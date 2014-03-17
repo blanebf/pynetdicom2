@@ -1,0 +1,2 @@
+include netdicom/test/*
+include distribute_setup.py
