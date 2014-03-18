@@ -12,9 +12,9 @@ import logging
 
 from dicom.UID import UID
 
-from DULparameters import *
-from PDU import MaximumLengthParameters
-import DULprovider
+import dulparameters
+from pdu import MaximumLengthParameters
+import dulprovider
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class ACSEServiceProvider(object):
         self.max_pdu_length = mp
 
         # build association service parameters object
-        assoc_rq = AAssociateServiceParameters()
+        assoc_rq = dulparameters.AAssociateServiceParameters()
         assoc_rq.application_context_name = self.application_context_name
         assoc_rq.calling_ae_title = self.local_ae['AET']
         assoc_rq.called_ae_title = self.remote_ae['AET']
@@ -100,7 +100,7 @@ class ACSEServiceProvider(object):
         of the request sends association response based on
         acceptable_presentation_contexts"""
         if self.dul is None:
-            self.dul = DULprovider.DULServiceProvider(socket_=client_socket)
+            self.dul = dulprovider.DULServiceProvider(socket_=client_socket)
         assoc = self.dul.receive(wait=True)
         if not assoc:
             return None
@@ -139,7 +139,7 @@ class ACSEServiceProvider(object):
     def release(self, reason):
         """Requests the release of the associations and waits for
         confirmation"""
-        rel = AReleaseServiceParameters()
+        rel = dulparameters.AReleaseServiceParameters()
         rel.reason = reason
         self.dul.send(rel)
         rsp = self.dul.receive(wait=True)
@@ -148,7 +148,7 @@ class ACSEServiceProvider(object):
 
     def abort(self):
         """Signifies the abortion of the association."""
-        self.dul.send(AAbortServiceParameters())
+        self.dul.send(dulparameters.AAbortServiceParameters())
         time.sleep(0.5)
         # self.dul.kill()
 
@@ -156,9 +156,9 @@ class ACSEServiceProvider(object):
         """Checks for release request from the remote AE. Upon reception of
         the request a confirmation is sent"""
         rel = self.dul.peek()
-        if isinstance(rel, AReleaseServiceParameters):
+        if isinstance(rel, dulparameters.AReleaseServiceParameters):
             self.dul.receive(wait=False)
-            release_rsp = AReleaseServiceParameters()
+            release_rsp = dulparameters.AReleaseServiceParameters()
             release_rsp.result = 0
             self.dul.send(release_rsp)
             return True
@@ -168,7 +168,7 @@ class ACSEServiceProvider(object):
     def check_abort(self):
         """Checks for abort indication from the remote AE. """
         rel = self.dul.peek()
-        if isinstance(rel, (AAbortServiceParameters, APAbortServiceParameters)):
+        if isinstance(rel, (dulparameters.AAbortServiceParameters, dulparameters.APAbortServiceParameters)):
             self.dul.receive(wait=False)
             return True
         else:

@@ -5,10 +5,10 @@
 #    available at http://pynetdicom.googlecode.com
 #
 
-import DIMSEmessages
-import DIMSEparameters
-from DIMSEmessages import DIMSEMessage
-from DULparameters import PDataServiceParameters
+import dimsemessages
+import dimseparameters
+from dimsemessages import DIMSEMessage
+from dulparameters import PDataServiceParameters
 import time
 
 import logging
@@ -24,31 +24,31 @@ class DIMSEServiceProvider(object):
     def send(self, primitive, id_, max_pdu_length):
         # take a DIMSE primitive, convert it to one or more DUL primitive and send it
         dimse_msg = None
-        if isinstance(primitive, DIMSEparameters.CEchoServiceParameters):
+        if isinstance(primitive, dimseparameters.CEchoServiceParameters):
             if primitive.message_id is not None:
-                dimse_msg = DIMSEmessages.CEchoRQMessage()
+                dimse_msg = dimsemessages.CEchoRQMessage()
             else:
-                dimse_msg = DIMSEmessages.CEchoRSPMessage()
-        if isinstance(primitive, DIMSEparameters.CStoreServiceParameters):
+                dimse_msg = dimsemessages.CEchoRSPMessage()
+        if isinstance(primitive, dimseparameters.CStoreServiceParameters):
             if primitive.message_id is not None:
-                dimse_msg = DIMSEmessages.CStoreRQMessage()
+                dimse_msg = dimsemessages.CStoreRQMessage()
             else:
-                dimse_msg = DIMSEmessages.CStoreRSPMessage()
-        if isinstance(primitive, DIMSEparameters.CFindServiceParameters):
+                dimse_msg = dimsemessages.CStoreRSPMessage()
+        if isinstance(primitive, dimseparameters.CFindServiceParameters):
             if primitive.message_id is not None:
-                dimse_msg = DIMSEmessages.CFindRQMessage()
+                dimse_msg = dimsemessages.CFindRQMessage()
             else:
-                dimse_msg = DIMSEmessages.CFindRSPMessage()
-        if isinstance(primitive, DIMSEparameters.CGetServiceParameters):
+                dimse_msg = dimsemessages.CFindRSPMessage()
+        if isinstance(primitive, dimseparameters.CGetServiceParameters):
             if primitive.message_id is not None:
-                dimse_msg = DIMSEmessages.CGetRQMessage()
+                dimse_msg = dimsemessages.CGetRQMessage()
             else:
-                dimse_msg = DIMSEmessages.CGetRSPMessage()
-        if isinstance(primitive, DIMSEparameters.CMoveServiceParameters):
+                dimse_msg = dimsemessages.CGetRSPMessage()
+        if isinstance(primitive, dimseparameters.CMoveServiceParameters):
             if primitive.message_id is not None:
-                dimse_msg = DIMSEmessages.CMoveRQMessage()
+                dimse_msg = dimsemessages.CMoveRQMessage()
             else:
-                dimse_msg = DIMSEmessages.CMoveRSPMessage()
+                dimse_msg = dimsemessages.CMoveRSPMessage()
 
         if dimse_msg is None:
             raise RuntimeError("Failed to get message")  # TODO: Replace exception type

@@ -8,7 +8,7 @@ import time
 import logging
 
 import dsutils
-from DIMSEparameters import *
+import dimseparameters
 
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ class VerificationServiceClass(ServiceClass):
     sop_classes = [VerificationSOPClass]
 
     def scu(self, id_):
-        c_echo = CEchoServiceParameters()
+        c_echo = dimseparameters.CEchoServiceParameters()
         c_echo.message_id = id_
         c_echo.affected_sop_class_uid = self.uid
 
@@ -155,7 +155,7 @@ class VerificationServiceClass(ServiceClass):
 
     def scp(self, msg):
         self.check_asce()
-        rsp = CEchoServiceParameters()
+        rsp = dimseparameters.CEchoServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.status = Success
 
@@ -185,7 +185,7 @@ class StorageServiceClass(ServiceClass):
 
     def scu(self, dataset, msg_id):
         # build C-STORE primitive
-        c_store = CStoreServiceParameters()
+        c_store = dimseparameters.CStoreServiceParameters()
         c_store.message_id = msg_id
         c_store.affected_sop_class_uid = dataset.SOPClassUID
         c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
@@ -209,7 +209,7 @@ class StorageServiceClass(ServiceClass):
         except Exception:  # TODO Replace this exception block with something more sensible
             status = CannotUnderstand
         # make response
-        rsp = CStoreServiceParameters()
+        rsp = dimseparameters.CStoreServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_instance_uid = msg.AffectedSOPInstanceUID
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
@@ -230,7 +230,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
 
     def scu(self, ds, msg_id):
         # build C-FIND primitive
-        c_find = CFindServiceParameters()
+        c_find = dimseparameters.CFindServiceParameters()
         c_find.message_id = msg_id
         c_find.affected_sop_class_uid = self.uid
         c_find.priority = 0x0002
@@ -258,7 +258,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
                             self.transfer_syntax.is_little_endian)
 
         # make response
-        rsp = CFindServiceParameters()
+        rsp = dimseparameters.CFindServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
@@ -274,7 +274,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
                 self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
         except StopIteration:
             # send final response
-            rsp = CFindServiceParameters()
+            rsp = dimseparameters.CFindServiceParameters()
             rsp.message_id_being_responded_to = msg.message_id
             rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
             rsp.status = int(Success)
@@ -287,7 +287,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
 
     def scu(self, ds, msg_id):
         # build C-GET primitive
-        c_get = CGetServiceParameters()
+        c_get = dimseparameters.CGetServiceParameters()
         c_get.message_id = msg_id
         c_get.affected_sop_class_uid = self.uid
         c_get.priority = 0x0002
@@ -299,14 +299,14 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
         while 1:
             # receive c-store
             msg, id_ = self.dimse.receive(wait=True)
-            if isinstance(msg, CGetServiceParameters):
+            if isinstance(msg, dimseparameters.CGetServiceParameters):
                 if self.code_to_status(msg.status.value).type_ == 'Pending':
                     pass  # pending. intermediate C-GET response
                 else:
                     break  # last answer
-            elif isinstance(msg, CStoreServiceParameters):
+            elif isinstance(msg, dimseparameters.CStoreServiceParameters):
                 # send c-store response
-                rsp = CStoreServiceParameters()
+                rsp = dimseparameters.CStoreServiceParameters()
                 rsp.message_id_being_responded_to = msg.message_id
                 rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
                 rsp.affected_sop_class_uid = msg.affected_sop_class_uid
@@ -328,7 +328,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
 
     def scu(self, ds, dest_ae, msg_id):
         # build C-FIND primitive
-        c_move = CMoveServiceParameters()
+        c_move = dimseparameters.CMoveServiceParameters()
         c_move.message_id = msg_id
         c_move.affected_sop_class_uid = self.uid
         c_move.move_destination = dest_ae
@@ -355,7 +355,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
                             self.transfer_syntax.is_little_endian)
 
         # make response
-        rsp = CMoveServiceParameters()
+        rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID.value
         gen = self.ae.OnReceiveMove(self, ds, msg.MoveDestination.value)
@@ -391,7 +391,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
 
         except StopIteration:
             # send final response
-            rsp = CMoveServiceParameters()
+            rsp = dimseparameters.CMoveServiceParameters()
             rsp.message_id_being_responded_to = msg.message_id.value
             rsp.affected_sop_class_uid = msg.AffectedSOPClassUID.value
             rsp.number_of_remaining_sub_operations = nop - completed
@@ -413,7 +413,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
 
     def scu(self, ds, msg_id):
         # build C-FIND primitive
-        c_find = CFindServiceParameters()
+        c_find = dimseparameters.CFindServiceParameters()
         c_find.message_id = msg_id
         c_find.affected_sop_class_uid = self.uid
         c_find.priority = 0x0002
@@ -440,7 +440,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         ds = dsutils.decode(msg.Identifier, self.transfer_syntax.is_implicit_VR, self.transfer_syntax.is_little_endian)
 
         # make response
-        rsp = CFindServiceParameters()
+        rsp = dimseparameters.CFindServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
@@ -456,7 +456,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
                 self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
         except StopIteration:
             # send final response
-            rsp = CFindServiceParameters()
+            rsp = dimseparameters.CFindServiceParameters()
             rsp.message_id_being_responded_to = msg.message_id
             rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
             rsp.status = int(Success)

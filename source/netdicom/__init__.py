@@ -5,9 +5,8 @@ __version_info__ = __version__.split('.')
 
 # some imports
 from applicationentity import AE
-from SOPclass import \
+from sopclass import \
     VerificationSOPClass,\
-    StorageSOPClass,\
     MRImageStorageSOPClass,\
     CTImageStorageSOPClass,\
     PositronEmissionTomographyImageStorageSOPClass,\
@@ -40,7 +39,7 @@ from SOPclass import \
     PatientStudyOnlyFindSOPClass,\
     PatientStudyOnlyMoveSOPClass,\
     PatientStudyOnlyGetSOPClass,\
-    ModalityWorklistInformationFindSOPClass
+    ModalityWorkListInformationFindSOPClass
 
 
 # Set up logging system for the whole package.  In each module, set

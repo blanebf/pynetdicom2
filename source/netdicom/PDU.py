@@ -59,10 +59,10 @@ These classes are:
 """
 
 
-from struct import *
+import struct
 from StringIO import StringIO
-import DULparameters
-from DIMSEparameters import *
+import dulparameters
+import dimseparameters
 
 
 class PDUBase(object):
@@ -132,7 +132,7 @@ class AAssociateRqPDU(PDUBase):
 
     def to_params(self):
         # Returns an A_ASSOCIATE_ServiceParameters object
-        assoc = DULparameters.AAssociateServiceParameters()
+        assoc = dulparameters.AAssociateServiceParameters()
         assoc.calling_ae_title = self.calling_ae_title
         assoc.called_ae_title = self.called_ae_title
         assoc.application_context_name = self.variable_items[0].application_context_name
@@ -146,10 +146,10 @@ class AAssociateRqPDU(PDUBase):
         return assoc
 
     def encode(self):
-        tmp = ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                       pack('>H', self.protocol_version), pack('>H',  self.reserved2),
-                       pack('16s', self.called_ae_title), pack('16s', self.calling_ae_title),
-                       pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
+        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                       struct.pack('>I', self.pdu_length), struct.pack('>H', self.protocol_version),
+                       struct.pack('>H',  self.reserved2), struct.pack('16s', self.called_ae_title),
+                       struct.pack('16s', self.calling_ae_title), struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
 
         tmp2 = ''.join([item.encode() for item in self.variable_items])
         return tmp + tmp2
@@ -157,8 +157,8 @@ class AAssociateRqPDU(PDUBase):
     def decode(self, rawstring):
         stream = StringIO(rawstring)
         self.pdu_type, self.reserved1, self.pdu_length, self.protocol_version, self.reserved2, \
-            self.called_ae_title, self.calling_ae_title = unpack('> B B I H H 16s 16s', stream.read(42))
-        self.reserved3 = unpack('> 8I', stream.read(32))
+            self.called_ae_title, self.calling_ae_title = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+        self.reserved3 = struct.unpack('> 8I', stream.read(32))
         while 1:
             type_ = next_type(stream)
             if type_ == 0x10:
@@ -230,7 +230,7 @@ class AAssociateAcPDU(PDUBase):
             self.pdu_length = self.pdu_length + ii.total_length()
 
     def to_params(self):
-        assoc = DULparameters.AAssociateServiceParameters()
+        assoc = dulparameters.AAssociateServiceParameters()
         assoc.called_ae_title = self.reserved3
         assoc.calling_ae_title = self.reserved4
         assoc.application_context_name = self.variable_items[0].to_params()
@@ -245,9 +245,10 @@ class AAssociateAcPDU(PDUBase):
         return assoc
 
     def encode(self):
-        tmp = ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                       pack('>H', self.protocol_version), pack('>H',  self.reserved2), pack('16s', self.reserved3),
-                       pack('16s', self.reserved4), pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
+        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                       struct.pack('>I', self.pdu_length), struct.pack('>H', self.protocol_version),
+                       struct.pack('>H',  self.reserved2), struct.pack('16s', self.reserved3),
+                       struct.pack('16s', self.reserved4), struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
 
         # variable item elements
         tmp2 = ''.join([item.encode() for item in self.variable_items])
@@ -256,8 +257,8 @@ class AAssociateAcPDU(PDUBase):
     def decode(self, rawstring):
         stream = StringIO(rawstring)
         self.pdu_type, self.reserved1, self.pdu_length, self.protocol_version, self.reserved2, \
-            self.reserved3, self.reserved4 = unpack('> B B I H H 16s 16s', stream.read(42))
-        self.reserved5 = unpack('>8I', stream.read(32))
+            self.reserved3, self.reserved4 = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+        self.reserved5 = struct.unpack('>8I', stream.read(32))
         while 1:
             type_ = next_type(stream)
             if type_ == 0x10:
@@ -304,21 +305,22 @@ class AAssociateRjPDU(PDUBase):
         self.reason_diag = params.diagnostic
 
     def to_params(self):
-        tmp = DULparameters.AAssociateServiceParameters()
+        tmp = dulparameters.AAssociateServiceParameters()
         tmp.result = self.result
         tmp.result_source = self.source
         tmp.diagnostic = self.reason_diag
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                        pack('B', self.reserved2), pack('B', self.result), pack('B', self.source),
-                        pack('B', self.reason_diag)])
+        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length), struct.pack('B', self.reserved2),
+                        struct.pack('B', self.result), struct.pack('B', self.source),
+                        struct.pack('B', self.reason_diag)])
 
     def decode(self, rawstring):
         stream = StringIO(rawstring)
         self.pdu_type, self.reserved1, self.pdu_length, self.reserved2, self.result, self.source, \
-            self.reason_diag = unpack('> B B I B B B B', stream.read(10))
+            self.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
 
     def total_length(self):
         return 10
@@ -354,20 +356,21 @@ class PDataTfPDU(PDUBase):
             self.pdu_length = self.pdu_length + ii.total_length()
 
     def to_params(self):
-        tmp = DULparameters.PDataServiceParameters()
+        tmp = dulparameters.PDataServiceParameters()
         tmp.presentation_data_value_list = []
         for ii in self.presentation_data_value_items:
             tmp.presentation_data_value_list.append([ii.presentation_context_id, ii.presentation_data_value])
         return tmp
 
     def encode(self):
-        tmp = ''.join([pack('B', self.pdu_type), pack('B', self.reserved), pack('>I', self.pdu_length)])
+        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved),
+                       struct.pack('>I', self.pdu_length)])
         tmp2 = ''.join([item.encode() for item in self.presentation_data_value_items])
         return tmp + tmp2
 
     def decode(self, rawstring):
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved, self.pdu_length = unpack('> B B I', stream.read(6))
+        self.pdu_type, self.reserved, self.pdu_length = struct.unpack('> B B I', stream.read(6))
         length_read = 0
         while length_read != self.pdu_length:
             tmp = PresentationDataValueItem()
@@ -400,18 +403,18 @@ class AReleaseRqPDU(PDUBase):
         pass
 
     def to_params(self):
-        tmp = DULparameters.AReleaseServiceParameters()
+        tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                        pack('>I', self.reserved2)])
+        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length),struct.pack('>I', self.reserved2)])
 
     def decode(self, rawstring):
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = unpack('> B B I I', stream.read(10))
+        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = struct.unpack('> B B I I', stream.read(10))
 
     def total_length(self):
         return 10
@@ -438,18 +441,18 @@ class AReleaseRpPDU(PDUBase):
         pass
 
     def to_params(self):
-        tmp = DULparameters.AReleaseServiceParameters()
+        tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                        pack('>I', self.reserved2)])
+        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length), struct.pack('>I', self.reserved2)])
 
     def decode(self, rawstring):
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = unpack('> B B I I', stream.read(10))
+        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = struct.unpack('> B B I I', stream.read(10))
 
     def total_length(self):
         return 10
@@ -476,34 +479,35 @@ class AAbortPDU(PDUBase):
 
     def from_params(self, params):
         # Params can be an AAbortServiceParameters or APAbortServiceParameters object.
-        if isinstance(params, DULparameters.AAbortServiceParameters):  # User initiated abort
+        if isinstance(params, dulparameters.AAbortServiceParameters):  # User initiated abort
             self.reason_diag = 0
             self.abort_source = params.abort_source
-        elif isinstance(params, DULparameters.APAbortServiceParameters):  # User provider initiated abort
+        elif isinstance(params, dulparameters.APAbortServiceParameters):  # User provider initiated abort
             self.abort_source = params.abort_source
             self.reason_diag = None
 
     def to_params(self):
         # Returns either a A-ABORT of an A-P-ABORT
         if self.abort_source is not None:
-            tmp = DULparameters.AAbortServiceParameters()
+            tmp = dulparameters.AAbortServiceParameters()
             tmp.abort_source = self.abort_source
         elif self.reason_diag is not None:
-            tmp = DULparameters.APAbortServiceParameters()
+            tmp = dulparameters.APAbortServiceParameters()
             tmp.provider_reason = self.reason_diag
         else:
             raise RuntimeError('Unknown abort source')
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.pdu_type), pack('B', self.reserved1), pack('>I', self.pdu_length),
-                        pack('B', self.reserved2), pack('B', self.reserved3), pack('B', self.abort_source),
-                        pack('B', self.reason_diag)])
+        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length), struct.pack('B', self.reserved2),
+                        struct.pack('B', self.reserved3), struct.pack('B', self.abort_source),
+                        struct.pack('B', self.reason_diag)])
 
     def decode(self, rawstring):
         stream = StringIO(rawstring)
         (self.pdu_type, self.reserved1, self.pdu_length, self.reserved2,
-         self.reserved3, self.abort_source, self.reason_diag) = unpack('> B B I B B B B', stream.read(10))
+         self.reserved3, self.abort_source, self.reason_diag) = struct.unpack('> B B I B B B B', stream.read(10))
 
     def total_length(self):
         return 10
@@ -537,11 +541,11 @@ class ApplicationContextItem(PDUBase):
         return self.application_context_name
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length),
-                        self.application_context_name])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length), self.application_context_name])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
         self.application_context_name = stream.read(self.item_length)
 
     def total_length(self):
@@ -595,15 +599,16 @@ class PresentationContextItemRQ(PDUBase):
                 [item.to_params() for item in self.abstract_transfer_syntax_sub_items[1:]]]
 
     def encode(self):
-        tmp = ''.join([pack('B', self.item_type), pack('B', self.reserved1), pack('>H', self.item_length),
-                       pack('B', self.presentation_context_id), pack('B', self.reserved2), pack('B', self.reserved3),
-                       pack('B', self.reserved4)])
+        tmp = ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved1),
+                       struct.pack('>H', self.item_length), struct.pack('B', self.presentation_context_id),
+                       struct.pack('B', self.reserved2), struct.pack('B', self.reserved3),
+                       struct.pack('B', self.reserved4)])
         tmp2 = ''.join([item.encode() for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
 
     def decode(self, stream):
         self.item_type, self.reserved1, self.item_length, self.presentation_context_id, self.reserved2, \
-            self.reserved3, self.reserved4 = unpack('> B B H B B B B', stream.read(8))
+            self.reserved3, self.reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
         tmp = AbstractSyntaxSubItem()
         tmp.decode(stream)
         self.abstract_transfer_syntax_sub_items.append(tmp)
@@ -651,14 +656,14 @@ class PresentationContextItemAC(PDUBase):
         return [self.presentation_context_id, self.result_reason, self.transfer_syntax_sub_item.to_params()]
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved1), pack('>H', self.item_length),
-                        pack('B', self.presentation_context_id), pack('B', self.reserved2),
-                        pack('B', self.result_reason), pack('B', self.reserved3),
-                        self.transfer_syntax_sub_item.encode()])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved1),
+                        struct.pack('>H', self.item_length), struct.pack('B', self.presentation_context_id),
+                        struct.pack('B', self.reserved2), struct.pack('B', self.result_reason),
+                        struct.pack('B', self.reserved3), self.transfer_syntax_sub_item.encode()])
 
     def decode(self, stream):
         self.item_type, self.reserved1, self.item_length, self.presentation_context_id,\
-            self.reserved2, self.result_reason, self.reserved3 = unpack('> B B H B B B B', stream.read(8))
+            self.reserved2, self.result_reason, self.reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
         self.transfer_syntax_sub_item = TransferSyntaxSubItem()
         self.transfer_syntax_sub_item.decode(stream)
 
@@ -691,11 +696,11 @@ class AbstractSyntaxSubItem(PDUBase):
         return self.abstract_syntax_name
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length),
-                        self.abstract_syntax_name])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length), self.abstract_syntax_name])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
         self.abstract_syntax_name = stream.read(self.item_length)
 
     def total_length(self):
@@ -727,11 +732,11 @@ class TransferSyntaxSubItem(PDUBase):
         return self.transfer_syntax_name
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length),
-                        self.transfer_syntax_name])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length), self.transfer_syntax_name])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
         self.transfer_syntax_name = stream.read(self.item_length)
 
     def total_length(self):
@@ -777,12 +782,13 @@ class UserInformationItem(PDUBase):
         return tmp
 
     def encode(self):
-        tmp = ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length)])
+        tmp = ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                       struct.pack('>H', self.item_length)])
         tmp2 = ''.join([data.encode() for data in self.user_data])
         return tmp + tmp2
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
         # read the rest of user info
         self.user_data = []
         while next_sub_item_type(stream) is not None:
@@ -833,12 +839,12 @@ class MaximumLengthSubItem(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length),
-                        pack('>I', self.maximum_length_received)])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length), struct.pack('>I', self.maximum_length_received)])
 
     def decode(self, stream):
         self.item_type, self.reserved, self.item_length, \
-            self.maximum_length_received = unpack('> B B H I', stream.read(8))
+            self.maximum_length_received = struct.unpack('> B B H I', stream.read(8))
 
     def total_length(self):
         return 0x08
@@ -866,16 +872,16 @@ class PresentationDataValueItem(PDUBase):
 
     def to_params(self):
         # Returns a PresentationDataValue
-        tmp = DULparameters.PresentationDataValue()
+        tmp = PresentationDataValueItem()
         tmp.presentation_context_id = self.presentation_context_id
         tmp.presentation_data_value = self.presentation_data_value
 
     def encode(self):
-        return ''.join([pack('>I', self.item_length), pack('B', self.presentation_context_id),
+        return ''.join([struct.pack('>I', self.item_length), struct.pack('B', self.presentation_context_id),
                         self.presentation_data_value])
 
     def decode(self, stream):
-        self.item_length, self.presentation_context_id = unpack('> I B', stream.read(5))
+        self.item_length, self.presentation_context_id = struct.unpack('> I B', stream.read(5))
         # Presentation data value is left in raw string format.
         # The Application Entity is responsible for dealing with it.
         self.presentation_data_value = stream.read(int(self.item_length) - 1)
@@ -917,11 +923,11 @@ class GenericUserDataSubItem(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([pack('B', self.item_type), pack('B', self.reserved), pack('>H', self.item_length),
-                        self.user_data])
+        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length), self.user_data])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
         # User data value is left in raw string format. The Application Entity is responsible for dealing with it.
         self.user_data = stream.read(int(self.item_length) - 1)
 
@@ -934,7 +940,7 @@ def next_type(stream):
     if char == '':
         return None  # we are at the end of the file
     stream.seek(-1, 1)
-    return unpack('B', char)[0]
+    return struct.unpack('B', char)[0]
 
 
 def next_pdu_type(stream):
@@ -962,15 +968,15 @@ def next_pdu_type(stream):
 def next_sub_item_type(stream):
     item_type = next_type(stream)
     if item_type == 0x52:
-        return ImplementationClassUIDSubItem
+        return dimseparameters.ImplementationClassUIDSubItem
     elif item_type == 0x51:
         return MaximumLengthSubItem
     elif item_type == 0x55:
-        return ImplementationVersionNameSubItem
+        return dimseparameters.ImplementationVersionNameSubItem
     elif item_type == 0x53:
-        return AsynchronousOperationsWindowSubItem
+        return dimseparameters.AsynchronousOperationsWindowSubItem
     elif item_type == 0x54:
-        return ScpScuRoleSelectionSubItem
+        return dimseparameters.ScpScuRoleSelectionSubItem
     elif item_type == 0x56:
         return SOPClassExtentedNegociationSubItem
     elif item_type is None:
@@ -981,7 +987,7 @@ def next_sub_item_type(stream):
 
 def decode_pdu(rawstring):
     """Takes an encoded PDU as a string and return a PDU object"""
-    char = unpack('B', rawstring[0])[0]
+    char = struct.unpack('B', rawstring[0])[0]
     if char == 0x01:
         pdu = AAssociateRqPDU()
     elif char == 0x02:

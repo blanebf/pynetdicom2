@@ -16,12 +16,12 @@ from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
 
 import time
-import SOPclass
+import sopclass
 
-from DULprovider import DULServiceProvider
-from DIMSEprovider import DIMSEServiceProvider
-from ACSEprovider import ACSEServiceProvider
-from DIMSEparameters import *
+from dulprovider import DULServiceProvider
+from dimseprovider import DIMSEServiceProvider
+from asceprovider import ACSEServiceProvider
+import dimseparameters
 
 
 class Association(threading.Thread):
@@ -55,7 +55,7 @@ class Association(threading.Thread):
 
     @staticmethod
     def get_sop_class(ds):
-        return SOPclass.SOP_CLASSES[ds.SOPClassUID]
+        return sopclass.SOP_CLASSES[ds.SOPClassUID]
 
     def scu(self, ds, id_):
         uid = ds.SOPClassUID
@@ -64,7 +64,7 @@ class Association(threading.Thread):
         except IndexError:
             raise Exception("SOP Class %s not supported as SCU")  # TODO: replace this exception
 
-        obj = SOPclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse, pcid=pcid,
+        obj = sopclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse, pcid=pcid,
                                         transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
         return obj.scu(ds, id_)
 
@@ -73,7 +73,7 @@ class Association(threading.Thread):
             pcid, _, transfer_syntax = [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
         except IndexError:
             raise Exception("SOP Class %s not supported as SCU" % sop_class)  # TODO replace this exception
-        obj = SOPclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+        obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
                                               transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
         return obj
 
@@ -106,7 +106,7 @@ class Association(threading.Thread):
             #  build role extended negociation
             ext = []
             for ii in self.ae.acceptable_presentation_contexts:
-                tmp = ScpScuRoleSelectionParameters()
+                tmp = dimseparameters.ScpScuRoleSelectionParameters()
                 tmp.sop_class_uid = ii[0]
                 tmp.scu_role = 0
                 tmp.scp_role = 1
@@ -141,7 +141,7 @@ class Association(threading.Thread):
                         pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                     except IndexError:
                         raise Exception("SOP Class %s not supported as SCP" % uid)  # TODO Replace exception
-                    obj = SOPclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                    obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
                                                           transfer_syntax=transfer_syntax,
                                                           max_pdu_length=self.asce.max_pdu_length,
                                                           asce=self.asce)

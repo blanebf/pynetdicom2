@@ -36,8 +36,8 @@ from struct import pack, unpack
 from dicom.dataset import Dataset
 from dicom.UID import ImplicitVRLittleEndian
 
-from DIMSEparameters import *
-from DULparameters import *
+import dimseparameters
+import dulparameters
 import dsutils
 
 #
@@ -121,12 +121,12 @@ class DIMSEMessage(object):
         assert ''.join(pdvs) == encoded_command_set
         for ii in pdvs[:-1]:
             # send only one pdv per pdata primitive
-            pdata = PDataServiceParameters()
+            pdata = dulparameters.PDataServiceParameters()
             # not last command fragment
             pdata.presentation_data_value_list = [[self.id_, pack('b', 1) + ii]]
             pdatas.append(pdata)
         # last command fragment
-        pdata = PDataServiceParameters()
+        pdata = dulparameters.PDataServiceParameters()
         # last command fragment
         pdata.presentation_data_value_list = [[self.id_, pack('b', 3) + pdvs[-1]]]
         pdatas.append(pdata)
@@ -137,11 +137,11 @@ class DIMSEMessage(object):
             pdvs = fragment(max_pdu_length, self.data_set)
             assert ''.join(pdvs) == self.data_set
             for ii in pdvs[:-1]:
-                pdata = PDataServiceParameters()
+                pdata = dulparameters.PDataServiceParameters()
                 # not last data fragment
                 pdata.presentation_data_value_list = [[self.id_, pack('b', 0) + ii]]
                 pdatas.append(pdata)
-            pdata = PDataServiceParameters()
+            pdata = dulparameters.PDataServiceParameters()
             # last data fragment
             pdata.presentation_data_value_list = [[self.id_, pack('b', 2) + pdvs[-1]]]
             pdatas.append(pdata)
@@ -151,7 +151,7 @@ class DIMSEMessage(object):
     def decode(self, pdata):
         """Constructs itself receiving a series of P-DATA primitives.
         Returns True when complete, False otherwise."""
-        if not isinstance(pdata, PDataServiceParameters):
+        if not isinstance(pdata, dulparameters.PDataServiceParameters):
             return False
 
         if pdata is None:
@@ -214,7 +214,7 @@ class CEchoRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CEchoServiceParameters()
+        tmp = dimseparameters.CEchoServiceParameters()
         tmp.message_id = self.command_set[(0x0000, 0x0110)]
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         return tmp
@@ -239,7 +239,7 @@ class CEchoRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CEchoServiceParameters()
+        tmp = dimseparameters.CEchoServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         tmp.status = 0
@@ -277,7 +277,7 @@ class CStoreRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CStoreServiceParameters()
+        tmp = dimseparameters.CStoreServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.affected_sop_instance_uid = self.command_set[(0x0000, 0x1000)]
         tmp.priority = self.command_set[(0x0000, 0x0700)]
@@ -306,7 +306,7 @@ class CStoreRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CStoreServiceParameters()
+        tmp = dimseparameters.CStoreServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         tmp.status = self.command_set[(0x0000, 0x0900)]
@@ -334,7 +334,7 @@ class CFindRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CFindServiceParameters()
+        tmp = dimseparameters.CFindServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.priority = self.command_set[(0x0000, 0x0700)]
         tmp.identifier = self.data_set
@@ -364,7 +364,7 @@ class CFindRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CFindServiceParameters()
+        tmp = dimseparameters.CFindServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         tmp.status = self.command_set[(0x0000, 0x0900)]
@@ -391,7 +391,7 @@ class CGetRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CGetServiceParameters()
+        tmp = dimseparameters.CGetServiceParameters()
         tmp.message_id = self.command_set[(0x0000, 0x0110)].value
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)].value
         tmp.priority = self.command_set[(0x0000, 0x0700)].value
@@ -425,7 +425,7 @@ class CGetRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CGetServiceParameters()
+        tmp = dimseparameters.CGetServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         tmp.status = self.command_set[(0x0000, 0x0900)]
@@ -463,7 +463,7 @@ class CMoveRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CMoveServiceParameters()
+        tmp = dimseparameters.CMoveServiceParameters()
         tmp.message_id = self.command_set[(0x0000, 0x0110)]
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.priority = self.command_set[(0x0000, 0x0700)]
@@ -498,7 +498,7 @@ class CMoveRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = CMoveServiceParameters()
+        tmp = dimseparameters.CMoveServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         tmp.status = self.command_set[(0x0000, 0x0900)]
@@ -530,7 +530,7 @@ class CCancelRQMessage(DIMSEMessage):
 class CCancelFindRQMessage(CCancelRQMessage):
 
     def to_params(self):
-        tmp = CFindServiceParameters()
+        tmp = dimseparameters.CFindServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
@@ -538,7 +538,7 @@ class CCancelFindRQMessage(CCancelRQMessage):
 class CCancelGetRQMessage(CCancelRQMessage):
 
     def to_params(self):
-        tmp = CGetServiceParameters()
+        tmp = dimseparameters.CGetServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
@@ -546,13 +546,13 @@ class CCancelGetRQMessage(CCancelRQMessage):
 class CCancelMoveRQMessage(CCancelRQMessage):
 
     def to_params(self):
-        tmp = CMoveServiceParameters()
+        tmp = dimseparameters.CMoveServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
 
 MessageType = {
-    0x0001: CStoreRQMessage,
+    0x0001: dimseparameters.CStoreRQMessage,
     0x8001: CStoreRSPMessage,
     0x0020: CFindRQMessage,
     0x8020: CFindRSPMessage,
@@ -568,7 +568,7 @@ MessageType = {
 
 if __name__ == '__main__':
 
-    c = CEchoServiceParameters()
+    c = dimseparameters.CEchoServiceParameters()
     c.message_id = 0
     c.affected_sop_class_uid = '12.1232.23.123.231.'
 
