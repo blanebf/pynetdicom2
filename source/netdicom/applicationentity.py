@@ -98,7 +98,7 @@ class Association(threading.Thread):
         if self.mode == 'Acceptor':
             self.asce.accept(self.client_socket, self.ae.acceptable_presentation_contexts)
             # call back
-            self.ae.OnAssociateRequest(self)
+            self.ae.on_association_request(self)
             # build list of SOPClasses supported
             self.sop_classes_as_scp = [(context[0], context[1], context[2])
                                        for context in self.asce.accepted_presentation_contexts]
@@ -117,9 +117,7 @@ class Association(threading.Thread):
                                     self.ae.presentation_context_definition_list,
                                     users_pdu=ext)
             if ans:
-                # call back
-                if 'OnAssociateResponse' in self.ae.__dict__:
-                    self.ae.OnAssociateResponse(ans)
+                self.ae.on_association_response(ans)
             else:
                 self.association_refused = True
                 self.dul.kill()
@@ -258,3 +256,21 @@ class AE(threading.Thread):
             return assoc
         else:
             return None
+
+    def on_association_request(self, assoc):
+        pass
+
+    def on_association_response(self, result):
+        pass
+
+    def on_receive_echo(self, service):
+        pass
+
+    def on_receive_store(self, service, ds):
+        pass
+
+    def on_receive_find(self, service, ds):
+        pass
+
+    def on_receive_move(self, service, ds, destination):
+        pass

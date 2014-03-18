@@ -18,11 +18,12 @@ import os
 import select
 import Queue
 import logging
+import struct
 
 import timer
 import fsm
-from PDU import *
-import DULparameters
+import pdu
+import dulparameters
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ class DULServiceProvider(Thread):
             raw_pdu += res
             length = recv_n(self.remote_client_socket, 4)
             raw_pdu += length
-            length = unpack('>L', length)
+            length = struct.unpack('>L', length)
             tmp = recv_n(self.remote_client_socket, length[0])
             raw_pdu += tmp
 
@@ -246,21 +247,21 @@ class DULServiceProvider(Thread):
 
 
 def primitive_to_event(primitive):
-    if isinstance(primitive, DULparameters.AAssociateServiceParameters):
+    if isinstance(primitive, dulparameters.AAssociateServiceParameters):
         if primitive.result is None:
             return 'Evt1'  # A-ASSOCIATE Request
         elif primitive.result == 0:
             return 'Evt7'  # A-ASSOCIATE Response (accept)
         else:
             return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, DULparameters.AReleaseServiceParameters):
+    elif isinstance(primitive, dulparameters.AReleaseServiceParameters):
         if primitive.result is None:
             return 'Evt11'  # A-Release Request
         else:
             return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, DULparameters.AAbortServiceParameters):
+    elif isinstance(primitive, dulparameters.AAbortServiceParameters):
         return 'Evt15'
-    elif isinstance(primitive, DULparameters.PDataServiceParameters):
+    elif isinstance(primitive, dulparameters.PDataServiceParameters):
         return 'Evt9'
     else:
         raise InvalidPrimitive
@@ -268,48 +269,48 @@ def primitive_to_event(primitive):
 
 def socket_to_pdu(data):
     # Returns the PDU object associated with an incoming data stream
-    pdu_type = unpack('B', data[0])[0]
+    pdu_type = struct.unpack('B', data[0])[0]
     if pdu_type == 0x01:
-        pdu = AAssociateRqPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AAssociateRqPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x02:
-        pdu = AAssociateAcPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AAssociateAcPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x03:
-        pdu = AAssociateRjPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AAssociateRjPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x04:
-        pdu = PDataTfPDU()
-        pdu.decode(data)
+        pdu_ = pdu.PDataTfPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x05:
-        pdu = AReleaseRqPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AReleaseRqPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x06:
-        pdu = AReleaseRpPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AReleaseRpPDU()
+        pdu_.decode(data)
     elif pdu_type == 0x07:
-        pdu = AAbortPDU()
-        pdu.decode(data)
+        pdu_ = pdu.AAbortPDU()
+        pdu_.decode(data)
     else:
         logger.error('Unrecognized or invalid PDU')
-        pdu = None
-    return pdu
+        pdu_ = None
+    return pdu_
 
 
 def pdu_to_event(pdu):
-    if isinstance(pdu, AAssociateRqPDU):
+    if isinstance(pdu, pdu.AAssociateRqPDU):
         return 'Evt6'
-    elif isinstance(pdu, AAssociateAcPDU):
+    elif isinstance(pdu, pdu.AAssociateAcPDU):
         return 'Evt3'
-    elif isinstance(pdu, AAssociateRjPDU):
+    elif isinstance(pdu, pdu.AAssociateRjPDU):
         return 'Evt4'
-    elif isinstance(pdu, PDataTfPDU):
+    elif isinstance(pdu, pdu.PDataTfPDU):
         return 'Evt10'
-    elif isinstance(pdu, AReleaseRqPDU):
+    elif isinstance(pdu, pdu.AReleaseRqPDU):
         return 'Evt12'
-    elif isinstance(pdu, AReleaseRpPDU):
+    elif isinstance(pdu, pdu.AReleaseRpPDU):
         return 'Evt13'
-    elif isinstance(pdu, AAbortPDU):
+    elif isinstance(pdu, pdu.AAbortPDU):
         return 'Evt16'
     else:
         logger.log('Unrecognized or invalid PDU')
