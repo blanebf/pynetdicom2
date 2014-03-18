@@ -161,7 +161,7 @@ class VerificationServiceClass(ServiceClass):
 
         # send response
         try:
-            self.ae.OnReceiveEcho(self)
+            self.ae.on_receive_echo(self)
         except Exception:  # TODO Replace this exception block with something more sensible
             logger.error("There was an exception on OnReceiveEcho callback")
         self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
@@ -205,7 +205,7 @@ class StorageServiceClass(ServiceClass):
             ds = dsutils.decode(msg.data_set,
                                 self.transfer_syntax.is_implicit_VR,
                                 self.transfer_syntax.is_little_endian)
-            status = self.ae.OnReceiveStore(self, ds)
+            status = self.ae.on_receive_store(self, ds)
         except Exception:  # TODO Replace this exception block with something more sensible
             status = CannotUnderstand
         # make response
@@ -262,7 +262,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
-        gen = self.ae.OnReceiveFind(self, ds)
+        gen = self.ae.on_receive_find(self, ds)
         try:
             while 1:
                 time.sleep(0.001)
@@ -314,7 +314,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                     d = dsutils.decode(msg.dataset, self.transfer_syntax.is_implicit_VR,
                                        self.transfer_syntax.is_little_endian)
                     sop_class = SOP_CLASSES[d.SOPClassUID]
-                    status = self.ae.OnReceiveStore(sop_class, d)
+                    status = self.ae.on_receive_store(sop_class, d)
                 except Exception:  # TODO Replace this exception block with something more sensible
                     status = CannotUnderstand
 
@@ -358,7 +358,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID.value
-        gen = self.ae.OnReceiveMove(self, ds, msg.MoveDestination.value)
+        gen = self.ae.on_receive_move(self, ds, msg.MoveDestination.value)
 
         # first value returned by callback must be the complete remote AE specs
         remote_ae = gen.next()
@@ -444,7 +444,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
-        gen = self.ae.OnReceiveFind(self, ds)
+        gen = self.ae.on_receive_find(self, ds)
         try:
             while 1:
                 time.sleep(0.001)
