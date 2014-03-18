@@ -47,38 +47,34 @@ class Association(threading.Thread):
         self.sop_classes_as_scu = []
         self.association_established = False
         self.association_refused = None
+
+        self.asce = ACSEServiceProvider(self.dul)
+        self.dimse = DIMSEServiceProvider(self.dul)
+
         self.start()
 
-    def get_sop_class(self, ds):
+    @staticmethod
+    def get_sop_class(ds):
         return SOPclass.SOP_CLASSES[ds.SOPClassUID]
 
-    def scu(self, ds, id):
-        obj = SOPclass.SOP_CLASSES[ds.SOPClassUID]()
+    def scu(self, ds, id_):
+        uid = ds.SOPClassUID
         try:
-            obj.pcid, obj.sopclass, obj.transfersyntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == obj.__class__][0]
+            pcid, _, transfer_syntax = [x for x in self.sop_classes_as_scu if x[1] == uid][0]
         except IndexError:
             raise Exception("SOP Class %s not supported as SCU")  # TODO: replace this exception
 
-        obj.max_pdu_length = self.asce.max_pdu_length
-        obj.dimse = self.dimse
-        obj.ae = self.ae
-        return obj.scu(ds, id)
+        obj = SOPclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse, pcid=pcid,
+                                        transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
+        return obj.scu(ds, id_)
 
-    def __getattr__(self, attr):
-        # while not self.association_established:
-        #    time.sleep(0.001)
-
-        obj = eval(attr)()
+    def get_scu(self, sop_class):
         try:
-            obj.pcid, obj.sopclass, obj.transfersyntax = \
-                [x for x in self.sop_classes_as_scu if
-                 x[1] == obj.__class__][0]
+            pcid, _, transfer_syntax = [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
         except IndexError:
-            raise Exception("SOP Class %s not supported as SCU" % attr)  # TODO replace this exception
-        obj.max_pdu_length = self.asce.max_pdu_length
-        obj.dimse = self.dimse
-        obj.ae = self.ae
+            raise Exception("SOP Class %s not supported as SCU" % sop_class)  # TODO replace this exception
+        obj = SOPclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                                              transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
         return obj
 
     def kill(self):
@@ -88,32 +84,26 @@ class Association(threading.Thread):
                 continue
             time.sleep(0.001)
         self.dul.kill()
-        # self.asce.kill()
-        #del self.dul
-        #del self.asce
 
     def release(self, reason):
         self.asce.release(reason)
         self.kill()
 
     def abort(self, reason):
-        self.asce.abort(reason)
+        # self.asce.abort(reason) TODO: Look into passing abort reason
+        self.asce.abort()
         self.kill()
 
     def run(self):
-        self.asce = ACSEServiceProvider(self.dul)
-        self.dimse = DIMSEServiceProvider(self.dul)
         if self.mode == 'Acceptor':
             self.asce.accept(self.client_socket, self.ae.acceptable_presentation_contexts)
             # call back
             self.ae.OnAssociateRequest(self)
             # build list of SOPClasses supported
-            self.sop_classes_as_scp = []
-            for ss in self.asce.accepted_presentation_contexts:
-                self.sop_classes_as_scp.append((ss[0], UID2SOPClass(ss[1]), ss[2]))
-
+            self.sop_classes_as_scp = [(context[0], context[1], context[2])
+                                       for context in self.asce.accepted_presentation_contexts]
         else:  # Requestor mode
-            # build role extended negociation
+            #  build role extended negociation
             ext = []
             for ii in self.ae.acceptable_presentation_contexts:
                 tmp = ScpScuRoleSelectionParameters()
@@ -134,35 +124,28 @@ class Association(threading.Thread):
                 self.association_refused = True
                 self.dul.kill()
                 return
-            self.sop_classes_as_scu = []
-            for ss in self.asce.accepted_presentation_contexts:
-                self.sop_classes_as_scu.append((ss[0], UID2SOPClass(ss[1]), ss[2]))
+            self.sop_classes_as_scu = [(context[0], context[1], context[2])
+                                       for context in self.asce.accepted_presentation_contexts]
 
         self.association_established = True
 
         # association established. Listening on local and remote interfaces
         while not self._kill:
             time.sleep(0.001)
-            # time.sleep(1)
             # look for incoming DIMSE message
             if self.mode == 'Acceptor':
                 dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
-                if dimse_msg:
-                    # dimse message received
+                if dimse_msg:  # dimse message received
                     uid = dimse_msg.AffectedSOPClassUID
-                    obj = UID2SOPClass(uid.value)()
                     try:
-                        obj.pcid, obj.sopclass, obj.transfersyntax = \
-                            [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
+                        pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                     except IndexError:
-                        raise "SOP Class %s not supported as SCP" % uid
-                    obj.max_pdu_length = self.asce.max_pdu_length
-                    obj.dimse = self.dimse
-                    obj.asce = self.asce
-                    obj.ae = self.ae
-
-                    # run SCP
-                    obj.scp(dimse_msg)
+                        raise Exception("SOP Class %s not supported as SCP" % uid)  # TODO Replace exception
+                    obj = SOPclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                                                          transfer_syntax=transfer_syntax,
+                                                          max_pdu_length=self.asce.max_pdu_length,
+                                                          asce=self.asce)
+                    obj.scp(dimse_msg)  # run SCP
 
                 # check for release request
                 if self.asce.check_release():
@@ -178,7 +161,7 @@ class AE(threading.Thread):
     """Represents a DICOM application entity
 
     Instance if this class represent an application entity. Once
-    instanciated, it starts a new thread and enters an event loop,
+    instantiated, it starts a new thread and enters an event loop,
     where events are association requests from remote AEs. Events
     trigger callback functions that perform user defined actions based
     on received events.
@@ -194,42 +177,25 @@ class AE(threading.Thread):
         self.max_number_of_associations = 25
         threading.Thread.__init__(self, name=self.local_ae['AET'])
 
-        self.sop_uid = [x for x in self.supported_sop_classes_as_scp]
         self.local_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.local_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.local_server_socket.bind(('', port))
         self.local_server_socket.listen(1)
         self.max_pdu_length = max_pdu_length
 
-        # build presentation context definition list to be sent to remote AE
-        # when requesting association.
+        # build presentation context definition list to be sent to remote AE when requesting association.
         count = 1
         self.presentation_context_definition_list = []
-        for ii in self.supported_sop_classes_as_scu + self.supported_sop_classes_as_scp:
-            if ii.__subclasses__():
-                for jj in ii.__subclasses__():
-                    self.presentation_context_definition_list.append([count, UID(jj.code_to_status),
-                                                                      [x for x in self.supported_transfer_syntax]])
-                    count += 2
-            else:
-                self.presentation_context_definition_list.append([
-                    count, UID(ii.code_to_status),
-                    [x for x in self.supported_transfer_syntax]])
-                count += 2
+        for sop_class in self.supported_sop_classes_as_scu + self.supported_sop_classes_as_scp:
+            self.presentation_context_definition_list.append([count, UID(sop_class),
+                                                             [x for x in self.supported_transfer_syntax]])
+            count += 2
 
-        # build acceptable context definition list used to decide
-        # whether an association from a remote AE will be accepted or
-        # not. This is based on the supported_sop_classes_as_scp and
-        # supported_transfer_syntax values set for this AE.
-        self.acceptable_presentation_contexts = []
-        for ii in self.supported_sop_classes_as_scp:
-            if ii.__subclasses__():
-                for jj in ii.__subclasses__():
-                    self.acceptable_presentation_contexts.append(
-                        [jj.code_to_status, [x for x in self.supported_transfer_syntax]])
-            else:
-                self.acceptable_presentation_contexts.append(
-                    [ii.code_to_status, [x for x in self.supported_transfer_syntax]])
+        # build acceptable context definition list used to decide whether an association from a remote AE will
+        # be accepted or not. This is based on the supported_sop_classes_as_scp and supported_transfer_syntax
+        # values set for this AE.
+        self.acceptable_presentation_contexts = [[sop_class, [x for x in self.supported_transfer_syntax]]
+                                                 for sop_class in self.supported_sop_classes_as_scp]
 
         # used to terminate AE
         self._quit = False
@@ -239,8 +205,7 @@ class AE(threading.Thread):
 
     def run(self):
         if not self.supported_sop_classes_as_scp:
-            # no need to loop. This is just a client AE. All events will be
-            # triggered by the user
+            # no need to loop. This is just a client AE. All events will be triggered by the user
             return
         count = 0
         while not self._quit:
@@ -254,9 +219,9 @@ class AE(threading.Thread):
                 self.associations.append(Association(self, client_socket))
 
             # delete dead associations
-            for aa in self.associations:
-                if not aa.isAlive():
-                    self.associations.remove(aa)
+            for association in self.associations:
+                if not association.isAlive():
+                    self.associations.remove(association)
             if not count % 50:
                 gc.collect()
             count += 1

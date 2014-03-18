@@ -109,7 +109,6 @@ class DULServiceProvider(Thread):
             self.remote_connection_address = None
 
         self.is_killed = False
-        self.daemon = True
         self.start()
 
     def kill(self):
