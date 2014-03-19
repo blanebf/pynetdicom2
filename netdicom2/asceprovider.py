@@ -13,8 +13,9 @@ import logging
 from dicom.UID import UID
 
 import dulparameters
+from netdicom2 import dulprovider
 from pdu import MaximumLengthParameters
-import dulprovider
+
 
 logger = logging.getLogger(__name__)
 

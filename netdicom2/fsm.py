@@ -11,8 +11,11 @@ DICOM, Part 8, Section 7
 
 import socket
 
-import pdu
+from netdicom2 import pdu
 import dulparameters
+
+
+
 
 # Finite State machine action definitions
 

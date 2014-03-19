@@ -11,15 +11,14 @@ import sys
 import select
 import platform
 import gc
+import time
 
 from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
 
-import time
 import sopclass
-
 from dulprovider import DULServiceProvider
-from dimseprovider import DIMSEServiceProvider
+from netdicom2.dimseprovider import DIMSEServiceProvider
 from asceprovider import ACSEServiceProvider
 import dimseparameters
 
@@ -134,7 +133,7 @@ class Association(threading.Thread):
             if self.mode == 'Acceptor':
                 dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
                 if dimse_msg:  # dimse message received
-                    uid = dimse_msg.AffectedSOPClassUID
+                    uid = dimse_msg.affected_sop_class_uid
                     try:
                         pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                     except IndexError:

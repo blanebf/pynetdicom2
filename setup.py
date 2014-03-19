@@ -3,10 +3,6 @@ from distribute_setup import use_setuptools
 use_setuptools()
 
 from setuptools import setup, find_packages
-import os
-import os.path
-
-import sys
 
 __version__ = open('netdicom/__version__.py').read().split('"')[1]
 print __version__
