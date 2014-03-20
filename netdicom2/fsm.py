@@ -38,7 +38,7 @@ def ae_2(provider):
 
 def ae_3(provider):
     # Issue A-ASSOCIATE confirmation (accept) primitive
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def ae_4(provider):
@@ -60,7 +60,7 @@ def ae_6(provider):
     provider.timer.stop()
     # Accept
     provider.state_machine.next_state('Sta3')
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
     # otherwise????
 
 
@@ -95,7 +95,7 @@ def dt_1(provider):
 
 def dt_2(provider):
     # Send P-DATA indication primitive
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def ar_1(provider):
@@ -107,12 +107,12 @@ def ar_1(provider):
 
 def ar_2(provider):
     # Send A-RELEASE indication primitive
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def ar_3(provider):
     # Issue A-RELEASE confirmation primitive and close transport connection
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
     provider.remote_client_socket.close()
     provider.remote_client_socket = None
 
@@ -132,7 +132,7 @@ def ar_5(provider):
 
 def ar_6(provider):
     # Issue P-DATA indication
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def ar_7(provider):
@@ -144,7 +144,7 @@ def ar_7(provider):
 
 def ar_8(provider):
     # Issue A-RELEASE indication (release collision)
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
     if provider.requestor == 1:
         provider.state_machine.next_state('Sta9')
     else:
@@ -160,7 +160,7 @@ def ar_9(provider):
 
 def ar_10(provider):
     # Issue A-RELEASE confirmation primitive
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def aa_1(provider):
@@ -188,7 +188,7 @@ def aa_3(provider):
     # Otherwise (service-provider initiated abort):
     #   - Issue A-P-ABORT indication and close transport connection.
     # This action is triggered by the reception of an A-ABORT PDU
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
     provider.remote_client_socket.close()
     provider.remote_client_socket = None
 
@@ -196,7 +196,7 @@ def aa_3(provider):
 def aa_4(provider):
     # Issue A-P-ABORT indication primitive.
     provider.primitive = dulparameters.AAbortServiceParameters()
-    provider.ToServiceUser.put(provider.primitive)
+    provider.to_service_user.put(provider.primitive)
 
 
 def aa_5(provider):
@@ -226,7 +226,7 @@ def aa_8(provider):
     if provider.remote_client_socket:
         provider.remote_client_socket.send(provider.pdu.encode())
         # Issue A-P-ABORT indication
-        provider.ToServiceUser.put(provider.primitive)
+        provider.to_service_user.put(provider.primitive)
         provider.timer.start()
 
 
@@ -503,7 +503,7 @@ class StateMachine:
                 self.current_state = action[2]
             logger.debug('%s: action complete. State is now %s %s' %
                          (self.provider.name, self.current_state, states[self.current_state]))
-        finally:
+        except Exception as e:
             self.provider.kill()
 
     def next_state(self, state):

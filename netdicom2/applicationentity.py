@@ -115,9 +115,8 @@ class Association(threading.Thread):
                                     self.ae.max_pdu_length,
                                     self.ae.presentation_context_definition_list,
                                     users_pdu=ext)
-            if ans:
-                self.ae.on_association_response(ans)
-            else:
+            self.ae.on_association_response(ans)
+            if not ans:
                 self.association_refused = True
                 self.dul.kill()
                 return

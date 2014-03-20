@@ -1,11 +1,11 @@
 # adapted from pydicom source code
 
-from netdicom2 import __version__
-
-__version_info__ = __version__.split('.')
+import __version__
+__version_info__ = __version__.__version__.split('.')
 
 # some imports
-
+import applicationentity
+import sopclass
 
 # Set up logging system for the whole package.  In each module, set
 # logger=logging.getLogger('pynetdicom') and the same instance will be

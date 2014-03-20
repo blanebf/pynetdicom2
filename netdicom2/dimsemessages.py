@@ -210,7 +210,7 @@ class CEchoRQMessage(DIMSEMessage):
     DataField = None
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x0030
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0800)].value = 0x0101
@@ -235,9 +235,9 @@ class CEchoRSPMessage(DIMSEMessage):
 
     def from_params(self, params):
         if params.AffectedSOPClassUID:
-            self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+            self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8030
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.Status
         self.set_length()
@@ -263,18 +263,18 @@ class CStoreRQMessage(DIMSEMessage):
     DataField = 'Data Set'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x0001
         self.command_set[(0x0000, 0x0110)].value = params.message_id
-        self.command_set[(0x0000, 0x0700)].value = params.Priority
+        self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
-        self.command_set[(0x0000, 0x1000)].value = params.AffectedSOPInstanceUID
+        self.command_set[(0x0000, 0x1000)].value = params.affected_sop_instance_uid
         if params.MoveOriginatorApplicationEntityTitle:
-            self.command_set[(0x0000, 0x1030)].value = params.MoveOriginatorApplicationEntityTitle
+            self.command_set[(0x0000, 0x1030)].value = params.move_originator_application_entity_title
         else:
             self.command_set[(0x0000, 0x1030)].value = ""
         if params.MoveOriginatorMessageID:
-            self.command_set[(0x0000, 0x1031)].value = params.MoveOriginatorMessageID
+            self.command_set[(0x0000, 0x1031)].value = params.move_originator_message_id
         else:
             self.command_set[(0x0000, 0x1031)].value = ""
         self.data_set = params.data_set
@@ -300,12 +300,12 @@ class CStoreRSPMessage(DIMSEMessage):
                       ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1)]
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID.value
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid.value
         self.command_set[(0x0000, 0x0100)].value = 0x8001
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo.value
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to.value
         self.command_set[(0x0000, 0x0800)].value = 0x0101
-        self.command_set[(0x0000, 0x0900)].value = params.Status
-        self.command_set[(0x0000, 0x1000)].value = params.AffectedSOPInstanceUID.value
+        self.command_set[(0x0000, 0x0900)].value = params.status
+        self.command_set[(0x0000, 0x1000)].value = params.affected_sop_instance_uid.value
         self.data_set = None
         self.set_length()
 
@@ -326,15 +326,15 @@ class CFindRQMessage(DIMSEMessage):
                       ('Message ID', (0x0000, 0x0110), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Priority', (0x0000, 0x0700), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x0020
         self.command_set[(0x0000, 0x0110)].value = params.message_id
-        self.command_set[(0x0000, 0x0700)].value = params.Priority
+        self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
-        self.data_set = params.Identifier
+        self.data_set = params.identifier
         self.set_length()
 
     def to_params(self):
@@ -353,18 +353,18 @@ class CFindRSPMessage(DIMSEMessage):
                       ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID.value
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid.value
         self.command_set[(0x0000, 0x0100)].value = 0x8020
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo.value
-        if not params.Identifier:
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to.value
+        if not params.identifier:
             self.command_set[(0x0000, 0x0800)].value = 0x0101
         else:
             self.command_set[(0x0000, 0x0800)].value = 0x000
         self.command_set[(0x0000, 0x0900)].value = params.Status
-        self.data_set = params.Identifier
+        self.data_set = params.identifier
         self.set_length()
 
     def to_params(self):
@@ -383,15 +383,15 @@ class CGetRQMessage(DIMSEMessage):
                       ('Message ID', (0x0000, 0x0110), 'US', 1),
                       ('Priority', (0x0000, 0x0700), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x0010
         self.command_set[(0x0000, 0x0110)].value = params.message_id
-        self.command_set[(0x0000, 0x0700)].value = params.Priority
+        self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
-        self.data_set = params.Identifier
+        self.data_set = params.identifier
         self.set_length()
 
     def to_params(self):
@@ -414,18 +414,18 @@ class CGetRSPMessage(DIMSEMessage):
                       ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
                       ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
                       ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8010
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.Status
-        self.command_set[(0x0000, 0x1020)].value = params.NumberOfRemainingSubOperations
-        self.command_set[(0x0000, 0x1021)].value = params.NumberOfCompletedSubOperations
-        self.command_set[(0x0000, 0x1022)].value = params.NumberOfFailedSubOperations
-        self.command_set[(0x0000, 0x1023)].value = params.NumberOfWarningSubOperations
+        self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+        self.command_set[(0x0000, 0x1021)].value = params.number_of_completed_sub_operations
+        self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
+        self.command_set[(0x0000, 0x1023)].value = params.number_of_warning_sub_operations
         self.set_length()
 
     def to_params(self):
@@ -449,17 +449,17 @@ class CMoveRQMessage(DIMSEMessage):
                       ('Priority', (0x0000, 0x0700), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Move Destination', (0x0000, 0x0600), 'AE', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x0021
         self.command_set[(0x0000, 0x0110)].value = params.message_id
-        self.command_set[(0x0000, 0x0700)].value = params.Priority
+        self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
-        self.command_set[(0x0000, 0x0600)].value = params.MoveDestination
+        self.command_set[(0x0000, 0x0600)].value = params.move_destination
 
-        self.data_set = params.Identifier
+        self.data_set = params.identifier
         self.set_length()
 
     def to_params(self):
@@ -483,18 +483,18 @@ class CMoveRSPMessage(DIMSEMessage):
                       ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
                       ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
                       ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.AffectedSOPClassUID
+        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8021
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.Status
-        self.command_set[(0x0000, 0x1020)].value = params.NumberOfRemainingSubOperations
-        self.command_set[(0x0000, 0x1021)].value = params.NumberOfCompletedSubOperations
-        self.command_set[(0x0000, 0x1022)].value = params.NumberOfFailedSubOperations
-        self.command_set[(0x0000, 0x1023)].value = params.NumberOfWarningSubOperations
+        self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+        self.command_set[(0x0000, 0x1021)].value = params.number_of_complete_sub_operations
+        self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
+        self.command_set[(0x0000, 0x1023)].value = params.number_of_warning_sub_operations
         self.set_length()
 
     def to_params(self):
@@ -515,11 +515,11 @@ class CCancelRQMessage(DIMSEMessage):
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
                       ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
-    DataField = 'Identifier'
+    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0100)].value = 0x0FFF
-        self.command_set[(0x0000, 0x0120)].value = params.MessageIDBeingRespondedTo
+        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.set_length()
 

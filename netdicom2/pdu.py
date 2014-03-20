@@ -334,7 +334,7 @@ class PDataTfPDU(PDUBase):
         super(PDataTfPDU, self).__init__()
 
         self.pdu_type = 0x04    # Unsigned byte
-        self.reserved = 0x00   # Unsigned byte
+        self.reserved = 0x00    # Unsigned byte
         self.pdu_length = None  # Unsigned int
 
         # List of one of more PresentationDataValueItem

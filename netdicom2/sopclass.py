@@ -104,7 +104,7 @@ SOP_CLASSES = {}  # Initialized later
 
 class ServiceClassMeta(type):
     def __new__(mcs, name, bases, dct):
-        new_class = super(ServiceClassMeta, mcs).__new__(name, bases, dct)
+        new_class = type.__new__(mcs, name, bases, dct)
         try:
             SOP_CLASSES.update({sop_class: new_class for sop_class in dct['sop_classes']})
         except KeyError:
@@ -123,7 +123,7 @@ class ServiceClass(object):
         self.ae = ae
         self.uid = uid
         self.dimse = dimse
-        self.pcid = pcid,
+        self.pcid = pcid
         self.transfer_syntax = transfer_syntax
         self.max_pdu_length = max_pdu_length
         self.asce = asce
@@ -151,7 +151,7 @@ class VerificationServiceClass(ServiceClass):
         self.dimse.send(c_echo, self.pcid, self.max_pdu_length)
 
         ans, id_ = self.dimse.receive(wait=True)
-        return self.code_to_status(ans.Status)
+        return self.code_to_status(ans.status)
 
     def scp(self, msg):
         self.check_asce()
@@ -218,13 +218,11 @@ class StorageServiceClass(ServiceClass):
 
 
 class QueryRetrieveServiceClass(ServiceClass):
-    sop_classes = [PatientRootFindSOPClass, PatientRootMoveSOPClass, PatientRootGetSOPClass,
-                   StudyRootFindSOPClass, StudyRootMoveSOPClass,
-                   StudyRootGetSOPClass, PatientStudyOnlyFindSOPClass,
-                   PatientStudyOnlyMoveSOPClass, PatientStudyOnlyGetSOPClass]
+    pass
 
 
 class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
+    sop_classes = [PatientRootFindSOPClass, StudyRootFindSOPClass, PatientStudyOnlyFindSOPClass]
     statuses = [OutOfResources, IdentifierDoesNotMatchSOPClass, UnableToProcess, MatchingTerminatedDueToCancelRequest,
                 Success, Pending, PendingWarning]
 
@@ -245,7 +243,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            d = dsutils.decode(ans.Identifier, self.transfer_syntax.is_implicit_VR,
+            d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
             status = self.code_to_status(ans.Status.value).type_
             yield status, d
@@ -254,7 +252,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
 
     def scp(self, msg):
         self.check_asce()
-        ds = dsutils.decode(msg.Identifier, self.transfer_syntax.is_implicit_VR,
+        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
         # make response
@@ -282,6 +280,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
 
 
 class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
+    sop_classes = [PatientRootGetSOPClass, StudyRootGetSOPClass, PatientStudyOnlyGetSOPClass]
     statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform, IdentifierDoesNotMatchSOPClass,
                 UnableToProcess, Cancel, Warning_, Success, Pending]
 
@@ -323,6 +322,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
 
 
 class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
+    sop_classes = [PatientRootMoveSOPClass, StudyRootMoveSOPClass, PatientStudyOnlyMoveSOPClass]
     statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform, MoveDestinationUnknown,
                 IdentifierDoesNotMatchSOPClass, UnableToProcess, Cancel, Warning_, Success, Pending]
 
@@ -351,7 +351,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
 
     def scp(self, msg):
         self.check_asce()
-        ds = dsutils.decode(msg.Identifier, self.transfer_syntax.is_implicit_VR,
+        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
         # make response
@@ -428,7 +428,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            d = dsutils.decode(ans.Identifier, self.transfer_syntax.is_implicit_VR,
+            d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
             status = self.code_to_status(ans.Status.value).type_
             yield status, d
@@ -437,7 +437,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
 
     def scp(self, msg):
         self.check_asce()
-        ds = dsutils.decode(msg.Identifier, self.transfer_syntax.is_implicit_VR, self.transfer_syntax.is_little_endian)
+        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR, self.transfer_syntax.is_little_endian)
 
         # make response
         rsp = dimseparameters.CFindServiceParameters()
