@@ -159,6 +159,8 @@ class AAssociateRqPDU(PDUBase):
         self.pdu_type, self.reserved1, self.pdu_length, self.protocol_version, self.reserved2, \
             self.called_ae_title, self.calling_ae_title = struct.unpack('> B B I H H 16s 16s', stream.read(42))
         self.reserved3 = struct.unpack('> 8I', stream.read(32))
+        self.called_ae_title = self.called_ae_title.strip('\0')
+        self.calling_ae_title = self.calling_ae_title.strip('\0')
         while 1:
             type_ = next_type(stream)
             if type_ == 0x10:

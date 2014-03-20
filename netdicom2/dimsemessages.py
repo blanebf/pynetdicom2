@@ -103,7 +103,7 @@ class DIMSEMessage(object):
     def __init__(self):
         self.command_set = None
         self.encoded_data_set = None
-        self.data_set = None
+        self.data_set = ''
         self.encoded_command_set = ''
         self.id_ = None
 

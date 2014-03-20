@@ -314,6 +314,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                                        self.transfer_syntax.is_little_endian)
                     sop_class = SOP_CLASSES[d.SOPClassUID]
                     status = self.ae.on_receive_store(sop_class, d)
+                    yield sop_class, d
                 except Exception:  # TODO Replace this exception block with something more sensible
                     status = CannotUnderstand
 
