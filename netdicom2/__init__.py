@@ -11,6 +11,7 @@ import sopclass
 def _setup_request(search_level, search_params, addr, port, aet, transfer_syntax=None):
     import dicom.UID
     import dicom.dataset
+    import dicom.datadict
     if not transfer_syntax:
         transfer_syntax = [dicom.UID.ExplicitVRLittleEndian, dicom.UID.ImplicitVRLittleEndian,
                            dicom.UID.ExplicitVRBigEndian]
@@ -18,8 +19,9 @@ def _setup_request(search_level, search_params, addr, port, aet, transfer_syntax
     remote_ae = {'Address': addr, 'Port': port, 'AET': aet}
     ds = dicom.dataset.Dataset()
     ds.QueryRetrieveLevel = search_level.upper()
-    for k, v in search_params:
-        ds[k] = v
+    for k, v in search_params.iteritems():
+        vr, _, _, _, _ = dicom.datadict.get_entry(k)
+        ds.add_new(k, vr, v)
     return remote_ae, ds, transfer_syntax
 
 

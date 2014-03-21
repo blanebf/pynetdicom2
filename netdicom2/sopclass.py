@@ -197,16 +197,15 @@ class StorageServiceClass(ServiceClass):
 
         # wait for c-store response
         ans, id_ = self.dimse.receive(wait=True)
-        return self.code_to_status(ans.Status.value)
+        return self.code_to_status(ans.status.value)
 
     def scp(self, msg):
         self.check_asce()
         try:
-            ds = dsutils.decode(msg.data_set,
-                                self.transfer_syntax.is_implicit_VR,
+            ds = dsutils.decode(msg.dataset, self.transfer_syntax.is_implicit_VR,
                                 self.transfer_syntax.is_little_endian)
             status = self.ae.on_receive_store(self, ds)
-        except Exception:  # TODO Replace this exception block with something more sensible
+        except Exception as e:  # TODO Replace this exception block with something more sensible
             status = CannotUnderstand
         # make response
         rsp = dimseparameters.CStoreServiceParameters()
@@ -245,7 +244,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
                 continue
             d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
-            status = self.code_to_status(ans.Status.value).type_
+            status = self.code_to_status(ans.status.value).type_
             yield status, d
             if status != 'Pending':
                 break
@@ -345,7 +344,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            status = self.code_to_status(ans.Status.value).type_
+            status = self.code_to_status(ans.status.value).type_
             if status != 'Pending':
                 break
             yield status
@@ -431,7 +430,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
                 continue
             d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
-            status = self.code_to_status(ans.Status.value).type_
+            status = self.code_to_status(ans.status.value).type_
             yield status, d
             if status != 'Pending':
                 break

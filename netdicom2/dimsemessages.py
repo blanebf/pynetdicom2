@@ -239,7 +239,7 @@ class CEchoRSPMessage(DIMSEMessage):
         self.command_set[(0x0000, 0x0100)].value = 0x8030
         self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
-        self.command_set[(0x0000, 0x0900)].value = params.Status
+        self.command_set[(0x0000, 0x0900)].value = params.status
         self.set_length()
 
     def to_params(self):
@@ -363,7 +363,7 @@ class CFindRSPMessage(DIMSEMessage):
             self.command_set[(0x0000, 0x0800)].value = 0x0101
         else:
             self.command_set[(0x0000, 0x0800)].value = 0x000
-        self.command_set[(0x0000, 0x0900)].value = params.Status
+        self.command_set[(0x0000, 0x0900)].value = params.status
         self.data_set = params.identifier
         self.set_length()
 
@@ -421,7 +421,7 @@ class CGetRSPMessage(DIMSEMessage):
         self.command_set[(0x0000, 0x0100)].value = 0x8010
         self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
-        self.command_set[(0x0000, 0x0900)].value = params.Status
+        self.command_set[(0x0000, 0x0900)].value = params.status
         self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
         self.command_set[(0x0000, 0x1021)].value = params.number_of_completed_sub_operations
         self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
@@ -490,7 +490,7 @@ class CMoveRSPMessage(DIMSEMessage):
         self.command_set[(0x0000, 0x0100)].value = 0x8021
         self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
-        self.command_set[(0x0000, 0x0900)].value = params.Status
+        self.command_set[(0x0000, 0x0900)].value = params.status
         self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
         self.command_set[(0x0000, 0x1021)].value = params.number_of_complete_sub_operations
         self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
@@ -549,7 +549,7 @@ class CCancelMoveRQMessage(CCancelRQMessage):
 
 
 MessageType = {
-    0x0001: dimseparameters.CStoreRQMessage,
+    0x0001: CStoreRQMessage,
     0x8001: CStoreRSPMessage,
     0x0020: CFindRQMessage,
     0x8020: CFindRSPMessage,

@@ -5,7 +5,7 @@
 #    available at http://pynetdicom.googlecode.com
 #
 
-import StringIO
+import cStringIO
 import dicom
 
 if dicom.__version_info__ >= (0, 9, 8):
@@ -18,7 +18,7 @@ from dicom.filewriter import write_dataset, write_data_element
 
 
 def decode(rawstr, is_implicit_vr, is_little_endian):
-    s = StringIO.StringIO(rawstr)
+    s = cStringIO.StringIO(rawstr)
     ds = read_dataset(s, is_implicit_vr, is_little_endian)
     return ds
 
