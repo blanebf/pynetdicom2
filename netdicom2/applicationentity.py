@@ -12,6 +12,7 @@ import select
 import platform
 import gc
 import time
+import contextlib
 
 from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
@@ -23,38 +24,144 @@ from asceprovider import ACSEServiceProvider
 import dimseparameters
 
 
-class Association(threading.Thread):
+class Association(object):
+    """Base association class.
 
-    def __init__(self, local_ae, client_socket=None, remote_ae=None):
-        if not client_socket and not remote_ae:
-            raise ValueError('Both remote_ae and client_socket are not specified')
-        if client_socket and remote_ae:
-            raise ValueError('Both remote_ae and client_socket specified')
+    Class is not intended for direct usage and meant to be sub-classed. Class provides basic
+    association interface: creation, release and abort.
+    """
+
+    def __init__(self, local_ae, dul_socket):
+        """Initializes Association instance with local AE title and DUL service provider
+
+        :param local_ae: local AE title parameters
+        :param dul_socket: socket for DUL provider or None if it's not needed
+        """
         super(Association, self).__init__()
-        if client_socket:  # must respond for request from a remote AE
-            self.mode = 'Acceptor'
-        if remote_ae:  # must request
-            self.mode = 'Requestor'
-
-        self.client_socket = client_socket
-        self.dul = DULServiceProvider(client_socket)
+        self.dul = DULServiceProvider(dul_socket)
         self.ae = local_ae
-        self.remote_ae = remote_ae
-        self._kill = False
-
-        self.sop_classes_as_scp = []
-        self.sop_classes_as_scu = []
         self.association_established = False
-        self.association_refused = None
-
         self.asce = ACSEServiceProvider(self.dul)
         self.dimse = DIMSEServiceProvider(self.dul)
 
+    def kill(self):
+        """Stops internal DUL service provider.
+
+        In most cases you won't need to use this method directly. Refer to release and abort instead.
+        :rtype : None
+        """
+        for _ in xrange(1000):
+            if self.dul.stop():
+                continue
+            time.sleep(0.001)
+        self.dul.kill()
+
+    def release(self, reason):
+        """Releases association with specified reason.
+
+        :rtype : None
+        :param reason: release reason
+        """
+        self.asce.release(reason)
+        self.kill()
+
+    def abort(self, reason):
+        """Aborts association with specified reason
+
+        :rtype : None
+        :param reason: abort reason
+        """
+        # self.asce.abort(reason) TODO: Look into passing abort reason
+        self.asce.abort()
+        self.kill()
+
+
+class AssociationAcceptor(threading.Thread, Association):
+    """'Server-side' association implementation.
+
+    Class is intended for handling incoming association requests.
+    """
+
+    def __init__(self, local_ae, client_socket):
+        """Initializes AssociationAcceptor instance with specified client socket
+
+        :param local_ae: local AE title
+        :param client_socket: client socket
+        """
+        super(AssociationAcceptor, self).__init__(local_ae, client_socket)
+        self.client_socket = client_socket
+        self._kill = False
+        self.sop_classes_as_scp = []
         self.start()
 
-    @staticmethod
-    def get_sop_class(ds):
-        return sopclass.SOP_CLASSES[ds.SOPClassUID]
+    def kill(self):
+        """Overrides base class kill method to set stop-flag for running thread
+
+        :rtype : None
+        """
+        self._kill = True
+        super(AssociationAcceptor, self).kill()
+
+    def run(self):
+        self.asce.accept(self.ae.acceptable_presentation_contexts)
+        # call back
+        self.ae.on_association_request(self)
+        # build list of SOPClasses supported
+        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in self.asce.accepted_presentation_contexts]
+        self.association_established = True
+
+        # association established. Listening on local and remote interfaces
+        while not self._kill:
+            time.sleep(0.001)
+            dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
+            if dimse_msg:  # dimse message received
+                uid = dimse_msg.affected_sop_class_uid
+                try:
+                    pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
+                except IndexError:
+                    raise Exception("SOP Class %s not supported as SCP" % uid)  # TODO Replace exception
+                obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                                                      transfer_syntax=transfer_syntax,
+                                                      max_pdu_length=self.asce.max_pdu_length,
+                                                      asce=self.asce)
+                obj.scp(dimse_msg)  # run SCP
+                if self.asce.check_release():
+                    self.kill()
+                if self.asce.check_abort():
+                    self.kill()
+
+
+class AssociationRequester(Association):
+    def __init__(self, local_ae, remote_ae=None):
+        super(AssociationRequester, self).__init__(local_ae, None)
+        self.ae = local_ae
+        self.remote_ae = remote_ae
+        self.sop_classes_as_scu = []
+        self.association_refused = False
+        self._request()
+
+    def _request(self):
+        ext = []
+        for ii in self.ae.acceptable_presentation_contexts:
+            tmp = dimseparameters.ScpScuRoleSelectionParameters()
+            tmp.sop_class_uid = ii[0]
+            tmp.scu_role = 0
+            tmp.scp_role = 1
+            ext.append(tmp)
+
+        ans = self.asce.request(self.ae.local_ae, self.remote_ae,
+                                self.ae.max_pdu_length,
+                                self.ae.presentation_context_definition_list,
+                                users_pdu=ext)
+        self.ae.on_association_response(ans)
+        if not ans:
+            self.association_refused = True
+            self.dul.kill()
+            return
+        self.sop_classes_as_scu = [(context[0], context[1], context[2])
+                                   for context in self.asce.accepted_presentation_contexts]
+
+        self.association_established = True
 
     def scu(self, ds, id_):
         uid = ds.SOPClassUID
@@ -75,81 +182,6 @@ class Association(threading.Thread):
         obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
                                               transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
         return obj
-
-    def kill(self):
-        self._kill = True
-        for ii in range(1000):
-            if self.dul.stop():
-                continue
-            time.sleep(0.001)
-        self.dul.kill()
-
-    def release(self, reason):
-        self.asce.release(reason)
-        self.kill()
-
-    def abort(self, reason):
-        # self.asce.abort(reason) TODO: Look into passing abort reason
-        self.asce.abort()
-        self.kill()
-
-    def run(self):
-        if self.mode == 'Acceptor':
-            self.asce.accept(self.client_socket, self.ae.acceptable_presentation_contexts)
-            # call back
-            self.ae.on_association_request(self)
-            # build list of SOPClasses supported
-            self.sop_classes_as_scp = [(context[0], context[1], context[2])
-                                       for context in self.asce.accepted_presentation_contexts]
-        else:  # Requestor mode
-            #  build role extended negociation
-            ext = []
-            for ii in self.ae.acceptable_presentation_contexts:
-                tmp = dimseparameters.ScpScuRoleSelectionParameters()
-                tmp.sop_class_uid = ii[0]
-                tmp.scu_role = 0
-                tmp.scp_role = 1
-                ext.append(tmp)
-
-            ans = self.asce.request(self.ae.local_ae, self.remote_ae,
-                                    self.ae.max_pdu_length,
-                                    self.ae.presentation_context_definition_list,
-                                    users_pdu=ext)
-            self.ae.on_association_response(ans)
-            if not ans:
-                self.association_refused = True
-                self.dul.kill()
-                return
-            self.sop_classes_as_scu = [(context[0], context[1], context[2])
-                                       for context in self.asce.accepted_presentation_contexts]
-
-        self.association_established = True
-
-        # association established. Listening on local and remote interfaces
-        while not self._kill:
-            time.sleep(0.001)
-            # look for incoming DIMSE message
-            if self.mode == 'Acceptor':
-                dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
-                if dimse_msg:  # dimse message received
-                    uid = dimse_msg.affected_sop_class_uid
-                    try:
-                        pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
-                    except IndexError:
-                        raise Exception("SOP Class %s not supported as SCP" % uid)  # TODO Replace exception
-                    obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
-                                                          transfer_syntax=transfer_syntax,
-                                                          max_pdu_length=self.asce.max_pdu_length,
-                                                          asce=self.asce)
-                    obj.scp(dimse_msg)  # run SCP
-
-                # check for release request
-                if self.asce.check_release():
-                    self.kill()
-
-                # check for abort
-                if self.asce.check_abort():
-                    self.kill()
 
 
 class AE(threading.Thread):
@@ -244,16 +276,17 @@ class AE(threading.Thread):
                 # when we logoff.
                 continue
 
+    @contextlib.contextmanager
     def request_association(self, remote_ae):
         """Requests association to a remote application entity"""
-        assoc = Association(self, remote_ae=remote_ae)
+        assoc = AssociationRequester(self, remote_ae=remote_ae)
         while not assoc.association_established and not assoc.association_refused:
             time.sleep(0.1)
-        if assoc.association_established:
-            self.associations.append(assoc)
-            return assoc
-        else:
-            return None
+        if not assoc.association_established:
+            raise Exception('Failed to establish association')  # TODO Replace this exception
+        self.associations.append(assoc)
+        yield assoc
+        assoc.release(0)
 
     def on_association_request(self, assoc):
         pass

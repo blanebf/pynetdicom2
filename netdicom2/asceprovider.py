@@ -96,12 +96,10 @@ class ACSEServiceProvider(object):
                 self.accepted_presentation_contexts.append((cc[0], uid, UID(cc[2])))
         return True
 
-    def accept(self, client_socket=None, acceptable_presentation_contexts=None, wait=True):
+    def accept(self, acceptable_presentation_contexts=None, wait=True):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
         acceptable_presentation_contexts"""
-        if self.dul is None:
-            self.dul = dulprovider.DULServiceProvider(socket_=client_socket)
         assoc = self.dul.receive(wait=True)
         if not assoc:
             return None

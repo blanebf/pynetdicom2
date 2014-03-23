@@ -260,22 +260,20 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
         gen = self.ae.on_receive_find(self, ds)
-        try:
-            while 1:
-                time.sleep(0.001)
-                identifier_ds, status = gen.next()
-                rsp.status = int(status)
-                rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
-                                                self.transfer_syntax.is_little_endian)
-                # send response
-                self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
-        except StopIteration:
-            # send final response
-            rsp = dimseparameters.CFindServiceParameters()
-            rsp.message_id_being_responded_to = msg.message_id
-            rsp.affected_sop_class_uid = msg.affected_sop_class_uid
-            rsp.status = int(Success)
+        for identifier_ds, status in gen:
+            time.sleep(0.001)
+            identifier_ds, status = gen.next()
+            rsp.status = int(status)
+            rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
+                                            self.transfer_syntax.is_little_endian)
+            # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+
+        rsp = dimseparameters.CFindServiceParameters()
+        rsp.message_id_being_responded_to = msg.message_id
+        rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+        rsp.status = int(Success)
+        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
 
 
 class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
@@ -445,19 +443,18 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
         gen = self.ae.on_receive_find(self, ds)
-        try:
-            while 1:
-                time.sleep(0.001)
-                identifier_ds, status = gen.next()
-                rsp.status = int(status)
-                rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
-                                                self.transfer_syntax.is_little_endian)
-                # send response
-                self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
-        except StopIteration:
-            # send final response
-            rsp = dimseparameters.CFindServiceParameters()
-            rsp.message_id_being_responded_to = msg.message_id
-            rsp.affected_sop_class_uid = msg.affected_sop_class_uid
-            rsp.status = int(Success)
+        for identifier_ds, stats in gen:
+            identifier_ds, status = gen.next()
+            rsp.status = int(status)
+            rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
+                                            self.transfer_syntax.is_little_endian)
+            # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+            time.sleep(0.001)
+
+        # send final response
+        rsp = dimseparameters.CFindServiceParameters()
+        rsp.message_id_being_responded_to = msg.message_id
+        rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+        rsp.status = int(Success)
+        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
