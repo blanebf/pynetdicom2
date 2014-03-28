@@ -11,8 +11,7 @@ class PDUEncodingTestCase(unittest.TestCase):
         rq1.called_ae_title = 'aet1'
         rq1.calling_ae_title = 'aet2'
         encoded = rq1.encode()
-        rq2 = netdicom2.pdu.AAssociateRqPDU()
-        rq2.decode(encoded)
+        rq2 = netdicom2.pdu.AAssociateRqPDU.decode(encoded)
         self.assertEqual(rq1, rq2)
 
     def test_a_associate_ac_pdu(self):

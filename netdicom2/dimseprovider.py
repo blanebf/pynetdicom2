@@ -55,23 +55,30 @@ class DIMSEServiceProvider(object):
         if dimse_msg is None:
             raise RuntimeError("Failed to get message")  # TODO: Replace exception type
 
-        logger.debug('DIMSE message of class %s' % dimse_msg.__class__)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('DIMSE message of class %s' % dimse_msg.__class__)
         dimse_msg.from_params(primitive)
-        logger.debug('DIMSE message: %s', str(dimse_msg))
+        if logger.isEnabledFor(logger.DEBUG):
+            logger.debug('DIMSE message: %s', str(dimse_msg))
         pdatas = dimse_msg.encode(id_, max_pdu_length)
-        logger.debug('encoded %d fragments' % len(pdatas))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('encoded %d fragments' % len(pdatas))
         for ii, pp in enumerate(pdatas):
-            logger.debug('sending pdata %d of %d' % (ii + 1, len(pdatas)))
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug('sending pdata %d of %d' % (ii + 1, len(pdatas)))
             self.dul.send(pp)
-        logger.debug('DIMSE message sent')
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('DIMSE message sent')
 
     def receive(self, wait=False, timeout=None):
-        logger.debug("In DIMSEprovider.receive")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("In DIMSEprovider.receive")
         if self.message is None:
             self.message = DIMSEMessage()
         if wait:
             # loop until complete DIMSE message is received
-            logger.debug('Entering loop for receiving DIMSE message')
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug('Entering loop for receiving DIMSE message')
             while 1:
                 time.sleep(0.001)
                 nxt = self.dul.peek()
@@ -81,16 +88,19 @@ class DIMSEServiceProvider(object):
                     return None, None
                 if self.message.decode(self.dul.receive(wait, timeout)):
                     tmp, self.message = self.message, None
-                    logger.debug('Decoded DIMSE message: %s', str(tmp))
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug('Decoded DIMSE message: %s', str(tmp))
                     return tmp.to_params(), tmp.id_
         else:
             cls = self.dul.peek().__class__
             if cls not in (type(None), PDataServiceParameters):
-                logger.debug('Waiting for P-DATA but received %s', cls)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug('Waiting for P-DATA but received %s', cls)
                 return None, None
             if self.message.decode(self.dul.receive(wait, timeout)):
                 tmp, self.message = self.message, None
-                logger.debug('received DIMSE message: %s', tmp)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug('received DIMSE message: %s', tmp)
                 return tmp.to_params(), tmp.id_
             else:
                 return None, None

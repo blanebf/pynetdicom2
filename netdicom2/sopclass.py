@@ -261,13 +261,12 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
 
         gen = self.ae.on_receive_find(self, ds)
         for identifier_ds, status in gen:
-            time.sleep(0.001)
-            identifier_ds, status = gen.next()
             rsp.status = int(status)
             rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)
             # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+            time.sleep(0.001)
 
         rsp = dimseparameters.CFindServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id
@@ -356,49 +355,39 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid.value
-        gen = self.ae.on_receive_move(self, ds, msg.MoveDestination.value)
-
-        # first value returned by callback must be the complete remote AE specs
-        remote_ae = gen.next()
-
-        # request association to move destination
+        remote_ae, nop, gen = self.ae.on_receive_move(self, ds, msg.MoveDestination.value)
         assoc = self.ae.request_association(remote_ae)
-        nop = gen.next()
         failed = 0
         warning = 0
         completed = 0
-        try:
-            while 1:
-                data_set = gen.next()
-                # request an association with destination send C-STORE
-                obj = assoc.get_scu(data_set.SOPClassUID)
-                status = obj.scu(data_set, completed)
-                if status.type_ == 'Failed':
-                    failed += 1
-                if status.type_ == 'Warning':
-                    warning += 1
-                rsp.status = int(Pending)
-                rsp.number_of_remaining_sub_operations = nop - completed
-                rsp.number_of_complete_sub_operations = completed
-                rsp.number_of_failed_sub_operations = failed
-                rsp.number_of_warning_sub_operations = warning
-                completed += 1
-
-                # send response
-                self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
-
-        except StopIteration:
-            # send final response
-            rsp = dimseparameters.CMoveServiceParameters()
-            rsp.message_id_being_responded_to = msg.message_id.value
-            rsp.affected_sop_class_uid = msg.affected_sop_class_uid.value
+        for data_set in gen:
+            # request an association with destination send C-STORE
+            obj = assoc.get_scu(data_set.SOPClassUID)
+            status = obj.scu(data_set, completed)
+            if status.type_ == 'Failed':
+                failed += 1
+            if status.type_ == 'Warning':
+                warning += 1
+            rsp.status = int(Pending)
             rsp.number_of_remaining_sub_operations = nop - completed
             rsp.number_of_complete_sub_operations = completed
             rsp.number_of_failed_sub_operations = failed
             rsp.number_of_warning_sub_operations = warning
-            rsp.status = int(Success)
+            completed += 1
+
+            # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
-            assoc.release(0)
+
+        rsp = dimseparameters.CMoveServiceParameters()
+        rsp.message_id_being_responded_to = msg.message_id.value
+        rsp.affected_sop_class_uid = msg.affected_sop_class_uid.value
+        rsp.number_of_remaining_sub_operations = nop - completed
+        rsp.number_of_complete_sub_operations = completed
+        rsp.number_of_failed_sub_operations = failed
+        rsp.number_of_warning_sub_operations = warning
+        rsp.status = int(Success)
+        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        assoc.release(0)
 
 
 class BasicWorkListServiceClass(ServiceClass):
@@ -443,8 +432,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         rsp.affected_sop_class_uid = msg.AffectedSOPClassUID
 
         gen = self.ae.on_receive_find(self, ds)
-        for identifier_ds, stats in gen:
-            identifier_ds, status = gen.next()
+        for identifier_ds, status in gen:
             rsp.status = int(status)
             rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)

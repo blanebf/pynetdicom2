@@ -59,9 +59,9 @@ These classes are:
 """
 
 import struct
-from StringIO import StringIO
+from cStringIO import StringIO
 
-import dulparameters
+import netdicom2.dulparameters as dulparams
 from netdicom2 import dimseparameters
 
 
@@ -85,10 +85,10 @@ class AAssociateRqPDU(PDUBase):
     def __init__(self):
         super(AAssociateRqPDU, self).__init__()
 
-        self.pdu_type = 0x01                        # Unsigned byte
+        self.pdu_type = 0x01                       # Unsigned byte
         self.reserved1 = 0x00                      # Unsigned byte
-        self.pdu_length = None                      # Unsigned int
-        self.protocol_version = 1                   # Unsigned short
+        self.pdu_length = None                     # Unsigned int
+        self.protocol_version = 1                  # Unsigned short
         self.reserved2 = 0x00                      # Unsigned short
         self.called_ae_title = None                # string of length 16
         self.calling_ae_title = None               # string of length 16
@@ -132,7 +132,7 @@ class AAssociateRqPDU(PDUBase):
 
     def to_params(self):
         # Returns an A_ASSOCIATE_ServiceParameters object
-        assoc = dulparameters.AAssociateServiceParameters()
+        assoc = dulparams.AAssociateServiceParameters()
         assoc.calling_ae_title = self.calling_ae_title
         assoc.called_ae_title = self.called_ae_title
         assoc.application_context_name = self.variable_items[0].application_context_name
@@ -154,27 +154,38 @@ class AAssociateRqPDU(PDUBase):
         tmp2 = ''.join([item.encode() for item in self.variable_items])
         return tmp + tmp2
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-ASSOCIATE-RQ PDU instance from raw string.
+
+        :rtype : AAssociateRqPDU
+        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-RQ PDU
+        :return: decoded PDU
+        :raise RuntimeError:
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.protocol_version, self.reserved2, \
-            self.called_ae_title, self.calling_ae_title = struct.unpack('> B B I H H 16s 16s', stream.read(42))
-        self.reserved3 = struct.unpack('> 8I', stream.read(32))
-        self.called_ae_title = self.called_ae_title.strip('\0')
-        self.calling_ae_title = self.calling_ae_title.strip('\0')
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, \
+            decoded_pdu.pdu_length, decoded_pdu.protocol_version, \
+            decoded_pdu.reserved2, decoded_pdu.called_ae_title, \
+            decoded_pdu.calling_ae_title = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+        decoded_pdu.reserved3 = struct.unpack('> 8I', stream.read(32))
+        decoded_pdu.called_ae_title = decoded_pdu.called_ae_title.strip('\0')
+        decoded_pdu.calling_ae_title = decoded_pdu.calling_ae_title.strip('\0')
         while 1:
             type_ = next_type(stream)
             if type_ == 0x10:
-                tmp = ApplicationContextItem()
+                tmp = ApplicationContextItem.decode(stream)
             elif type_ == 0x20:
-                tmp = PresentationContextItemRQ()
+                tmp = PresentationContextItemRQ.decode(stream)
             elif type_ == 0x50:
-                tmp = UserInformationItem()
+                tmp = UserInformationItem.decode(stream)
             elif type_ is None:
                 break
             else:
                 raise RuntimeError('InvalidVariableItem')
-            tmp.decode(stream)
-            self.variable_items.append(tmp)
+            decoded_pdu.variable_items.append(tmp)
+        return decoded_pdu
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -232,7 +243,7 @@ class AAssociateAcPDU(PDUBase):
             self.pdu_length = self.pdu_length + ii.total_length()
 
     def to_params(self):
-        assoc = dulparameters.AAssociateServiceParameters()
+        assoc = dulparams.AAssociateServiceParameters()
         assoc.called_ae_title = self.reserved3
         assoc.calling_ae_title = self.reserved4
         assoc.application_context_name = self.variable_items[0].to_params()
@@ -256,25 +267,35 @@ class AAssociateAcPDU(PDUBase):
         tmp2 = ''.join([item.encode() for item in self.variable_items])
         return tmp + tmp2
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-ASSOCIATE-AC PDU instance from raw string.
+
+        :rtype : AAssociateAcPDU
+        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-AC PDU
+        :return: decoded PDU
+        :raise RuntimeError:
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.protocol_version, self.reserved2, \
-            self.reserved3, self.reserved4 = struct.unpack('> B B I H H 16s 16s', stream.read(42))
-        self.reserved5 = struct.unpack('>8I', stream.read(32))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
+            decoded_pdu.protocol_version, decoded_pdu.reserved2, \
+            decoded_pdu.reserved3, decoded_pdu.reserved4 = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+        decoded_pdu.reserved5 = struct.unpack('>8I', stream.read(32))
         while 1:
             type_ = next_type(stream)
             if type_ == 0x10:
-                tmp = ApplicationContextItem()
+                tmp = ApplicationContextItem.decode(stream)
             elif type_ == 0x21:
-                tmp = PresentationContextItemAC()
+                tmp = PresentationContextItemAC.decode(stream)
             elif type_ == 0x50:
-                tmp = UserInformationItem()
+                tmp = UserInformationItem.decode(stream)
             elif type_ is None:
                 break
             else:
                 raise RuntimeError('InvalidVariableItem')
-            tmp.decode(stream)
-            self.variable_items.append(tmp)
+            decoded_pdu.variable_items.append(tmp)
+        return decoded_pdu
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -307,7 +328,7 @@ class AAssociateRjPDU(PDUBase):
         self.reason_diag = params.diagnostic
 
     def to_params(self):
-        tmp = dulparameters.AAssociateServiceParameters()
+        tmp = dulparams.AAssociateServiceParameters()
         tmp.result = self.result
         tmp.result_source = self.source
         tmp.diagnostic = self.reason_diag
@@ -319,10 +340,20 @@ class AAssociateRjPDU(PDUBase):
                         struct.pack('B', self.result), struct.pack('B', self.source),
                         struct.pack('B', self.reason_diag)])
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-ASSOCIATE-RJ PDU instance from raw string.
+
+        :rtype : AAssociateRjPDU
+        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-RJ PDU
+        :return: decoded PDU
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2, self.result, self.source, \
-            self.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
+            decoded_pdu.reserved2, decoded_pdu.result, decoded_pdu.source, \
+            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        return decoded_pdu
 
     def total_length(self):
         return 10
@@ -358,7 +389,7 @@ class PDataTfPDU(PDUBase):
             self.pdu_length = self.pdu_length + ii.total_length()
 
     def to_params(self):
-        tmp = dulparameters.PDataServiceParameters()
+        tmp = dulparams.PDataServiceParameters()
         tmp.presentation_data_value_list = []
         for ii in self.presentation_data_value_items:
             tmp.presentation_data_value_list.append([ii.presentation_context_id, ii.presentation_data_value])
@@ -370,15 +401,22 @@ class PDataTfPDU(PDUBase):
         tmp2 = ''.join([item.encode() for item in self.presentation_data_value_items])
         return tmp + tmp2
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes P-DATA-TF PDU instance from raw string.
+
+        :rtype : PDataTfPDU
+        :param rawstring: rawstring containing binary representation of the P-DATA-TF PDU
+        :return: decoded PDU
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved, self.pdu_length = struct.unpack('> B B I', stream.read(6))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved, decoded_pdu.pdu_length = struct.unpack('> B B I', stream.read(6))
         length_read = 0
-        while length_read != self.pdu_length:
-            tmp = PresentationDataValueItem()
-            tmp.decode(stream)
+        while length_read != decoded_pdu.pdu_length:
+            tmp = PresentationDataValueItem.decode(stream)
             length_read += tmp.total_length()
-            self.presentation_data_value_items.append(tmp)
+            decoded_pdu.presentation_data_value_items.append(tmp)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -386,7 +424,7 @@ class PDataTfPDU(PDUBase):
 
 class AReleaseRqPDU(PDUBase):
 
-    """This class represents the A-ASSOCIATE-RQ PDU"""
+    """This class represents the A-RELEASE-RQ PDU"""
 
     def __init__(self):
         super(AReleaseRqPDU, self).__init__()
@@ -405,7 +443,7 @@ class AReleaseRqPDU(PDUBase):
         pass
 
     def to_params(self):
-        tmp = dulparameters.AReleaseServiceParameters()
+        tmp = dulparams.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
@@ -414,9 +452,19 @@ class AReleaseRqPDU(PDUBase):
         return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
                         struct.pack('>I', self.pdu_length),struct.pack('>I', self.reserved2)])
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-RELEASE-RQ PDU instance from raw string.
+
+        :rtype : AReleaseRqPDU
+        :param rawstring: rawstring containing binary representation of the A-RELEASE-RQ PDU
+        :return: decoded PDU
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = struct.unpack('> B B I I', stream.read(10))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length,\
+            decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
+        return decoded_pdu
 
     def total_length(self):
         return 10
@@ -443,7 +491,7 @@ class AReleaseRpPDU(PDUBase):
         pass
 
     def to_params(self):
-        tmp = dulparameters.AReleaseServiceParameters()
+        tmp = dulparams.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
@@ -452,9 +500,19 @@ class AReleaseRpPDU(PDUBase):
         return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
                         struct.pack('>I', self.pdu_length), struct.pack('>I', self.reserved2)])
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-RELEASE-RP PDU instance from raw string.
+
+        :rtype : AReleaseRpPDU
+        :param rawstring: rawstring containing binary representation of the A-RELEASE-RP PDU
+        :return: decoded PDU
+        """
         stream = StringIO(rawstring)
-        self.pdu_type, self.reserved1, self.pdu_length, self.reserved2 = struct.unpack('> B B I I', stream.read(10))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length,\
+            decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
+        return decoded_pdu
 
     def total_length(self):
         return 10
@@ -481,20 +539,20 @@ class AAbortPDU(PDUBase):
 
     def from_params(self, params):
         # Params can be an AAbortServiceParameters or APAbortServiceParameters object.
-        if isinstance(params, dulparameters.AAbortServiceParameters):  # User initiated abort
+        if isinstance(params, dulparams.AAbortServiceParameters):  # User initiated abort
             self.reason_diag = 0
             self.abort_source = params.abort_source
-        elif isinstance(params, dulparameters.APAbortServiceParameters):  # User provider initiated abort
+        elif isinstance(params, dulparams.APAbortServiceParameters):  # User provider initiated abort
             self.abort_source = params.abort_source
             self.reason_diag = None
 
     def to_params(self):
         # Returns either a A-ABORT of an A-P-ABORT
         if self.abort_source is not None:
-            tmp = dulparameters.AAbortServiceParameters()
+            tmp = dulparams.AAbortServiceParameters()
             tmp.abort_source = self.abort_source
         elif self.reason_diag is not None:
-            tmp = dulparameters.APAbortServiceParameters()
+            tmp = dulparams.APAbortServiceParameters()
             tmp.provider_reason = self.reason_diag
         else:
             raise RuntimeError('Unknown abort source')
@@ -506,10 +564,21 @@ class AAbortPDU(PDUBase):
                         struct.pack('B', self.reserved3), struct.pack('B', self.abort_source),
                         struct.pack('B', self.reason_diag)])
 
-    def decode(self, rawstring):
+    @classmethod
+    def decode(cls, rawstring):
+        """Factory method. Decodes A-ABORT PDU instance from raw string.
+
+        :rtype : AAbortPDU
+        :param rawstring: rawstring containing binary representation of the A-ABORT PDU
+        :return: decoded PDU
+        """
         stream = StringIO(rawstring)
-        (self.pdu_type, self.reserved1, self.pdu_length, self.reserved2,
-         self.reserved3, self.abort_source, self.reason_diag) = struct.unpack('> B B I B B B B', stream.read(10))
+        decoded_pdu = cls()
+        decoded_pdu.pdu_type, decoded_pdu.reserved1,\
+            decoded_pdu.pdu_length, decoded_pdu.reserved2,\
+            decoded_pdu.reserved3, decoded_pdu.abort_source,\
+            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        return decoded_pdu
 
     def total_length(self):
         return 10
@@ -546,9 +615,18 @@ class ApplicationContextItem(PDUBase):
         return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), self.application_context_name])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
-        self.application_context_name = stream.read(self.item_length)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes application context item from data stream
+
+        :rtype : ApplicationContextItem
+        :param stream: raw data stream
+        :return decoded item
+        """
+        decoded_obj = cls()
+        decoded_obj.item_type, decoded_obj.reserved, decoded_obj.item_length = struct.unpack('> B B H', stream.read(4))
+        decoded_obj.application_context_name = stream.read(decoded_obj.item_length)
+        return decoded_obj
 
     def total_length(self):
         return 4 + self.item_length
@@ -608,18 +686,28 @@ class PresentationContextItemRQ(PDUBase):
         tmp2 = ''.join([item.encode() for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
 
-    def decode(self, stream):
-        self.item_type, self.reserved1, self.item_length, self.presentation_context_id, self.reserved2, \
-            self.reserved3, self.reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
-        tmp = AbstractSyntaxSubItem()
-        tmp.decode(stream)
-        self.abstract_transfer_syntax_sub_items.append(tmp)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes presentation context item 'request' from data stream
+
+        :rtype : PresentationContextItemRQ
+        :param stream: raw data stream
+        :return: decoded context item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved1, \
+            decoded_item.item_length, \
+            decoded_item.presentation_context_id, \
+            decoded_item.reserved2, decoded_item.reserved3, \
+            decoded_item.reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
+        tmp = AbstractSyntaxSubItem.decode(stream)
+        decoded_item.abstract_transfer_syntax_sub_items.append(tmp)
         next_item_type = next_type(stream)
         while next_item_type == 0x40:
-            tmp = TransferSyntaxSubItem()
-            tmp.decode(stream)
-            self.abstract_transfer_syntax_sub_items.append(tmp)
+            tmp = TransferSyntaxSubItem.decode(stream)
+            decoded_item.abstract_transfer_syntax_sub_items.append(tmp)
             next_item_type = next_type(stream)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -663,11 +751,21 @@ class PresentationContextItemAC(PDUBase):
                         struct.pack('B', self.reserved2), struct.pack('B', self.result_reason),
                         struct.pack('B', self.reserved3), self.transfer_syntax_sub_item.encode()])
 
-    def decode(self, stream):
-        self.item_type, self.reserved1, self.item_length, self.presentation_context_id,\
-            self.reserved2, self.result_reason, self.reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
-        self.transfer_syntax_sub_item = TransferSyntaxSubItem()
-        self.transfer_syntax_sub_item.decode(stream)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes presentation context item 'accepted' from data stream
+
+        :rtype : PresentationContextItemAC
+        :param stream: raw data stream
+        :return: decoded context item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved1, \
+            decoded_item.item_length, decoded_item.presentation_context_id,\
+            decoded_item.reserved2, decoded_item.result_reason, \
+            decoded_item.reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
+        decoded_item.transfer_syntax_sub_item = TransferSyntaxSubItem.decode(stream)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -701,9 +799,19 @@ class AbstractSyntaxSubItem(PDUBase):
         return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), self.abstract_syntax_name])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
-        self.abstract_syntax_name = stream.read(self.item_length)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes abstract syntax sub-item from data stream
+
+        :rtype : AbstractSyntaxSubItem
+        :param stream: raw data stream
+        :return: decoded abstract syntax sub-item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved, \
+            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
+        decoded_item.abstract_syntax_name = stream.read(decoded_item.item_length)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -737,9 +845,19 @@ class TransferSyntaxSubItem(PDUBase):
         return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), self.transfer_syntax_name])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
-        self.transfer_syntax_name = stream.read(self.item_length)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes transfer syntax sub-item from data stream
+
+        :rtype : TransferSyntaxSubItem
+        :param stream: raw data stream
+        :return: decoded transfer syntax sub-item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved, \
+            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
+        decoded_item.transfer_syntax_name = stream.read(decoded_item.item_length)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -789,14 +907,24 @@ class UserInformationItem(PDUBase):
         tmp2 = ''.join([data.encode() for data in self.user_data])
         return tmp + tmp2
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
+    @classmethod
+    def decode(cls, stream):
+        """Decodes user information item from data stream
+
+        :rtype : UserInformationItem
+        :param stream: raw data stream
+        :return: decoded user information item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved, \
+            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
         # read the rest of user info
-        self.user_data = []
+        decoded_item.user_data = []
         while next_sub_item_type(stream) is not None:
             tmp = next_sub_item_type(stream)()
             tmp.decode(stream)
-            self.user_data.append(tmp)
+            decoded_item.user_data.append(tmp)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -844,9 +972,19 @@ class MaximumLengthSubItem(PDUBase):
         return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), struct.pack('>I', self.maximum_length_received)])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length, \
-            self.maximum_length_received = struct.unpack('> B B H I', stream.read(8))
+    @classmethod
+    def decode(cls, stream):
+        """Decodes maximum length sub-item from data stream
+
+        :rtype : MaximumLengthSubItem
+        :param stream: raw data stream
+        :return: decoded maximum length sub-item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved, \
+            decoded_item.item_length, \
+            decoded_item.maximum_length_received = struct.unpack('> B B H I', stream.read(8))
+        return decoded_item
 
     def total_length(self):
         return 0x08
@@ -882,11 +1020,21 @@ class PresentationDataValueItem(PDUBase):
         return ''.join([struct.pack('>I', self.item_length), struct.pack('B', self.presentation_context_id),
                         self.presentation_data_value])
 
-    def decode(self, stream):
-        self.item_length, self.presentation_context_id = struct.unpack('> I B', stream.read(5))
+    @classmethod
+    def decode(cls, stream):
+        """Decodes presentation data value item from data stream
+
+        :rtype : PresentationDataValueItem
+        :param stream: raw data stream
+        :return: decoded presentation data value item
+        """
+        decoded_item = cls()
+        decoded_item.item_length, \
+            decoded_item.presentation_context_id = struct.unpack('> I B', stream.read(5))
         # Presentation data value is left in raw string format.
         # The Application Entity is responsible for dealing with it.
-        self.presentation_data_value = stream.read(int(self.item_length) - 1)
+        decoded_item.presentation_data_value = stream.read(int(decoded_item.item_length) - 1)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -928,10 +1076,21 @@ class GenericUserDataSubItem(PDUBase):
         return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), self.user_data])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
-        # User data value is left in raw string format. The Application Entity is responsible for dealing with it.
-        self.user_data = stream.read(int(self.item_length) - 1)
+    @classmethod
+    def decode(cls, stream):
+        """Decodes generic data sub-item from data stream
+
+        :rtype : GenericUserDataSubItem
+        :param stream: raw data stream
+        :return: decoded generic data sub-item
+        """
+        decoded_item = cls()
+        decoded_item.item_type, decoded_item.reserved, \
+            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
+        # User data value is left in raw string format. The Application Entity is
+        # responsible for dealing with it.
+        decoded_item.user_data = stream.read(int(decoded_item.item_length) - 1)
+        return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
@@ -943,28 +1102,6 @@ def next_type(stream):
         return None  # we are at the end of the file
     stream.seek(-1, 1)
     return struct.unpack('B', char)[0]
-
-
-def next_pdu_type(stream):
-    pdu_type = next_type(stream)
-    if pdu_type == 0x01:
-        return AAssociateRqPDU
-    elif pdu_type == 0x02:
-        return AAssociateAcPDU
-    elif pdu_type == 0x03:
-        return AAssociateRjPDU
-    elif pdu_type == 0x04:
-        return PDataTfPDU
-    elif pdu_type == 0x05:
-        return AReleaseRqPDU
-    elif pdu_type == 0x06:
-        return AReleaseRpPDU
-    elif pdu_type == 0x07:
-        return AAbortPDU
-    elif pdu_type is None:
-        return None  # end of file
-    else:
-        raise RuntimeError('InvalidPDU')
 
 
 def next_sub_item_type(stream):
@@ -985,26 +1122,3 @@ def next_sub_item_type(stream):
         return None
     else:
         raise RuntimeError('Invalid Sub Item', "0x%X" % item_type)
-
-
-def decode_pdu(rawstring):
-    """Takes an encoded PDU as a string and return a PDU object"""
-    char = struct.unpack('B', rawstring[0])[0]
-    if char == 0x01:
-        pdu = AAssociateRqPDU()
-    elif char == 0x02:
-        pdu = AAssociateAcPDU()
-    elif char == 0x03:
-        pdu = AAssociateRjPDU()
-    elif char == 0x04:
-        pdu = PDataTfPDU()
-    elif char == 0x05:
-        pdu = AReleaseRqPDU()
-    elif char == 0x06:
-        pdu = AReleaseRpPDU()
-    elif char == 0x07:
-        pdu = AAbortPDU()
-    else:
-        raise RuntimeError('InvalidPDUType')
-    pdu.decode(rawstring)
-    return pdu

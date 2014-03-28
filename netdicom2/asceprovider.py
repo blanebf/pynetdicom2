@@ -13,7 +13,6 @@ import logging
 from dicom.UID import UID
 
 import dulparameters
-from netdicom2 import dulprovider
 from pdu import MaximumLengthParameters
 
 
@@ -63,18 +62,21 @@ class ACSEServiceProvider(object):
         assoc_rq.calling_presentation_address = (self.local_ae['Address'], self.local_ae['Port'])
         assoc_rq.called_presentation_address = (self.remote_ae['Address'], self.remote_ae['Port'])
         assoc_rq.presentation_context_definition_list = pcdl
-        logger.debug(pcdl)
-        # send A-Associate request
-        logger.debug("Sending Association Request")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(pcdl)
+            # send A-Associate request
+            logger.debug("Sending Association Request")
         self.dul.send(assoc_rq)
 
         # get answer
-        logger.debug("Waiting for Association Response")
+        if logger.isEnabledFor(logger.DEBUG):
+            logger.debug("Waiting for Association Response")
 
         assoc_rsp = self.dul.receive(True, timeout)
         if not assoc_rsp:
             return False
-        logger.debug(assoc_rsp)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(assoc_rsp)
 
         try:
             if assoc_rsp.result != 'Accepted':

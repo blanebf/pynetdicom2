@@ -26,7 +26,7 @@ from netdicom2 import pdu
 
 import timer
 import fsm
-import dulparameters
+import netdicom2.dulparameters as dulparams
 
 
 logger = logging.getLogger(__name__)
@@ -179,7 +179,8 @@ class DULServiceProvider(Thread):
     def check_timer(self):
         #logger.debug('%s: checking timer' % (self.name))
         if self.timer.check() is False:
-            logger.debug('%s: timer expired' % self.name)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug('%s: timer expired' % self.name)
             self.event.append('Evt18')  # Timer expired
             return True
         else:
@@ -246,21 +247,21 @@ class DULServiceProvider(Thread):
 
 
 def primitive_to_event(primitive):
-    if isinstance(primitive, dulparameters.AAssociateServiceParameters):
+    if isinstance(primitive, dulparams.AAssociateServiceParameters):
         if primitive.result is None:
             return 'Evt1'  # A-ASSOCIATE Request
         elif primitive.result == 0:
             return 'Evt7'  # A-ASSOCIATE Response (accept)
         else:
             return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, dulparameters.AReleaseServiceParameters):
+    elif isinstance(primitive, dulparams.AReleaseServiceParameters):
         if primitive.result is None:
             return 'Evt11'  # A-Release Request
         else:
             return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, dulparameters.AAbortServiceParameters):
+    elif isinstance(primitive, dulparams.AAbortServiceParameters):
         return 'Evt15'
-    elif isinstance(primitive, dulparameters.PDataServiceParameters):
+    elif isinstance(primitive, dulparams.PDataServiceParameters):
         return 'Evt9'
     else:
         raise InvalidPrimitive
@@ -270,23 +271,17 @@ def socket_to_pdu(data):
     # Returns the PDU object associated with an incoming data stream
     pdu_type = struct.unpack('B', data[0])[0]
     if pdu_type == 0x01:
-        pdu_ = pdu.AAssociateRqPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.AAssociateRqPDU.decode(data)
     elif pdu_type == 0x02:
-        pdu_ = pdu.AAssociateAcPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.AAssociateAcPDU.decode(data)
     elif pdu_type == 0x03:
-        pdu_ = pdu.AAssociateRjPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.AAssociateRjPDU.decode(data)
     elif pdu_type == 0x04:
-        pdu_ = pdu.PDataTfPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.PDataTfPDU.decode(data)
     elif pdu_type == 0x05:
-        pdu_ = pdu.AReleaseRqPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.AReleaseRqPDU.decode(data)
     elif pdu_type == 0x06:
-        pdu_ = pdu.AReleaseRpPDU()
-        pdu_.decode(data)
+        pdu_ = pdu.AReleaseRpPDU.decode(data)
     elif pdu_type == 0x07:
         pdu_ = pdu.AAbortPDU()
         pdu_.decode(data)
