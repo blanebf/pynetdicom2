@@ -9,7 +9,8 @@ import struct
 
 
 def class_printer(obj):
-    return ''.join(['%s: %s\n' % (k, v) for k, v in obj.__dict__.iteritems() if not callable(v)])
+    return ''.join(['%s: %s\n' % (k, v) for k, v in obj.__dict__.iteritems() if
+                    not callable(v)])
 
 
 # DIMSE-C Services
@@ -194,7 +195,8 @@ class ImplementationClassUIDSubItem(object):
         self.implementation_class_uid = None  # String
 
     def __repr__(self):
-        return ''.join(['  Implementation class IUD sub item\n', '   Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Implementation class IUD sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
                         '   SOP class UID length: %s\n' % self.implementation_class_uid])
 
@@ -208,11 +210,14 @@ class ImplementationClassUIDSubItem(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.implementation_class_uid])
+        return ''.join(
+            [struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+             struct.pack('>H', self.item_length),
+             self.implementation_class_uid])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack(
+            '> B B H', stream.read(4))
         self.implementation_class_uid = stream.read(self.item_length)
 
     def total_length(self):
@@ -231,13 +236,14 @@ class ImplementationVersionNameParameters(object):
 
 class ImplementationVersionNameSubItem(object):
     def __init__(self):
-        self.item_type = 0x55    # Unsigned byte
-        self.reserved = 0x00     # Unsigned byte 0x00
+        self.item_type = 0x55  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte 0x00
         self.item_length = None  # Unsigned short
         self.implementation_version_name = None  # String
 
     def __repr__(self):
-        return ''.join(['  Implementation version name sub item\n', '   Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Implementation version name sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
                         '   SOP class UID length: %s\n' % self.implementation_version_name])
 
@@ -251,11 +257,14 @@ class ImplementationVersionNameSubItem(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.implementation_version_name])
+        return ''.join(
+            [struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+             struct.pack('>H', self.item_length),
+             self.implementation_version_name])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack('> B B H', stream.read(4))
+        self.item_type, self.reserved, self.item_length = struct.unpack(
+            '> B B H', stream.read(4))
         self.implementation_version_name = stream.read(self.item_length)
 
     def total_length(self):
@@ -271,7 +280,8 @@ class AsynchronousOperationsWindowSubItem(object):
         self.maximum_number_operations_performed = None  # Unsigned short
 
     def __repr__(self):
-        return ''.join(['  Asynchronous operation window sub item\n', '   Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Asynchronous operation window sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
                         '   Maximum number of operations invoked: %d\n' % self.maximum_number_operations_invoked,
                         '   Maximum number of operations performed: %d\n' % self.maximum_number_operations_performed])
@@ -287,13 +297,17 @@ class AsynchronousOperationsWindowSubItem(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), struct.pack('>H', self.maximum_number_operations_invoked),
-                        struct.pack('>H', self.maximum_number_operations_performed)])
+        return ''.join(
+            [struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+             struct.pack('>H', self.item_length),
+             struct.pack('>H', self.maximum_number_operations_invoked),
+             struct.pack('>H', self.maximum_number_operations_performed)])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length, self.maximum_number_operations_invoked, \
-            self.maximum_number_operations_performed = struct.unpack('> B B H H H', stream.read(8))
+        self.item_type, self.reserved, self.item_length, \
+            self.maximum_number_operations_invoked, \
+            self.maximum_number_operations_performed = struct.unpack('> B B H H H',
+                                                                     stream.read(8))
 
     def total_length(self):
         return 4 + self.item_length
@@ -322,10 +336,13 @@ class ScpScuRoleSelectionSubItem(object):
         self.scp_role = None  # Unsigned byte
 
     def __repr__(self):
-        return ''.join(['  SCU/SCP role selection sub item\n', '   Item type: 0x%02x\n' % self.item_type,
-                       '   Item length: %d\n' % self.item_length, '   SOP class UID length: %d\n' % self.uid_length,
-                       '   SOP class UID: %s\n' % self.sop_class_uid, '   SCU Role: %d\n' % self.scu_role,
-                       '   SCP Role: %d' % self.scp_role])
+        return ''.join(['  SCU/SCP role selection sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
+                        '   Item length: %d\n' % self.item_length,
+                        '   SOP class UID length: %d\n' % self.uid_length,
+                        '   SOP class UID: %s\n' % self.sop_class_uid,
+                        '   SCU Role: %d\n' % self.scu_role,
+                        '   SCP Role: %d' % self.scp_role])
 
     def from_params(self, params):
         self.sop_class_uid = params.sop_class_uid
@@ -342,12 +359,16 @@ class ScpScuRoleSelectionSubItem(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), struct.pack('>H', self.uid_length),
-                        self.sop_class_uid, struct.pack('B B', self.scu_role, self.scp_role)])
+        return ''.join(
+            [struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+             struct.pack('>H', self.item_length),
+             struct.pack('>H', self.uid_length),
+             self.sop_class_uid,
+             struct.pack('B B', self.scu_role, self.scp_role)])
 
     def decode(self, stream):
-        self.item_type, self.reserved, self.item_length, self.uid_length = struct.unpack('> B B H H', stream.read(6))
+        self.item_type, self.reserved, self.item_length, \
+            self.uid_length = struct.unpack('> B B H H', stream.read(6))
         self.sop_class_uid = stream.read(self.uid_length)
         self.scu_role, self.scp_role = struct.unpack('B B', stream.read(2))
 

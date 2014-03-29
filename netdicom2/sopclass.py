@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class Status(object):
-
     def __init__(self, type_, description, code_range):
         self.type_ = type_
         self.description = description
@@ -27,33 +26,59 @@ class Status(object):
     def __repr__(self):
         return self.type_ + ' ' + self.description
 
-Success = Status('Success', 'Sub-operations Complete - No Failure or Warnings', xrange(0x0000, 0x0000 + 1))
 
-Pending = Status('Pending', 'Sub-operations are continuing', xrange(0xFF00, 0xFF00 + 1))
-PendingWarning = Status('Pending', 'Matches are continuing - Warning that one or more Optional'
-                                   'Keys were not supported for existence and/or matching for this identifier',
+Success = Status('Success', 'Sub-operations Complete - No Failure or Warnings',
+                 xrange(0x0000, 0x0000 + 1))
+
+Pending = Status('Pending', 'Sub-operations are continuing',
+                 xrange(0xFF00, 0xFF00 + 1))
+PendingWarning = Status('Pending',
+                        'Matches are continuing - Warning that one or more'
+                        ' optional keys were not supported for existence '
+                        'and/or matching for this identifier',
                         xrange(0xFF01, 0xFF01 + 1))
 
-Cancel = Status('Cancel', 'Sub-operations terminated due to Cancel indication', xrange(0xFE00, 0xFE00 + 1))
-MatchingTerminatedDueToCancelRequest = Status('Cancel', 'Matching terminated due to Cancel request',
+Cancel = Status('Cancel', 'Sub-operations terminated due to Cancel indication',
+                xrange(0xFE00, 0xFE00 + 1))
+MatchingTerminatedDueToCancelRequest = Status('Cancel',
+                                              'Matching terminated due to '
+                                              'Cancel request',
                                               xrange(0xFE00, 0xFE00 + 1))
 
-Warning_ = Status('Warning', 'Sub-operations Complete - One or more Failures or Warnings', xrange(0xB000, 0xB000 + 1))
-CoercionOfDataElements = Status('Warning', 'Coercion of Data Elements', xrange(0xB000, 0xB000 + 1))
-ElementDiscarded = Status('Warning', 'Element Discarded', xrange(0xB006, 0xB006 + 1))
-DataSetDoesNotMatchSOPClassWarning = Status('Warning', 'Data Set does not match SOP Class', xrange(0xB007, 0xB007 + 1))
+Warning_ = Status('Warning',
+                  'Sub-operations Complete - One or more Failures or Warnings',
+                  xrange(0xB000, 0xB000 + 1))
+CoercionOfDataElements = Status('Warning', 'Coercion of Data Elements',
+                                xrange(0xB000, 0xB000 + 1))
+ElementDiscarded = Status('Warning', 'Element Discarded',
+                          xrange(0xB006, 0xB006 + 1))
+DataSetDoesNotMatchSOPClassWarning = Status('Warning',
+                                            'Data Set does not match SOP Class',
+                                            xrange(0xB007, 0xB007 + 1))
 
-OutOfResources = Status('Failure', 'Refused: Out of resources', xrange(0xA700, 0xA7FF + 1))
-DataSetDoesNotMatchSOPClassFailure = Status('Failure', 'Error: Data Set does not match SOP Class',
+OutOfResources = Status('Failure', 'Refused: Out of resources',
+                        xrange(0xA700, 0xA7FF + 1))
+DataSetDoesNotMatchSOPClassFailure = Status('Failure',
+                                            'Error: Data Set does not '
+                                            'match SOP Class',
                                             xrange(0xA900, 0xA9FF + 1))
-CannotUnderstand = Status('Failure', 'Error: Cannot understand', xrange(0xC000, 0xCFFF + 1))
-IdentifierDoesNotMatchSOPClass = Status('Failure', 'Identifier does not match SOP Class', xrange(0xA900, 0xA900 + 1))
-UnableToProcess = Status('Failure', 'Unable to process', xrange(0xC000, 0xCFFF + 1))
-OutOfResourcesNumberOfMatches = Status('Failure', 'Refused: Out of resources - Unable to calcultate number of matches',
+CannotUnderstand = Status('Failure', 'Error: Cannot understand',
+                          xrange(0xC000, 0xCFFF + 1))
+IdentifierDoesNotMatchSOPClass = Status('Failure',
+                                        'Identifier does not match SOP Class',
+                                        xrange(0xA900, 0xA900 + 1))
+UnableToProcess = Status('Failure', 'Unable to process',
+                         xrange(0xC000, 0xCFFF + 1))
+OutOfResourcesNumberOfMatches = Status('Failure',
+                                       'Refused: Out of resources - '
+                                       'Unable to calcultate number of matches',
                                        xrange(0xA701, 0xA701 + 1))
-OutOfResourcesUnableToPerform = Status('Failure', 'Refused: Out of resources - Unable to perform sub-operations',
+OutOfResourcesUnableToPerform = Status('Failure',
+                                       'Refused: Out of resources - '
+                                       'Unable to perform sub-operations',
                                        xrange(0xA702, 0xA702 + 1))
-MoveDestinationUnknown = Status('Failure', 'Refused: Move destination unknown', xrange(0xA801, 0xA801 + 1))
+MoveDestinationUnknown = Status('Failure', 'Refused: Move destination unknown',
+                                xrange(0xA801, 0xA801 + 1))
 
 
 # VERIFICATION SOP CLASSES
@@ -98,7 +123,6 @@ PatientStudyOnlyGetSOPClass = '1.2.840.10008.5.1.4.1.2.3.3'
 
 ModalityWorkListInformationFindSOPClass = '1.2.840.10008.5.1.4.31'
 
-
 SOP_CLASSES = {}  # Initialized later
 
 
@@ -106,7 +130,8 @@ class ServiceClassMeta(type):
     def __new__(mcs, name, bases, dct):
         new_class = type.__new__(mcs, name, bases, dct)
         try:
-            SOP_CLASSES.update({sop_class: new_class for sop_class in dct['sop_classes']})
+            SOP_CLASSES.update(
+                {sop_class: new_class for sop_class in dct['sop_classes']})
         except KeyError:
             pass
         finally:
@@ -119,7 +144,8 @@ class ServiceClass(object):
     statuses = []
     sop_classes = []
 
-    def __init__(self, ae, uid, dimse, pcid, transfer_syntax, max_pdu_length=16000, asce=None):
+    def __init__(self, ae, uid, dimse, pcid, transfer_syntax,
+                 max_pdu_length=16000, asce=None):
         self.ae = ae
         self.uid = uid
         self.dimse = dimse
@@ -132,11 +158,13 @@ class ServiceClass(object):
         for status in self.statuses:
             if code in status.code_range:
                 return status
-        return Status('Failure', 'Unknown or unexpected status', xrange(code, code))
+        return Status('Failure', 'Unknown or unexpected status',
+                      xrange(code, code))
 
     def check_asce(self):
         if not self.asce:
-            raise Exception("Association is not specified. Service does not support provider class")
+            raise Exception('Association is not specified. '
+                            'Service does not support provider class')
 
 
 class VerificationServiceClass(ServiceClass):
@@ -162,25 +190,33 @@ class VerificationServiceClass(ServiceClass):
         # send response
         try:
             self.ae.on_receive_echo(self)
-        except Exception:  # TODO Replace this exception block with something more sensible
-            logger.error("There was an exception on OnReceiveEcho callback")
+        except Exception:
+            # TODO Replace this exception block with something more sensible
+            logger.error('There was an exception on OnReceiveEcho callback')
         self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
 
 
 class StorageServiceClass(ServiceClass):
-    statuses = [OutOfResources, DataSetDoesNotMatchSOPClassFailure, CannotUnderstand, CoercionOfDataElements,
+    statuses = [OutOfResources, DataSetDoesNotMatchSOPClassFailure,
+                CannotUnderstand, CoercionOfDataElements,
                 DataSetDoesNotMatchSOPClassWarning, ElementDiscarded, Success]
-    sop_classes = [MRImageStorageSOPClass, CTImageStorageSOPClass, PositronEmissionTomographyImageStorageSOPClass,
-                   CRImageStorageSOPClass, SCImageStorageSOPClass, RTImageStorageSOPClass, RTDoseStorageSOPClass,
-                   RTStructureSetStorageSOPClass, RTPlanStorageSOPClass, SpatialRegistrationSOPClass,
-                   EnhancedSRSOPClass, XRayRadiationDoseSRSOPClass, DigitalXRayImageStorageForPresentationSOPClass,
+    sop_classes = [MRImageStorageSOPClass, CTImageStorageSOPClass,
+                   PositronEmissionTomographyImageStorageSOPClass,
+                   CRImageStorageSOPClass, SCImageStorageSOPClass,
+                   RTImageStorageSOPClass, RTDoseStorageSOPClass,
+                   RTStructureSetStorageSOPClass, RTPlanStorageSOPClass,
+                   SpatialRegistrationSOPClass,
+                   EnhancedSRSOPClass, XRayRadiationDoseSRSOPClass,
+                   DigitalXRayImageStorageForPresentationSOPClass,
                    DigitalXRayImageStorageForProcessingSOPClass,
                    DigitalMammographyXRayImageStorageForPresentationSOPClass,
                    DigitalMammographyXRayImageStorageForProcessingSOPClass,
                    DigitalIntraOralXRayImageStorageForPresentationSOPClass,
                    DigitalIntraOralXRayImageStorageForProcessingSOPClass,
-                   XRayAngiographicImageStorageSOPClass, EnhancedXAImageStorageSOPClass,
-                   XRayRadiofluoroscopicImageStorageSOPClass, EnhancedXRFImageStorageSOPClass,
+                   XRayAngiographicImageStorageSOPClass,
+                   EnhancedXAImageStorageSOPClass,
+                   XRayRadiofluoroscopicImageStorageSOPClass,
+                   EnhancedXRFImageStorageSOPClass,
                    EnhancedCTImageStorageSOPClass, NMImageStorageSOPClass]
 
     def scu(self, dataset, msg_id):
@@ -190,7 +226,8 @@ class StorageServiceClass(ServiceClass):
         c_store.affected_sop_class_uid = dataset.SOPClassUID
         c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
         c_store.priority = 0x0002
-        c_store.dataset = dsutils.encode(dataset, self.transfer_syntax.is_implicit_VR,
+        c_store.dataset = dsutils.encode(dataset,
+                                         self.transfer_syntax.is_implicit_VR,
                                          self.transfer_syntax.is_little_endian)
         # send c_store request
         self.dimse.send(c_store, self.pcid, self.max_pdu_length)
@@ -202,10 +239,12 @@ class StorageServiceClass(ServiceClass):
     def scp(self, msg):
         self.check_asce()
         try:
-            ds = dsutils.decode(msg.dataset, self.transfer_syntax.is_implicit_VR,
+            ds = dsutils.decode(msg.dataset,
+                                self.transfer_syntax.is_implicit_VR,
                                 self.transfer_syntax.is_little_endian)
             status = self.ae.on_receive_store(self, ds)
-        except Exception as e:  # TODO Replace this exception block with something more sensible
+        except Exception:
+            # TODO Replace this exception block with something more sensible
             status = CannotUnderstand
         # make response
         rsp = dimseparameters.CStoreServiceParameters()
@@ -221,8 +260,10 @@ class QueryRetrieveServiceClass(ServiceClass):
 
 
 class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
-    sop_classes = [PatientRootFindSOPClass, StudyRootFindSOPClass, PatientStudyOnlyFindSOPClass]
-    statuses = [OutOfResources, IdentifierDoesNotMatchSOPClass, UnableToProcess, MatchingTerminatedDueToCancelRequest,
+    sop_classes = [PatientRootFindSOPClass, StudyRootFindSOPClass,
+                   PatientStudyOnlyFindSOPClass]
+    statuses = [OutOfResources, IdentifierDoesNotMatchSOPClass, UnableToProcess,
+                MatchingTerminatedDueToCancelRequest,
                 Success, Pending, PendingWarning]
 
     def scu(self, ds, msg_id):
@@ -231,7 +272,8 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
         c_find.message_id = msg_id
         c_find.affected_sop_class_uid = self.uid
         c_find.priority = 0x0002
-        c_find.identifier = dsutils.encode(ds, self.transfer_syntax.is_implicit_VR,
+        c_find.identifier = dsutils.encode(ds,
+                                           self.transfer_syntax.is_implicit_VR,
                                            self.transfer_syntax.is_little_endian)
 
         # send c-find request
@@ -242,7 +284,8 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
+            d = dsutils.decode(ans.identifier,
+                               self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
             status = self.code_to_status(ans.status.value).type_
             yield status, d
@@ -262,7 +305,8 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
         gen = self.ae.on_receive_find(self, ds)
         for identifier_ds, status in gen:
             rsp.status = int(status)
-            rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
+            rsp.identifier = dsutils.encode(identifier_ds,
+                                            self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)
             # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
@@ -276,8 +320,10 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
 
 
 class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
-    sop_classes = [PatientRootGetSOPClass, StudyRootGetSOPClass, PatientStudyOnlyGetSOPClass]
-    statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform, IdentifierDoesNotMatchSOPClass,
+    sop_classes = [PatientRootGetSOPClass, StudyRootGetSOPClass,
+                   PatientStudyOnlyGetSOPClass]
+    statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform,
+                IdentifierDoesNotMatchSOPClass,
                 UnableToProcess, Cancel, Warning_, Success, Pending]
 
     def scu(self, ds, msg_id):
@@ -286,7 +332,8 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
         c_get.message_id = msg_id
         c_get.affected_sop_class_uid = self.uid
         c_get.priority = 0x0002
-        c_get.identifier = dsutils.encode(ds, self.transfer_syntax.is_implicit_VR,
+        c_get.identifier = dsutils.encode(ds,
+                                          self.transfer_syntax.is_implicit_VR,
                                           self.transfer_syntax.is_little_endian)
 
         # send c-get primitive
@@ -306,12 +353,15 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                 rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
                 rsp.affected_sop_class_uid = msg.affected_sop_class_uid
                 try:
-                    d = dsutils.decode(msg.dataset, self.transfer_syntax.is_implicit_VR,
+                    d = dsutils.decode(msg.dataset,
+                                       self.transfer_syntax.is_implicit_VR,
                                        self.transfer_syntax.is_little_endian)
                     sop_class = SOP_CLASSES[d.SOPClassUID]
                     status = self.ae.on_receive_store(sop_class, d)
                     yield sop_class, d
-                except Exception:  # TODO Replace this exception block with something more sensible
+                except Exception:
+                    # TODO Replace this exception block with
+                    # something more sensible
                     status = CannotUnderstand
 
                 rsp.status = int(status)
@@ -319,9 +369,12 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
 
 
 class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
-    sop_classes = [PatientRootMoveSOPClass, StudyRootMoveSOPClass, PatientStudyOnlyMoveSOPClass]
-    statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform, MoveDestinationUnknown,
-                IdentifierDoesNotMatchSOPClass, UnableToProcess, Cancel, Warning_, Success, Pending]
+    sop_classes = [PatientRootMoveSOPClass, StudyRootMoveSOPClass,
+                   PatientStudyOnlyMoveSOPClass]
+    statuses = [OutOfResourcesNumberOfMatches, OutOfResourcesUnableToPerform,
+                MoveDestinationUnknown,
+                IdentifierDoesNotMatchSOPClass, UnableToProcess, Cancel,
+                Warning_, Success, Pending]
 
     def scu(self, ds, dest_ae, msg_id):
         # build C-FIND primitive
@@ -330,7 +383,8 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         c_move.affected_sop_class_uid = self.uid
         c_move.move_destination = dest_ae
         c_move.priority = 0x0002
-        c_move.identifier = dsutils.encode(ds, self.transfer_syntax.is_implicit_VR,
+        c_move.identifier = dsutils.encode(ds,
+                                           self.transfer_syntax.is_implicit_VR,
                                            self.transfer_syntax.is_little_endian)
         # send c-find request
         self.dimse.send(c_move, self.pcid, self.max_pdu_length)
@@ -355,7 +409,8 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid.value
-        remote_ae, nop, gen = self.ae.on_receive_move(self, ds, msg.MoveDestination.value)
+        remote_ae, nop, gen = self.ae.on_receive_move(self, ds,
+                                                      msg.MoveDestination.value)
         assoc = self.ae.request_association(remote_ae)
         failed = 0
         warning = 0
@@ -395,7 +450,8 @@ class BasicWorkListServiceClass(ServiceClass):
 
 
 class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
-    statuses = [OutOfResources, IdentifierDoesNotMatchSOPClass, UnableToProcess, MatchingTerminatedDueToCancelRequest,
+    statuses = [OutOfResources, IdentifierDoesNotMatchSOPClass, UnableToProcess,
+                MatchingTerminatedDueToCancelRequest,
                 Success, Pending, PendingWarning]
 
     def scu(self, ds, msg_id):
@@ -404,7 +460,8 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         c_find.message_id = msg_id
         c_find.affected_sop_class_uid = self.uid
         c_find.priority = 0x0002
-        c_find.identifier = dsutils.encode(ds, self.transfer_syntax.is_implicit_VR,
+        c_find.identifier = dsutils.encode(ds,
+                                           self.transfer_syntax.is_implicit_VR,
                                            self.transfer_syntax.is_little_endian)
 
         # send c-find request
@@ -415,7 +472,8 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            d = dsutils.decode(ans.identifier, self.transfer_syntax.is_implicit_VR,
+            d = dsutils.decode(ans.identifier,
+                               self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
             status = self.code_to_status(ans.status.value).type_
             yield status, d
@@ -424,7 +482,8 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
 
     def scp(self, msg):
         self.check_asce()
-        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR, self.transfer_syntax.is_little_endian)
+        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
+                            self.transfer_syntax.is_little_endian)
 
         # make response
         rsp = dimseparameters.CFindServiceParameters()
@@ -434,7 +493,8 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         gen = self.ae.on_receive_find(self, ds)
         for identifier_ds, status in gen:
             rsp.status = int(status)
-            rsp.identifier = dsutils.encode(identifier_ds, self.transfer_syntax.is_implicit_VR,
+            rsp.identifier = dsutils.encode(identifier_ds,
+                                            self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)
             # send response
             self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)

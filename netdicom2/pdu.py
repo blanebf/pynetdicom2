@@ -66,17 +66,16 @@ from netdicom2 import dimseparameters
 
 
 class AAssociateRqPDU(object):
-
     """This class represents the A-ASSOCIATE-RQ PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x01                       # Unsigned byte
-        self.reserved1 = 0x00                      # Unsigned byte
-        self.pdu_length = None                     # Unsigned int
-        self.protocol_version = 1                  # Unsigned short
-        self.reserved2 = 0x00                      # Unsigned short
-        self.called_ae_title = None                # string of length 16
-        self.calling_ae_title = None               # string of length 16
+        self.pdu_type = 0x01  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
+        self.pdu_length = None  # Unsigned int
+        self.protocol_version = 1  # Unsigned short
+        self.reserved2 = 0x00  # Unsigned short
+        self.called_ae_title = None  # string of length 16
+        self.calling_ae_title = None  # string of length 16
         self.reserved3 = (0, 0, 0, 0, 0, 0, 0, 0)  # 32 bytes
 
         # VariablesItems is a list containing the following:
@@ -105,7 +104,8 @@ class AAssociateRqPDU(object):
         instance = cls()
         instance.calling_ae_title = params.calling_ae_title
         instance.called_ae_title = params.called_ae_title
-        tmp_app_cont = ApplicationContextItem.from_params(params.application_context_name)
+        tmp_app_cont = ApplicationContextItem.from_params(
+            params.application_context_name)
         instance.variable_items.append(tmp_app_cont)
 
         # Make presentation contexts
@@ -128,7 +128,8 @@ class AAssociateRqPDU(object):
         assoc = dulparams.AAssociateServiceParameters()
         assoc.calling_ae_title = self.calling_ae_title
         assoc.called_ae_title = self.called_ae_title
-        assoc.application_context_name = self.variable_items[0].application_context_name
+        assoc.application_context_name = self.variable_items[
+            0].application_context_name
 
         # Write presentation contexts
         for ii in self.variable_items[1:-1]:
@@ -143,7 +144,7 @@ class AAssociateRqPDU(object):
                        struct.pack('B', self.reserved1),
                        struct.pack('>I', self.pdu_length),
                        struct.pack('>H', self.protocol_version),
-                       struct.pack('>H',  self.reserved2),
+                       struct.pack('>H', self.reserved2),
                        struct.pack('16s', self.called_ae_title),
                        struct.pack('16s', self.calling_ae_title),
                        struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
@@ -191,17 +192,16 @@ class AAssociateRqPDU(object):
 
 
 class AAssociateAcPDU(object):
-
     """This class represents the A-ASSOCIATE-AC PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x02       # Unsigned byte
-        self.reserved1 = 0x00      # Unsigned byte
-        self.pdu_length = None     # Unsigned int
+        self.pdu_type = 0x02  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
+        self.pdu_length = None  # Unsigned int
         self.protocol_version = 1  # Unsigned short
-        self.reserved2 = 0x00      # Unsigned short
-        self.reserved3 = None      # string of length 16
-        self.reserved4 = None      # string of length 16
+        self.reserved2 = 0x00  # Unsigned short
+        self.reserved3 = None  # string of length 16
+        self.reserved4 = None  # string of length 16
         self.reserved5 = (0x0000, 0x0000, 0x0000, 0x0000)  # 32 bytes
 
         # VariablesItems is a list containing the following:
@@ -231,7 +231,8 @@ class AAssociateAcPDU(object):
         instance.reserved3 = params.called_ae_title
         instance.reserved4 = params.calling_ae_title
         # Make application context
-        tmp_app_cont = ApplicationContextItem.from_params(params.application_context_name)
+        tmp_app_cont = ApplicationContextItem.from_params(
+            params.application_context_name)
         instance.variable_items.append(tmp_app_cont)
         # Make presentation contexts
         for context in params.presentation_context_definition_result_list:
@@ -254,7 +255,8 @@ class AAssociateAcPDU(object):
 
         # Write presentation context
         for ii in self.variable_items[1:-1]:
-            assoc.presentation_context_definition_result_list.append(ii.to_params())
+            assoc.presentation_context_definition_result_list.append(
+                ii.to_params())
 
         # Write user information
         assoc.user_information = self.variable_items[-1].to_params()
@@ -266,7 +268,7 @@ class AAssociateAcPDU(object):
                        struct.pack('B', self.reserved1),
                        struct.pack('>I', self.pdu_length),
                        struct.pack('>H', self.protocol_version),
-                       struct.pack('>H',  self.reserved2),
+                       struct.pack('>H', self.reserved2),
                        struct.pack('16s', self.reserved3),
                        struct.pack('16s', self.reserved4),
                        struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
@@ -313,17 +315,16 @@ class AAssociateAcPDU(object):
 
 
 class AAssociateRjPDU(object):
-
     """This class represents the A-ASSOCIATE-RJ PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x03          # Unsigned byte
-        self.reserved1 = 0x00         # Unsigned byte
+        self.pdu_type = 0x03  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00         # Unsigned byte
-        self.result = None            # Unsigned byte
-        self.source = None            # Unsigned byte
-        self.reason_diag = None       # Unsigned byte
+        self.reserved2 = 0x00  # Unsigned byte
+        self.result = None  # Unsigned byte
+        self.source = None  # Unsigned byte
+        self.reason_diag = None  # Unsigned byte
 
     def __repr__(self):
         return ''.join(['A-ASSOCIATE-RJ PDU\n',
@@ -377,7 +378,8 @@ class AAssociateRjPDU(object):
         decoded_pdu = cls()
         decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
             decoded_pdu.reserved2, decoded_pdu.result, decoded_pdu.source, \
-            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B',
+                                                    stream.read(10))
         return decoded_pdu
 
     def total_length(self):
@@ -385,12 +387,11 @@ class AAssociateRjPDU(object):
 
 
 class PDataTfPDU(object):
-
     """This class represents the P-DATA-TF PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x04    # Unsigned byte
-        self.reserved = 0x00    # Unsigned byte
+        self.pdu_type = 0x04  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
         self.pdu_length = None  # Unsigned int
 
         # List of one of more PresentationDataValueItem
@@ -423,7 +424,8 @@ class PDataTfPDU(object):
         tmp = dulparams.PDataServiceParameters()
         tmp.presentation_data_value_list = [[i.presentation_context_id,
                                              i.presentation_data_value]
-                                            for i in self.presentation_data_value_items]
+                                            for i in
+                                            self.presentation_data_value_items]
         return tmp
 
     def encode(self):
@@ -459,14 +461,13 @@ class PDataTfPDU(object):
 
 
 class AReleaseRqPDU(object):
-
     """This class represents the A-RELEASE-RQ PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x05          # Unsigned byte
-        self.reserved1 = 0x00         # Unsigned byte
+        self.pdu_type = 0x05  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00000000   # Unsigned int
+        self.reserved2 = 0x00000000  # Unsigned int
 
     def __repr__(self):
         return ''.join(['A-RELEASE-RQ PDU\n',
@@ -496,7 +497,7 @@ class AReleaseRqPDU(object):
         """
         stream = StringIO(rawstring)
         decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length,\
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
             decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
         return decoded_pdu
 
@@ -505,14 +506,13 @@ class AReleaseRqPDU(object):
 
 
 class AReleaseRpPDU(object):
-
     """This class represents the A-RELEASE-RP PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x06          # Unsigned byte
-        self.reserved1 = 0x00         # Unsigned byte
+        self.pdu_type = 0x06  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00000000   # Unsigned int
+        self.reserved2 = 0x00000000  # Unsigned int
 
     def __repr__(self):
         return ''.join(['A-RELEASE-RP PDU\n',
@@ -542,7 +542,7 @@ class AReleaseRpPDU(object):
         """
         stream = StringIO(rawstring)
         decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length,\
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
             decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
         return decoded_pdu
 
@@ -551,17 +551,16 @@ class AReleaseRpPDU(object):
 
 
 class AAbortPDU(object):
-
     """This class represents the A-ABORT PDU"""
 
     def __init__(self):
-        self.pdu_type = 0x07          # Unsigned byte
-        self.reserved1 = 0x00         # Unsigned byte
+        self.pdu_type = 0x07  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00         # Unsigned byte
-        self.reserved3 = 0x00         # Unsigned byte
-        self.abort_source = None      # Unsigned byte
-        self.reason_diag = None       # Unsigned byte
+        self.reserved2 = 0x00  # Unsigned byte
+        self.reserved3 = 0x00  # Unsigned byte
+        self.abort_source = None  # Unsigned byte
+        self.reason_diag = None  # Unsigned byte
 
     def __repr__(self):
         return ''.join(['A-ABORT PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
@@ -608,15 +607,17 @@ class AAbortPDU(object):
         """Factory method. Decodes A-ABORT PDU instance from raw string.
 
         :rtype : AAbortPDU
-        :param rawstring: rawstring containing binary representation of the A-ABORT PDU
+        :param rawstring: rawstring containing binary representation of
+        the A-ABORT PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
         decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1,\
-            decoded_pdu.pdu_length, decoded_pdu.reserved2,\
-            decoded_pdu.reserved3, decoded_pdu.abort_source,\
-            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        decoded_pdu.pdu_type, decoded_pdu.reserved1, \
+            decoded_pdu.pdu_length, decoded_pdu.reserved2, \
+            decoded_pdu.reserved3, decoded_pdu.abort_source, \
+            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B',
+                                                    stream.read(10))
         return decoded_pdu
 
     def total_length(self):
@@ -627,18 +628,18 @@ class AAbortPDU(object):
 
 
 class ApplicationContextItem(object):
-
     def __init__(self):
-        self.item_type = 0x10                 # Unsigned byte
-        self.reserved = 0x00                  # Unsigned byte
-        self.item_length = None               # Unsigned short
+        self.item_type = 0x10  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
+        self.item_length = None  # Unsigned short
         self.application_context_name = None  # String
 
     def __repr__(self):
         return ''.join([' Application context item\n',
                         '  Item type: 0x%02x\n' % self.item_type,
-                       '  Item length: %d\n' % self.item_length,
-                       '  Presentation context ID: %s\n' % self.application_context_name])
+                        '  Item length: %d\n' % self.item_length,
+                        '  Presentation context ID: %s\n' %
+                        self.application_context_name])
 
     @classmethod
     def from_params(cls, params):
@@ -669,7 +670,8 @@ class ApplicationContextItem(object):
         decoded_obj = cls()
         decoded_obj.item_type, decoded_obj.reserved, \
             decoded_obj.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_obj.application_context_name = stream.read(decoded_obj.item_length)
+        decoded_obj.application_context_name = stream.read(
+            decoded_obj.item_length)
         return decoded_obj
 
     def total_length(self):
@@ -677,11 +679,10 @@ class ApplicationContextItem(object):
 
 
 class PresentationContextItemRQ(object):
-
     def __init__(self):
-        self.item_type = 0x20                # Unsigned byte
-        self.reserved1 = 0x00                # Unsigned byte
-        self.item_length = None              # Unsigned short
+        self.item_type = 0x20  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
+        self.item_length = None  # Unsigned short
         self.presentation_context_id = None  # Unsigned byte
 
         self.reserved2 = 0x00  # Unsigned byte
@@ -697,7 +698,8 @@ class PresentationContextItemRQ(object):
         tmp = ''.join([" Presentation context RQ item\n",
                        "  Item type: 0x%02x\n" % self.item_type,
                        "  Item length: %d\n" % self.item_length,
-                       "  Presentation context ID: %d\n" % self.presentation_context_id])
+                       "  Presentation context ID: %d\n" %
+                       self.presentation_context_id])
         tmp2 = ''.join([item.__repr__()
                         for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
@@ -751,7 +753,8 @@ class PresentationContextItemRQ(object):
             decoded_item.item_length, \
             decoded_item.presentation_context_id, \
             decoded_item.reserved2, decoded_item.reserved3, \
-            decoded_item.reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
+            decoded_item.reserved4 = struct.unpack('> B B H B B B B',
+                                                   stream.read(8))
         tmp = AbstractSyntaxSubItem.decode(stream)
         decoded_item.abstract_transfer_syntax_sub_items.append(tmp)
         next_item_type = next_type(stream)
@@ -766,22 +769,22 @@ class PresentationContextItemRQ(object):
 
 
 class PresentationContextItemAC(object):
-
     def __init__(self):
-        self.item_type = 0x21                 # Unsigned byte
-        self.reserved1 = 0x00                 # Unsigned byte
-        self.item_length = None               # Unsigned short
-        self.presentation_context_id = None   # Unsigned byte
-        self.reserved2 = 0x00                 # Unsigned byte
-        self.result_reason = None             # Unsigned byte
-        self.reserved3 = 0x00                 # Unsigned byte
+        self.item_type = 0x21  # Unsigned byte
+        self.reserved1 = 0x00  # Unsigned byte
+        self.item_length = None  # Unsigned short
+        self.presentation_context_id = None  # Unsigned byte
+        self.reserved2 = 0x00  # Unsigned byte
+        self.result_reason = None  # Unsigned byte
+        self.reserved3 = 0x00  # Unsigned byte
         self.transfer_syntax_sub_item = None  # TransferSyntaxSubItem object
 
     def __repr__(self):
         return ''.join([' Presentation context AC item\n',
                         '  Item type: 0x%02x\n' % self.item_type,
                         '  Item length: %d\n' % self.item_length,
-                        '  Presentation context ID: %d\n' % self.presentation_context_id,
+                        '  Presentation context ID: %d\n' %
+                        self.presentation_context_id,
                         '  Result/Reason: %d\n' % self.result_reason,
                         self.transfer_syntax_sub_item.__repr__()])
 
@@ -791,7 +794,8 @@ class PresentationContextItemAC(object):
         instance = cls()
         instance.presentation_context_id = params[0]
         instance.result_reason = params[1]
-        instance.transfer_syntax_sub_item = TransferSyntaxSubItem.from_params(params[2])
+        instance.transfer_syntax_sub_item = TransferSyntaxSubItem.from_params(
+            params[2])
         instance.item_length = 4 + instance.transfer_syntax_sub_item.total_length()
         return instance
 
@@ -820,10 +824,12 @@ class PresentationContextItemAC(object):
         """
         decoded_item = cls()
         decoded_item.item_type, decoded_item.reserved1, \
-            decoded_item.item_length, decoded_item.presentation_context_id,\
+            decoded_item.item_length, decoded_item.presentation_context_id, \
             decoded_item.reserved2, decoded_item.result_reason, \
-            decoded_item.reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
-        decoded_item.transfer_syntax_sub_item = TransferSyntaxSubItem.decode(stream)
+            decoded_item.reserved3 = struct.unpack('> B B H B B B B',
+                                                   stream.read(8))
+        decoded_item.transfer_syntax_sub_item = TransferSyntaxSubItem.decode(
+            stream)
         return decoded_item
 
     def total_length(self):
@@ -831,18 +837,18 @@ class PresentationContextItemAC(object):
 
 
 class AbstractSyntaxSubItem(object):
-
     def __init__(self):
-        self.reserved = 0x00              # Unsigned byte
-        self.item_type = 0x30             # Unsigned byte
-        self.item_length = None           # Unsigned short
+        self.reserved = 0x00  # Unsigned byte
+        self.item_type = 0x30  # Unsigned byte
+        self.item_length = None  # Unsigned short
         self.abstract_syntax_name = None  # String
 
     def __repr__(self):
         return ''.join(['  Abstract syntax sub item\n',
                         '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
-                        '   Abstract syntax name: %s\n' % self.abstract_syntax_name])
+                        '   Abstract syntax name: %s\n' %
+                        self.abstract_syntax_name])
 
     @classmethod
     def from_params(cls, params):
@@ -873,7 +879,8 @@ class AbstractSyntaxSubItem(object):
         decoded_item = cls()
         decoded_item.item_type, decoded_item.reserved, \
             decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_item.abstract_syntax_name = stream.read(decoded_item.item_length)
+        decoded_item.abstract_syntax_name = stream.read(
+            decoded_item.item_length)
         return decoded_item
 
     def total_length(self):
@@ -881,18 +888,18 @@ class AbstractSyntaxSubItem(object):
 
 
 class TransferSyntaxSubItem(object):
-
     def __init__(self):
-        self.item_type = 0x40             # Unsigned byte
-        self.reserved = 0x00              # Unsigned byte
-        self.item_length = None           # Unsigned short
+        self.item_type = 0x40  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
+        self.item_length = None  # Unsigned short
         self.transfer_syntax_name = None  # String
 
     def __repr__(self):
         return ''.join(['  Transfer syntax sub item\n',
                         '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
-                        '   Transfer syntax name: %s\n' % self.transfer_syntax_name])
+                        '   Transfer syntax name: %s\n' %
+                        self.transfer_syntax_name])
 
     @classmethod
     def from_params(cls, params):
@@ -923,7 +930,8 @@ class TransferSyntaxSubItem(object):
         decoded_item = cls()
         decoded_item.item_type, decoded_item.reserved, \
             decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_item.transfer_syntax_name = stream.read(decoded_item.item_length)
+        decoded_item.transfer_syntax_name = stream.read(
+            decoded_item.item_length)
         return decoded_item
 
     def total_length(self):
@@ -931,10 +939,9 @@ class TransferSyntaxSubItem(object):
 
 
 class UserInformationItem(object):
-
     def __init__(self):
-        self.item_type = 0x50    # Unsigned byte
-        self.reserved = 0x00     # Unsigned byte
+        self.item_type = 0x50  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
         self.item_length = None  # Unsigned short
 
         #  user_data is a list containing the following:
@@ -997,7 +1004,6 @@ class UserInformationItem(object):
 
 
 class MaximumLengthParameters(object):
-
     def __init__(self):
         self.maximum_length_received = None
 
@@ -1009,17 +1015,18 @@ class MaximumLengthParameters(object):
 
 
 class MaximumLengthSubItem(object):
-
     def __init__(self):
-        self.item_type = 0x51                # Unsigned byte
-        self.reserved = 0x00                 # Unsigned byte
-        self.item_length = 0x0004            # Unsigned short
+        self.item_type = 0x51  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
+        self.item_length = 0x0004  # Unsigned short
         self.maximum_length_received = None  # Unsigned int
 
     def __repr__(self):
-        return ''.join(['  Maximum length sub item\n', '    Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Maximum length sub item\n',
+                        '    Item type: 0x%02x\n' % self.item_type,
                         '    Item length: %d\n' % self.item_length,
-                        '    Maximum Length Received: %d\n' % self.maximum_length_received])
+                        '    Maximum Length Received: %d\n' %
+                        self.maximum_length_received])
 
     @classmethod
     def from_params(cls, params):
@@ -1058,17 +1065,18 @@ class MaximumLengthSubItem(object):
 
 
 class PresentationDataValueItem(object):
-
     def __init__(self):
-        self.item_length = None              # Unsigned int
+        self.item_length = None  # Unsigned int
         self.presentation_context_id = None  # Unsigned byte
         self.presentation_data_value = None  # String
 
     def __repr__(self):
         return ''.join([' Presentation value data item\n',
                         '  Item length: %d\n' % self.item_length,
-                        '  Presentation context ID: %d\n' % self.presentation_context_id,
-                        '  Presentation data value: %s ...\n' % self.presentation_data_value[:20]])
+                        '  Presentation context ID: %d\n' %
+                        self.presentation_context_id,
+                        '  Presentation data value: %s ...\n' %
+                        self.presentation_data_value[:20]])
 
     @classmethod
     def from_params(cls, params):
@@ -1101,10 +1109,12 @@ class PresentationDataValueItem(object):
         """
         decoded_item = cls()
         decoded_item.item_length, \
-            decoded_item.presentation_context_id = struct.unpack('> I B', stream.read(5))
+            decoded_item.presentation_context_id = struct.unpack('> I B',
+                                                                 stream.read(5))
         # Presentation data value is left in raw string format.
         # The Application Entity is responsible for dealing with it.
-        decoded_item.presentation_data_value = stream.read(int(decoded_item.item_length) - 1)
+        decoded_item.presentation_data_value = stream.read(
+            int(decoded_item.item_length) - 1)
         return decoded_item
 
     def total_length(self):
@@ -1112,17 +1122,16 @@ class PresentationDataValueItem(object):
 
 
 class GenericUserDataSubItem(object):
-
     """
     This class is provided only to allow user data to converted to and from
     PDUs. The actual data is not interpreted. This is left to the user.
     """
 
     def __init__(self):
-        self.item_type = None    # Unsigned byte
-        self.reserved = 0x00     # Unsigned byte
+        self.item_type = None  # Unsigned byte
+        self.reserved = 0x00  # Unsigned byte
         self.item_length = None  # Unsigned short
-        self.user_data = None    # Raw string
+        self.user_data = None  # Raw string
 
     def __repr__(self):
         tmp = ['User data item\n', '  Item type: %d\n' % self.item_type,

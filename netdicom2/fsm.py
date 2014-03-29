@@ -18,13 +18,16 @@ import dulparameters
 # Finite State machine action definitions
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 def ae_1(provider):
     # Issue TRANSPORT CONNECT request primitive to local transport service
-    provider.remote_client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    provider.remote_client_socket.connect(provider.primitive.called_presentation_address)
+    provider.remote_client_socket = socket.socket(socket.AF_INET,
+                                                  socket.SOCK_STREAM)
+    provider.remote_client_socket.connect(
+        provider.primitive.called_presentation_address)
 
 
 def ae_2(provider):
@@ -39,7 +42,8 @@ def ae_3(provider):
 
 
 def ae_4(provider):
-    # Issue A-ASSOCIATE confirmation (reject) primitive and close transport connection
+    # Issue A-ASSOCIATE confirmation (reject) primitive and close
+    #  transport connection
     provider.to_service_user.put(provider.primitive)
     provider.remote_client_socket.close()
     provider.remote_client_socket = None
@@ -311,7 +315,6 @@ events = {
     'Evt18': "ARTIM timer expired (rej/rel)",
     'Evt19': "Unrecognized/invalid PDU"}
 
-
 TransitionTable = {
 
     ('Evt1', 'Sta1'): 'AE-1',
@@ -458,7 +461,6 @@ TransitionTable = {
 
 
 class StateMachine:
-
     def __init__(self, provider):
         self.current_state = 'Sta1'
         self.provider = provider
@@ -469,25 +471,31 @@ class StateMachine:
             action_name = TransitionTable[(event, self.current_state)]
         except KeyError:
             logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
-            logger.debug('%s: event: %s %s' % (self.provider.name, event, events[event]))
+                         (self.provider.name, self.current_state,
+                          states[self.current_state]))
+            logger.debug(
+                '%s: event: %s %s' % (self.provider.name, event, events[event]))
             raise
 
         action = actions[action_name]
         try:
             logger.debug('')
             logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
-            logger.debug('%s: event: %s %s' % (self.provider.name, event, events[event]))
+                         (self.provider.name, self.current_state,
+                          states[self.current_state]))
+            logger.debug(
+                '%s: event: %s %s' % (self.provider.name, event, events[event]))
             logger.debug('%s: entering action: (%s, %s) %s %s' %
-                         (self.provider.name, event, self.current_state, action_name, actions[action_name][0]))
+                         (self.provider.name, event, self.current_state,
+                          action_name, actions[action_name][0]))
             action[1](c)
             #if type(action[2]) != type(()):
             if not isinstance(action[2], tuple):
                 # only one next state possible
                 self.current_state = action[2]
             logger.debug('%s: action complete. State is now %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
+                         (self.provider.name, self.current_state,
+                          states[self.current_state]))
         except Exception as e:
             self.provider.kill()
 

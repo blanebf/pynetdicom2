@@ -47,7 +47,6 @@ from netdicom2 import dimseparameters
 
 logger = logging.getLogger(__name__)
 
-
 DicomDictionary.update({
     0x00000000: ('UL', '1', 'CommandGroupLength', ''),
     0x00000002: ('UI', '1', 'Affected SOP class', ''),
@@ -111,7 +110,9 @@ class DIMSEMessage(object):
         parameter objects."""
         self.id_ = id_
         pdatas = []
-        encoded_command_set = dsutils.encode(self.command_set, self.ts.is_implicit_VR, self.ts.is_little_endian)
+        encoded_command_set = dsutils.encode(self.command_set,
+                                             self.ts.is_implicit_VR,
+                                             self.ts.is_little_endian)
 
         # fragment command set
         pdvs = fragment(max_pdu_length, encoded_command_set)
@@ -125,7 +126,8 @@ class DIMSEMessage(object):
         # last command fragment
         pdata = dulparameters.PDataServiceParameters()
         # last command fragment
-        pdata.presentation_data_value_list = [[self.id_, pack('b', 3) + pdvs[-1]]]
+        pdata.presentation_data_value_list = [
+            [self.id_, pack('b', 3) + pdvs[-1]]]
         pdatas.append(pdata)
 
         # fragment data set
@@ -136,11 +138,13 @@ class DIMSEMessage(object):
             for ii in pdvs[:-1]:
                 pdata = dulparameters.PDataServiceParameters()
                 # not last data fragment
-                pdata.presentation_data_value_list = [[self.id_, pack('b', 0) + ii]]
+                pdata.presentation_data_value_list = [
+                    [self.id_, pack('b', 0) + ii]]
                 pdatas.append(pdata)
             pdata = dulparameters.PDataServiceParameters()
             # last data fragment
-            pdata.presentation_data_value_list = [[self.id_, pack('b', 2) + pdvs[-1]]]
+            pdata.presentation_data_value_list = [
+                [self.id_, pack('b', 2) + pdvs[-1]]]
             pdatas.append(pdata)
 
         return pdatas
@@ -166,7 +170,8 @@ class DIMSEMessage(object):
                     self.command_set = dsutils.decode(
                         self.encoded_command_set, self.ts.is_implicit_VR,
                         self.ts.is_little_endian)
-                    self.__class__ = MESSAGE_TYPE[self.command_set[(0x0000, 0x0100)].value]
+                    self.__class__ = MESSAGE_TYPE[
+                        self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:
                         return True  # response: no dataset
             elif unpack('b', vv[1][0])[0] in (0, 2):
@@ -181,7 +186,8 @@ class DIMSEMessage(object):
         return False
 
     def set_length(self):
-        it = (len(dsutils.encode_element(v, self.ts.is_implicit_VR, self.ts.is_little_endian))
+        it = (len(dsutils.encode_element(v, self.ts.is_implicit_VR,
+                                         self.ts.is_little_endian))
               for v in self.command_set.values()[1:])
         self.command_set[(0x0000, 0x0000)].value = sum(it)
 
@@ -215,15 +221,18 @@ class CEchoRSPMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1)]
 
     def from_params(self, params):
         if params.AffectedSOPClassUID:
-            self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
+            self.command_set[
+                (0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8030
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.set_length()
@@ -231,7 +240,8 @@ class CEchoRSPMessage(DIMSEMessage):
     def to_params(self):
         tmp = dimseparameters.CEchoServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
-        tmp.message_id_being_responded_to = self.command_set.get((0x0000, 0x0120))
+        tmp.message_id_being_responded_to = self.command_set.get(
+            (0x0000, 0x0120))
         tmp.status = 0
         return tmp
 
@@ -244,7 +254,8 @@ class CStoreRQMessage(DIMSEMessage):
                       ('Priority', (0x0000, 0x0700), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1),
-                      ('Move Originator Application Entity Title', (0x0000, 0x1030), 'AE', 1),
+                      ('Move Originator Application Entity Title',
+                       (0x0000, 0x1030), 'AE', 1),
                       ('Move Originator Message ID', (0x0000, 0x1031), 'US', 1)]
 
     def from_params(self, params):
@@ -253,13 +264,16 @@ class CStoreRQMessage(DIMSEMessage):
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
-        self.command_set[(0x0000, 0x1000)].value = params.affected_sop_instance_uid
+        self.command_set[
+            (0x0000, 0x1000)].value = params.affected_sop_instance_uid
         if params.move_originator_application_entity_title:
-            self.command_set[(0x0000, 0x1030)].value = params.move_originator_application_entity_title
+            self.command_set[(0x0000,
+                              0x1030)].value = params.move_originator_application_entity_title
         else:
             self.command_set[(0x0000, 0x1030)].value = ""
         if params.move_originator_message_id:
-            self.command_set[(0x0000, 0x1031)].value = params.move_originator_message_id
+            self.command_set[
+                (0x0000, 0x1031)].value = params.move_originator_message_id
         else:
             self.command_set[(0x0000, 0x1031)].value = ""
         self.data_set = params.data_set
@@ -279,25 +293,30 @@ class CStoreRSPMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1),
                       ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1)]
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid.value
+        self.command_set[
+            (0x0000, 0x0002)].value = params.affected_sop_class_uid.value
         self.command_set[(0x0000, 0x0100)].value = 0x8001
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to.value
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to.value
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
-        self.command_set[(0x0000, 0x1000)].value = params.affected_sop_instance_uid.value
+        self.command_set[
+            (0x0000, 0x1000)].value = params.affected_sop_instance_uid.value
         self.data_set = None
         self.set_length()
 
     def to_params(self):
         tmp = dimseparameters.CStoreServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
-        tmp.message_id_being_responded_to = self.command_set.get((0x0000, 0x0120))
+        tmp.message_id_being_responded_to = self.command_set.get(
+            (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
         tmp.affected_sop_instance_uid = self.command_set.get((0x0000, 0x1000))
         tmp.dataset = self.data_set
@@ -334,14 +353,17 @@ class CFindRSPMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1)]
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid.value
+        self.command_set[
+            (0x0000, 0x0002)].value = params.affected_sop_class_uid.value
         self.command_set[(0x0000, 0x0100)].value = 0x8020
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to.value
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to.value
         if not params.identifier:
             self.command_set[(0x0000, 0x0800)].value = 0x0101
         else:
@@ -353,7 +375,8 @@ class CFindRSPMessage(DIMSEMessage):
     def to_params(self):
         tmp = dimseparameters.CFindServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
-        tmp.message_id_being_responded_to = self.command_set.get((0x0000, 0x0120))
+        tmp.message_id_being_responded_to = self.command_set.get(
+            (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
         tmp.identifier = self.data_set
         return tmp
@@ -379,7 +402,8 @@ class CGetRQMessage(DIMSEMessage):
     def to_params(self):
         tmp = dimseparameters.CGetServiceParameters()
         tmp.message_id = self.command_set.get((0x0000, 0x0110)).value
-        tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002)).value
+        tmp.affected_sop_class_uid = self.command_set.get(
+            (0x0000, 0x0002)).value
         tmp.priority = self.command_set.get((0x0000, 0x0700)).value
         tmp.identifier = self.data_set
         return tmp
@@ -389,35 +413,50 @@ class CGetRSPMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1),
-                      ('Number of Remaining Sub-operations', (0x0000, 0x1020), 'US', 1),
-                      ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
-                      ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
-                      ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
+                      ('Number of Remaining Sub-operations', (0x0000, 0x1020),
+                       'US', 1),
+                      ('Number of Complete Sub-operations', (0x0000, 0x1021),
+                       'US', 1),
+                      ('Number of Failed Sub-operations', (0x0000, 0x1022),
+                       'US', 1),
+                      ('Number of Warning Sub-operations', (0x0000, 0x1023),
+                       'US', 1)]
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8010
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
-        self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
-        self.command_set[(0x0000, 0x1021)].value = params.number_of_completed_sub_operations
-        self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
-        self.command_set[(0x0000, 0x1023)].value = params.number_of_warning_sub_operations
+        self.command_set[
+            (0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+        self.command_set[
+            (0x0000, 0x1021)].value = params.number_of_completed_sub_operations
+        self.command_set[
+            (0x0000, 0x1022)].value = params.number_of_failed_sub_operations
+        self.command_set[
+            (0x0000, 0x1023)].value = params.number_of_warning_sub_operations
         self.set_length()
 
     def to_params(self):
         tmp = dimseparameters.CGetServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
-        tmp.message_id_being_responded_to = self.command_set.get((0x0000, 0x0120))
+        tmp.message_id_being_responded_to = self.command_set.get(
+            (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
-        tmp.number_of_remaining_sub_operations = self.command_set.get((0x0000, 0x1020))
-        tmp.number_of_complete_sub_operations = self.command_set.get((0x0000, 0x1021))
-        tmp.number_of_failed_sub_operations = self.command_set.get((0x0000, 0x1022))
-        tmp.number_of_warning_sub_operations = self.command_set.get((0x0000, 0x1023))
+        tmp.number_of_remaining_sub_operations = self.command_set.get(
+            (0x0000, 0x1020))
+        tmp.number_of_complete_sub_operations = self.command_set.get(
+            (0x0000, 0x1021))
+        tmp.number_of_failed_sub_operations = self.command_set.get(
+            (0x0000, 0x1022))
+        tmp.number_of_warning_sub_operations = self.command_set.get(
+            (0x0000, 0x1023))
         tmp.identifier = self.data_set
         return tmp
 
@@ -456,35 +495,50 @@ class CMoveRSPMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1),
-                      ('Number of Remaining Sub-operations', (0x0000, 0x1020), 'US', 1),
-                      ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
-                      ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
-                      ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
+                      ('Number of Remaining Sub-operations', (0x0000, 0x1020),
+                       'US', 1),
+                      ('Number of Complete Sub-operations', (0x0000, 0x1021),
+                       'US', 1),
+                      ('Number of Failed Sub-operations', (0x0000, 0x1022),
+                       'US', 1),
+                      ('Number of Warning Sub-operations', (0x0000, 0x1023),
+                       'US', 1)]
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8021
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
-        self.command_set[(0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
-        self.command_set[(0x0000, 0x1021)].value = params.number_of_complete_sub_operations
-        self.command_set[(0x0000, 0x1022)].value = params.number_of_failed_sub_operations
-        self.command_set[(0x0000, 0x1023)].value = params.number_of_warning_sub_operations
+        self.command_set[
+            (0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+        self.command_set[
+            (0x0000, 0x1021)].value = params.number_of_complete_sub_operations
+        self.command_set[
+            (0x0000, 0x1022)].value = params.number_of_failed_sub_operations
+        self.command_set[
+            (0x0000, 0x1023)].value = params.number_of_warning_sub_operations
         self.set_length()
 
     def to_params(self):
         tmp = dimseparameters.CMoveServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
-        tmp.message_id_being_responded_to = self.command_set.get((0x0000, 0x0120))
+        tmp.message_id_being_responded_to = self.command_set.get(
+            (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
-        tmp.number_of_remaining_sub_operations = self.command_set.get((0x0000, 0x1020))
-        tmp.number_of_complete_sub_operations = self.command_set.get((0x0000, 0x1021))
-        tmp.number_of_failed_sub_operations = self.command_set.get((0x0000, 0x1022))
-        tmp.number_of_warning_sub_operations = self.command_set.get((0x0000, 0x1023))
+        tmp.number_of_remaining_sub_operations = self.command_set.get(
+            (0x0000, 0x1020))
+        tmp.number_of_complete_sub_operations = self.command_set.get(
+            (0x0000, 0x1021))
+        tmp.number_of_failed_sub_operations = self.command_set.get(
+            (0x0000, 0x1022))
+        tmp.number_of_warning_sub_operations = self.command_set.get(
+            (0x0000, 0x1023))
         tmp.identifier = self.data_set
         return tmp
 
@@ -492,18 +546,19 @@ class CMoveRSPMessage(DIMSEMessage):
 class CCancelRQMessage(DIMSEMessage):
     command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
+                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
+                       1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0100)].value = 0x0FFF
-        self.command_set[(0x0000, 0x0120)].value = params.message_id_being_responded_to
+        self.command_set[
+            (0x0000, 0x0120)].value = params.message_id_being_responded_to
         self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.set_length()
 
 
 class CCancelFindRQMessage(CCancelRQMessage):
-
     def to_params(self):
         tmp = dimseparameters.CFindServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
@@ -511,7 +566,6 @@ class CCancelFindRQMessage(CCancelRQMessage):
 
 
 class CCancelGetRQMessage(CCancelRQMessage):
-
     def to_params(self):
         tmp = dimseparameters.CGetServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
@@ -519,7 +573,6 @@ class CCancelGetRQMessage(CCancelRQMessage):
 
 
 class CCancelMoveRQMessage(CCancelRQMessage):
-
     def to_params(self):
         tmp = dimseparameters.CMoveServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]

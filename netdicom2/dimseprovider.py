@@ -24,7 +24,8 @@ class DIMSEServiceProvider(object):
         self.message = None
 
     def send(self, primitive, id_, max_pdu_length):
-        # take a DIMSE primitive, convert it to one or more DUL primitive and send it
+        # take a DIMSE primitive, convert it to one or more DUL primitive
+        # and send it
         dimse_msg = None
         if isinstance(primitive, dimseparameters.CEchoServiceParameters):
             if primitive.message_id is not None:
@@ -53,7 +54,8 @@ class DIMSEServiceProvider(object):
                 dimse_msg = dimsemessages.CMoveRSPMessage()
 
         if dimse_msg is None:
-            raise RuntimeError("Failed to get message")  # TODO: Replace exception type
+            # TODO: Replace exception type
+            raise RuntimeError("Failed to get message")
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug('DIMSE message of class %s' % dimse_msg.__class__)

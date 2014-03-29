@@ -27,12 +27,13 @@ import dimseparameters
 class Association(object):
     """Base association class.
 
-    Class is not intended for direct usage and meant to be sub-classed. Class provides basic
-    association interface: creation, release and abort.
+    Class is not intended for direct usage and meant to be sub-classed.
+    Class provides basic association interface: creation, release and abort.
     """
 
     def __init__(self, local_ae, dul_socket):
-        """Initializes Association instance with local AE title and DUL service provider
+        """Initializes Association instance with local AE title and DUL service
+        provider
 
         :param local_ae: local AE title parameters
         :param dul_socket: socket for DUL provider or None if it's not needed
@@ -47,7 +48,8 @@ class Association(object):
     def kill(self):
         """Stops internal DUL service provider.
 
-        In most cases you won't need to use this method directly. Refer to release and abort instead.
+        In most cases you won't need to use this method directly. Refer to
+        release and abort instead.
         :rtype : None
         """
         for _ in xrange(1000):
@@ -107,7 +109,8 @@ class AssociationAcceptor(threading.Thread, Association):
         # call back
         self.ae.on_association_request(self)
         # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in self.asce.accepted_presentation_contexts]
+        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
+                                   self.asce.accepted_presentation_contexts]
         self.association_established = True
 
         # association established. Listening on local and remote interfaces
@@ -117,10 +120,14 @@ class AssociationAcceptor(threading.Thread, Association):
             if dimse_msg:  # dimse message received
                 uid = dimse_msg.affected_sop_class_uid
                 try:
-                    pcid, sop_class, transfer_syntax = [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
+                    pcid, sop_class, transfer_syntax = \
+                        [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                 except IndexError:
-                    raise Exception("SOP Class %s not supported as SCP" % uid)  # TODO Replace exception
-                obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                    # TODO Replace exception
+                    raise Exception('SOP Class %s not supported as SCP' % uid)
+                obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class,
+                                                      dimse=self.dimse,
+                                                      pcid=pcid,
                                                       transfer_syntax=transfer_syntax,
                                                       max_pdu_length=self.asce.max_pdu_length,
                                                       asce=self.asce)
@@ -159,33 +166,41 @@ class AssociationRequester(Association):
             self.dul.kill()
             return
         self.sop_classes_as_scu = [(context[0], context[1], context[2])
-                                   for context in self.asce.accepted_presentation_contexts]
+                                   for context in
+                                   self.asce.accepted_presentation_contexts]
 
         self.association_established = True
 
     def scu(self, ds, id_):
         uid = ds.SOPClassUID
         try:
-            pcid, _, transfer_syntax = [x for x in self.sop_classes_as_scu if x[1] == uid][0]
+            pcid, _, transfer_syntax = \
+                [x for x in self.sop_classes_as_scu if x[1] == uid][0]
         except IndexError:
-            raise Exception("SOP Class %s not supported as SCU")  # TODO: replace this exception
+            # TODO: replace this exception
+            raise Exception('SOP Class %s not supported as SCU')
 
-        obj = sopclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse, pcid=pcid,
-                                        transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
+        obj = sopclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse,
+                                        pcid=pcid,
+                                        transfer_syntax=transfer_syntax,
+                                        max_pdu_length=self.asce.max_pdu_length)
         return obj.scu(ds, id_)
 
     def get_scu(self, sop_class):
         try:
-            pcid, _, transfer_syntax = [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
+            pcid, _, transfer_syntax = \
+                [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
         except IndexError:
-            raise Exception("SOP Class %s not supported as SCU" % sop_class)  # TODO replace this exception
-        obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
-                                              transfer_syntax=transfer_syntax, max_pdu_length=self.asce.max_pdu_length)
+            # TODO replace this exception
+            raise Exception('SOP Class %s not supported as SCU' % sop_class)
+        obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class,
+                                              dimse=self.dimse, pcid=pcid,
+                                              transfer_syntax=transfer_syntax,
+                                              max_pdu_length=self.asce.max_pdu_length)
         return obj
 
 
 class AE(threading.Thread):
-
     """Represents a DICOM application entity
 
     Instance if this class represent an application entity. Once
@@ -195,35 +210,45 @@ class AE(threading.Thread):
     on received events.
     """
 
-    def __init__(self, ae_title, port, sop_scu, sop_scp, supported_transfer_syntax=None, max_pdu_length=16000):
+    def __init__(self, ae_title, port, sop_scu, sop_scp,
+                 supported_transfer_syntax=None, max_pdu_length=16000):
         if supported_transfer_syntax is None:
-            supported_transfer_syntax = [ExplicitVRLittleEndian, ImplicitVRLittleEndian, ExplicitVRBigEndian]
-        self.local_ae = {'Address': platform.node(), 'Port': port, 'AET': ae_title}
+            supported_transfer_syntax = [ExplicitVRLittleEndian,
+                                         ImplicitVRLittleEndian,
+                                         ExplicitVRBigEndian]
+        self.local_ae = {'Address': platform.node(), 'Port': port,
+                         'AET': ae_title}
         self.supported_sop_classes_as_scu = sop_scu
         self.supported_sop_classes_as_scp = sop_scp
         self.supported_transfer_syntax = supported_transfer_syntax
         self.max_number_of_associations = 25
         threading.Thread.__init__(self, name=self.local_ae['AET'])
 
-        self.local_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.local_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.local_server_socket = socket.socket(socket.AF_INET,
+                                                 socket.SOCK_STREAM)
+        self.local_server_socket.setsockopt(socket.SOL_SOCKET,
+                                            socket.SO_REUSEADDR, 1)
         self.local_server_socket.bind(('', port))
         self.local_server_socket.listen(1)
         self.max_pdu_length = max_pdu_length
 
-        # build presentation context definition list to be sent to remote AE when requesting association.
+        # build presentation context definition list to be sent to remote
+        # AE when requesting association.
         count = 1
         self.presentation_context_definition_list = []
         for sop_class in self.supported_sop_classes_as_scu + self.supported_sop_classes_as_scp:
-            self.presentation_context_definition_list.append([count, UID(sop_class),
-                                                             [x for x in self.supported_transfer_syntax]])
+            self.presentation_context_definition_list.append(
+                [count, UID(sop_class),
+                 [x for x in self.supported_transfer_syntax]])
             count += 2
 
-        # build acceptable context definition list used to decide whether an association from a remote AE will
-        # be accepted or not. This is based on the supported_sop_classes_as_scp and supported_transfer_syntax
-        # values set for this AE.
-        self.acceptable_presentation_contexts = [[sop_class, [x for x in self.supported_transfer_syntax]]
-                                                 for sop_class in self.supported_sop_classes_as_scp]
+        # build acceptable context definition list used to decide whether an
+        # association from a remote AE will be accepted or not.
+        # This is based on the supported_sop_classes_as_scp and
+        # supported_transfer_syntax values set for this AE.
+        self.acceptable_presentation_contexts = [
+            [sop_class, [x for x in self.supported_transfer_syntax]]
+            for sop_class in self.supported_sop_classes_as_scp]
 
         # used to terminate AE
         self._quit = False
@@ -233,7 +258,8 @@ class AE(threading.Thread):
 
     def run(self):
         if not self.supported_sop_classes_as_scp:
-            # no need to loop. This is just a client AE. All events will be triggered by the user
+            # no need to loop. This is just a client AE.
+            # All events will be triggered by the user
             return
         count = 0
         while not self._quit:
@@ -283,7 +309,8 @@ class AE(threading.Thread):
         while not assoc.association_established and not assoc.association_refused:
             time.sleep(0.1)
         if not assoc.association_established:
-            raise Exception('Failed to establish association')  # TODO Replace this exception
+            # TODO Replace this exception
+            raise Exception('Failed to establish association')
         self.associations.append(assoc)
         yield assoc
         assoc.release(0)

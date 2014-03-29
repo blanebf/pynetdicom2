@@ -6,9 +6,10 @@
 #
 
 """
-This module implements the DUL service provider, allowing a DUL service user to send and receive DUL messages.
-The User and Provider talk to each other using a TCP socket. The DULServer runs in a thread,
-so that and implements an event loop whose events will drive the state machine.
+This module implements the DUL service provider, allowing a DUL service user to
+send and receive DUL messages.  The User and Provider talk to each other using
+a TCP socket. The DULServer runs in a thread, so that and implements an event
+loop whose events will drive the state machine.
 """
 
 import collections
@@ -60,7 +61,6 @@ PDU_TYPES = {
 
 
 class DULServiceProvider(Thread):
-
     def __init__(self, socket_=None, port=None, name=''):
         """
         Three ways to call DULServiceProvider. If a port number is given,
@@ -103,13 +103,17 @@ class DULServiceProvider(Thread):
             # This is the socket that will accept connections
             # from the remote DUL provider
             # start this instance of DULServiceProvider in a thread.
-            self.local_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.local_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.local_server_socket = socket.socket(socket.AF_INET,
+                                                     socket.SOCK_STREAM)
+            self.local_server_socket.setsockopt(socket.SOL_SOCKET,
+                                                socket.SO_REUSEADDR, 1)
 
             self.local_server_port = port
             if self.local_server_port:
                 try:
-                    self.local_server_socket.bind((os.popen('hostname').read()[:-1], self.local_server_port))
+                    self.local_server_socket.bind((
+                        os.popen('hostname').read()[:-1],
+                        self.local_server_port))
                 except IOError:
                     logger.exception("Failed to bind socket")
                 self.local_server_socket.listen(1)
@@ -182,7 +186,8 @@ class DULServiceProvider(Thread):
             tmp = recv_n(self.remote_client_socket, length[0])
             raw_pdu += tmp
 
-            # Determine the type of PDU coming on remote port and set the event accordingly
+            # Determine the type of PDU coming on remote port and set the event
+            # accordingly
             try:
                 pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
                 self.pdu = pdu_type.decode(raw_pdu)
@@ -233,7 +238,8 @@ class DULServiceProvider(Thread):
             a, _, _ = select.select([self.local_server_socket], [], [], 0)
             if a:
                 # got an incoming connection
-                self.remote_client_socket, address = self.local_server_socket.accept()
+                self.remote_client_socket, \
+                    address = self.local_server_socket.accept()
                 self.event.append('Evt5')
                 return True
         elif self.remote_client_socket:
@@ -253,7 +259,8 @@ class DULServiceProvider(Thread):
         while not self.is_killed:
             time.sleep(0.001)
             # catch an event
-            self.check_network() or self.check_incoming_primitive() or self.check_timer()
+            self.check_network() or self.check_incoming_primitive() or\
+                self.check_timer()
             try:
                 evt = self.event.popleft()
             except IndexError:

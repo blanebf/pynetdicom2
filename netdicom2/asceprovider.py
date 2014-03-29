@@ -20,19 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 class AssociationRefused(Exception):
-
     def __init__(self, data=None):
         self.data = data
 
 
 class NoAcceptablePresentationContext(Exception):
-
     def __init__(self, data=None):
         self.data = data
 
 
 class ACSEServiceProvider(object):
-
     def __init__(self, dul):
         self.dul = dul
         self.application_context_name = '1.2.840.10008.3.1.1.1'
@@ -41,7 +38,8 @@ class ACSEServiceProvider(object):
         self.max_pdu_length = 16000
         self.accepted_presentation_contexts = []
 
-    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None, timeout=30):
+    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None,
+                timeout=30):
         """Requests an association with a remote AE and waits for association
         response."""
         self.local_ae = local_ae
@@ -59,8 +57,10 @@ class ACSEServiceProvider(object):
             assoc_rq.user_information = [max_pdu_length_par] + users_pdu
         else:
             assoc_rq.user_information = [max_pdu_length_par]
-        assoc_rq.calling_presentation_address = (self.local_ae['Address'], self.local_ae['Port'])
-        assoc_rq.called_presentation_address = (self.remote_ae['Address'], self.remote_ae['Port'])
+        assoc_rq.calling_presentation_address = (
+            self.local_ae['Address'], self.local_ae['Port'])
+        assoc_rq.called_presentation_address = (
+            self.remote_ae['Address'], self.remote_ae['Port'])
         assoc_rq.presentation_context_definition_list = pcdl
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(pcdl)
@@ -86,7 +86,8 @@ class ACSEServiceProvider(object):
 
         # Get maximum pdu length from answer
         try:
-            self.max_pdu_length = assoc_rsp.user_information[0].maximum_length_received
+            self.max_pdu_length = assoc_rsp.user_information[
+                0].maximum_length_received
         except IndexError:
             self.max_pdu_length = 16000
 
@@ -95,7 +96,8 @@ class ACSEServiceProvider(object):
         for cc in assoc_rsp.presentation_context_definition_result_list:
             if cc[1] == 0:
                 uid = [x[1] for x in pcdl if x[0] == cc[0]][0]
-                self.accepted_presentation_contexts.append((cc[0], uid, UID(cc[2])))
+                self.accepted_presentation_contexts.append(
+                    (cc[0], uid, UID(cc[2])))
         return True
 
     def accept(self, acceptable_presentation_contexts=None, wait=True):
@@ -116,12 +118,15 @@ class ACSEServiceProvider(object):
             proposed_sop = ii[1]
             proposed_ts = ii[2]
             if proposed_sop in acceptable_sop:
-                acceptable_ts = [x[1] for x in acceptable_presentation_contexts if x[0] == proposed_sop][0]
+                acceptable_ts = \
+                    [x[1] for x in acceptable_presentation_contexts if
+                     x[0] == proposed_sop][0]
                 for ts in proposed_ts:
                     if ts in acceptable_ts:
                         # accept sop class and ts
                         rsp.append((ii[0], 0, ts))
-                        self.accepted_presentation_contexts.append((ii[0], proposed_sop, UID(ts)))
+                        self.accepted_presentation_contexts.append(
+                            (ii[0], proposed_sop, UID(ts)))
                         break
                 else:  # Refuse sop class because of TS not supported
                     rsp.append((ii[0], 1, ''))
@@ -169,7 +174,8 @@ class ACSEServiceProvider(object):
     def check_abort(self):
         """Checks for abort indication from the remote AE. """
         rel = self.dul.peek()
-        if isinstance(rel, (dulparameters.AAbortServiceParameters, dulparameters.APAbortServiceParameters)):
+        if isinstance(rel, (dulparameters.AAbortServiceParameters,
+                            dulparameters.APAbortServiceParameters)):
             self.dul.receive(wait=False)
             return True
         else:
