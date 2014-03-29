@@ -65,26 +65,11 @@ import netdicom2.dulparameters as dulparams
 from netdicom2 import dimseparameters
 
 
-class PDUBase(object):
-    """Base class for PDUs."""
-    def __init__(self):
-        pass
-
-    def __eq__(self, other):
-        """Equality of tho PDUs"""
-        for k, v in self.__dict__.iteritems():
-            if v != other.__dict__[k]:
-                return False
-        return True
-
-
-class AAssociateRqPDU(PDUBase):
+class AAssociateRqPDU(object):
 
     """This class represents the A-ASSOCIATE-RQ PDU"""
 
     def __init__(self):
-        super(AAssociateRqPDU, self).__init__()
-
         self.pdu_type = 0x01                       # Unsigned byte
         self.reserved1 = 0x00                      # Unsigned byte
         self.pdu_length = None                     # Unsigned int
@@ -101,34 +86,42 @@ class AAssociateRqPDU(PDUBase):
         self.variable_items = []
 
     def __repr__(self):
-        tmp = ''.join(['A-ASSOCIATE-RQ PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
-                       ' PDU length: %d\n' % self.pdu_length, ' Called AE title: %s\n' % self.called_ae_title,
+        tmp = ''.join(['A-ASSOCIATE-RQ PDU\n',
+                       ' PDU type: 0x%02x\n' % self.pdu_type,
+                       ' PDU length: %d\n' % self.pdu_length,
+                       ' Called AE title: %s\n' % self.called_ae_title,
                        ' Calling AE title: %s\n' % self.calling_ae_title])
         tmp2 = ''.join([item.__repr__() for item in self.variable_items])
         return '%s%s\n' % (tmp, tmp2)
 
-    def from_params(self, params):
-        # Params is an A_ASSOCIATE_ServiceParameters object
-        self.calling_ae_title = params.calling_ae_title
-        self.called_ae_title = params.called_ae_title
-        tmp_app_cont = ApplicationContextItem()
-        tmp_app_cont.from_params(params.application_context_name)
-        self.variable_items.append(tmp_app_cont)
+    @classmethod
+    def from_params(cls, params):
+        """Factory method. Create PDU from AAssociateServiceParameters instance
+
+        :rtype : AAssociateRqPDU
+        :param params: AAssociateServiceParameters instance
+        :return: PDU instance
+        """
+        instance = cls()
+        instance.calling_ae_title = params.calling_ae_title
+        instance.called_ae_title = params.called_ae_title
+        tmp_app_cont = ApplicationContextItem.from_params(params.application_context_name)
+        instance.variable_items.append(tmp_app_cont)
 
         # Make presentation contexts
-        for ii in params.presentation_context_definition_list:
+        for context in params.presentation_context_definition_list:
             tmp_pres_cont = PresentationContextItemRQ()
-            tmp_pres_cont.from_params(ii)
-            self.variable_items.append(tmp_pres_cont)
+            tmp_pres_cont.from_params(context)
+            instance.variable_items.append(tmp_pres_cont)
 
         # Make user information
-        tmp_user_info = UserInformationItem()
-        tmp_user_info.from_params(params.user_information)
-        self.variable_items.append(tmp_user_info)
+        tmp_user_info = UserInformationItem.from_params(params.user_information)
+        instance.variable_items.append(tmp_user_info)
 
-        self.pdu_length = 68
-        for ii in self.variable_items:
-            self.pdu_length = self.pdu_length + ii.total_length()
+        instance.pdu_length = 68
+        for item in instance.variable_items:
+            instance.pdu_length = instance.pdu_length + item.total_length()
+        return instance
 
     def to_params(self):
         # Returns an A_ASSOCIATE_ServiceParameters object
@@ -146,10 +139,14 @@ class AAssociateRqPDU(PDUBase):
         return assoc
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                       struct.pack('>I', self.pdu_length), struct.pack('>H', self.protocol_version),
-                       struct.pack('>H',  self.reserved2), struct.pack('16s', self.called_ae_title),
-                       struct.pack('16s', self.calling_ae_title), struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
+        tmp = ''.join([struct.pack('B', self.pdu_type),
+                       struct.pack('B', self.reserved1),
+                       struct.pack('>I', self.pdu_length),
+                       struct.pack('>H', self.protocol_version),
+                       struct.pack('>H',  self.reserved2),
+                       struct.pack('16s', self.called_ae_title),
+                       struct.pack('16s', self.calling_ae_title),
+                       struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
 
         tmp2 = ''.join([item.encode() for item in self.variable_items])
         return tmp + tmp2
@@ -159,7 +156,8 @@ class AAssociateRqPDU(PDUBase):
         """Factory method. Decodes A-ASSOCIATE-RQ PDU instance from raw string.
 
         :rtype : AAssociateRqPDU
-        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-RQ PDU
+        :param rawstring: rawstring containing binary representation of the
+        A-ASSOCIATE-RQ PDU
         :return: decoded PDU
         :raise RuntimeError:
         """
@@ -168,36 +166,35 @@ class AAssociateRqPDU(PDUBase):
         decoded_pdu.pdu_type, decoded_pdu.reserved1, \
             decoded_pdu.pdu_length, decoded_pdu.protocol_version, \
             decoded_pdu.reserved2, decoded_pdu.called_ae_title, \
-            decoded_pdu.calling_ae_title = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+            decoded_pdu.calling_ae_title = struct.unpack('> B B I H H 16s 16s',
+                                                         stream.read(42))
         decoded_pdu.reserved3 = struct.unpack('> 8I', stream.read(32))
         decoded_pdu.called_ae_title = decoded_pdu.called_ae_title.strip('\0')
         decoded_pdu.calling_ae_title = decoded_pdu.calling_ae_title.strip('\0')
-        while 1:
-            type_ = next_type(stream)
-            if type_ == 0x10:
+        item_type = next_type(stream)
+        while item_type:
+            if item_type == 0x10:
                 tmp = ApplicationContextItem.decode(stream)
-            elif type_ == 0x20:
+            elif item_type == 0x20:
                 tmp = PresentationContextItemRQ.decode(stream)
-            elif type_ == 0x50:
+            elif item_type == 0x50:
                 tmp = UserInformationItem.decode(stream)
-            elif type_ is None:
-                break
             else:
-                raise RuntimeError('InvalidVariableItem')
+                # TODO replace this exception
+                raise Exception('InvalidVariableItem')
             decoded_pdu.variable_items.append(tmp)
+            item_type = next_type(stream)
         return decoded_pdu
 
     def total_length(self):
         return 6 + self.pdu_length
 
 
-class AAssociateAcPDU(PDUBase):
+class AAssociateAcPDU(object):
 
     """This class represents the A-ASSOCIATE-AC PDU"""
 
     def __init__(self):
-        super(AAssociateAcPDU, self).__init__()
-
         self.pdu_type = 0x02       # Unsigned byte
         self.reserved1 = 0x00      # Unsigned byte
         self.pdu_length = None     # Unsigned int
@@ -214,33 +211,40 @@ class AAssociateAcPDU(PDUBase):
         self.variable_items = []
 
     def __repr__(self):
-        tmp = ''.join(["A-ASSOCIATE-AC PDU\n", " PDU type: 0x%02x\n" % self.pdu_type,
-                       " PDU length: %d\n" % self.pdu_length, " Called AE title: %s\n" % self.reserved3,
-                       " Calling AE title: %s\n" % self.reserved4])
+        tmp = ''.join(['A-ASSOCIATE-AC PDU\n',
+                       ' PDU type: 0x%02x\n' % self.pdu_type,
+                       ' PDU length: %d\n' % self.pdu_length,
+                       ' Called AE title: %s\n' % self.reserved3,
+                       ' Calling AE title: %s\n' % self.reserved4])
         tmp2 = ''.join([item.__repr__() for item in self.variable_items])
         return '%s%s\n' % (tmp, tmp2)
 
-    def from_params(self, params):
-        # Params is an A_ASSOCIATE_ServiceParameters object
-        self.reserved3 = params.called_ae_title
-        self.reserved4 = params.calling_ae_title
+    @classmethod
+    def from_params(cls, params):
+        """Factory method. Create PDU from AAssociateServiceParameters instance
+
+        :rtype : AAssociateAcPDU
+        :param params: AAssociateServiceParameters instance
+        :return: PDU instance
+        """
+        instance = cls()
+        instance.reserved3 = params.called_ae_title
+        instance.reserved4 = params.calling_ae_title
         # Make application context
-        tmp_app_cont = ApplicationContextItem()
-        tmp_app_cont.from_params(params.application_context_name)
-        self.variable_items.append(tmp_app_cont)
+        tmp_app_cont = ApplicationContextItem.from_params(params.application_context_name)
+        instance.variable_items.append(tmp_app_cont)
         # Make presentation contexts
-        for ii in params.presentation_context_definition_result_list:
-            tmp_pres_cont = PresentationContextItemAC()
-            tmp_pres_cont.from_params(ii)
-            self.variable_items.append(tmp_pres_cont)
+        for context in params.presentation_context_definition_result_list:
+            tmp_pres_cont = PresentationContextItemAC.from_params(context)
+            instance.variable_items.append(tmp_pres_cont)
         # Make user information
-        tmp_user_info = UserInformationItem()
-        tmp_user_info.from_params(params.user_information)
-        self.variable_items.append(tmp_user_info)
+        tmp_user_info = UserInformationItem.from_params(params.user_information)
+        instance.variable_items.append(tmp_user_info)
         # Compute PDU length
-        self.pdu_length = 68
-        for ii in self.variable_items:
-            self.pdu_length = self.pdu_length + ii.total_length()
+        instance.pdu_length = 68
+        for item in instance.variable_items:
+            instance.pdu_length = instance.pdu_length + item.total_length()
+        return instance
 
     def to_params(self):
         assoc = dulparams.AAssociateServiceParameters()
@@ -258,10 +262,14 @@ class AAssociateAcPDU(PDUBase):
         return assoc
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                       struct.pack('>I', self.pdu_length), struct.pack('>H', self.protocol_version),
-                       struct.pack('>H',  self.reserved2), struct.pack('16s', self.reserved3),
-                       struct.pack('16s', self.reserved4), struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
+        tmp = ''.join([struct.pack('B', self.pdu_type),
+                       struct.pack('B', self.reserved1),
+                       struct.pack('>I', self.pdu_length),
+                       struct.pack('>H', self.protocol_version),
+                       struct.pack('>H',  self.reserved2),
+                       struct.pack('16s', self.reserved3),
+                       struct.pack('16s', self.reserved4),
+                       struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
 
         # variable item elements
         tmp2 = ''.join([item.encode() for item in self.variable_items])
@@ -272,7 +280,8 @@ class AAssociateAcPDU(PDUBase):
         """Factory method. Decodes A-ASSOCIATE-AC PDU instance from raw string.
 
         :rtype : AAssociateAcPDU
-        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-AC PDU
+        :param rawstring: rawstring containing binary representation of the
+        A-ASSOCIATE-AC PDU
         :return: decoded PDU
         :raise RuntimeError:
         """
@@ -280,34 +289,34 @@ class AAssociateAcPDU(PDUBase):
         decoded_pdu = cls()
         decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
             decoded_pdu.protocol_version, decoded_pdu.reserved2, \
-            decoded_pdu.reserved3, decoded_pdu.reserved4 = struct.unpack('> B B I H H 16s 16s', stream.read(42))
+            decoded_pdu.reserved3, \
+            decoded_pdu.reserved4 = struct.unpack('> B B I H H 16s 16s',
+                                                  stream.read(42))
         decoded_pdu.reserved5 = struct.unpack('>8I', stream.read(32))
-        while 1:
-            type_ = next_type(stream)
-            if type_ == 0x10:
+        item_type = next_type(stream)
+        while item_type:
+            if item_type == 0x10:
                 tmp = ApplicationContextItem.decode(stream)
-            elif type_ == 0x21:
+            elif item_type == 0x21:
                 tmp = PresentationContextItemAC.decode(stream)
-            elif type_ == 0x50:
+            elif item_type == 0x50:
                 tmp = UserInformationItem.decode(stream)
-            elif type_ is None:
-                break
             else:
-                raise RuntimeError('InvalidVariableItem')
+                # TODO replace this exception
+                raise Exception('InvalidVariableItem')
             decoded_pdu.variable_items.append(tmp)
+            item_type = next_type(stream)
         return decoded_pdu
 
     def total_length(self):
         return 6 + self.pdu_length
 
 
-class AAssociateRjPDU(PDUBase):
+class AAssociateRjPDU(object):
 
     """This class represents the A-ASSOCIATE-RJ PDU"""
 
     def __init__(self):
-        super(AAssociateRjPDU, self).__init__()
-
         self.pdu_type = 0x03          # Unsigned byte
         self.reserved1 = 0x00         # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
@@ -317,15 +326,27 @@ class AAssociateRjPDU(PDUBase):
         self.reason_diag = None       # Unsigned byte
 
     def __repr__(self):
-        return ''.join(['A-ASSOCIATE-RJ PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
-                        ' PDU length: %d\n' % self.pdu_length, ' Result: %d\n' % self.result,
-                        ' Source: %s\n' % str(self.source), ' Reason/Diagnostic: %s\n' % str(self.reason_diag), "\n"])
+        return ''.join(['A-ASSOCIATE-RJ PDU\n',
+                        ' PDU type: 0x%02x\n' % self.pdu_type,
+                        ' PDU length: %d\n' % self.pdu_length,
+                        ' Result: %d\n' % self.result,
+                        ' Source: %s\n' % str(self.source),
+                        ' Reason/Diagnostic: %s\n' % str(self.reason_diag),
+                        '\n'])
 
-    def from_params(self, params):
-        # Params is an A_ASSOCIATE_ServiceParameters object
-        self.result = params.result
-        self.source = params.result_source
-        self.reason_diag = params.diagnostic
+    @classmethod
+    def from_params(cls, params):
+        """Factory method. Create PDU from AAssociateServiceParameters instance
+
+        :rtype : AAssociateRjPDU
+        :param params: AAssociateServiceParameters instance
+        :return: PDU instance
+        """
+        instance = cls()
+        instance.result = params.result
+        instance.source = params.result_source
+        instance.reason_diag = params.diagnostic
+        return instance
 
     def to_params(self):
         tmp = dulparams.AAssociateServiceParameters()
@@ -335,9 +356,12 @@ class AAssociateRjPDU(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length), struct.pack('B', self.reserved2),
-                        struct.pack('B', self.result), struct.pack('B', self.source),
+        return ''.join([struct.pack('B', self.pdu_type),
+                        struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length),
+                        struct.pack('B', self.reserved2),
+                        struct.pack('B', self.result),
+                        struct.pack('B', self.source),
                         struct.pack('B', self.reason_diag)])
 
     @classmethod
@@ -345,7 +369,8 @@ class AAssociateRjPDU(PDUBase):
         """Factory method. Decodes A-ASSOCIATE-RJ PDU instance from raw string.
 
         :rtype : AAssociateRjPDU
-        :param rawstring: rawstring containing binary representation of the A-ASSOCIATE-RJ PDU
+        :param rawstring: rawstring containing binary representation of the
+        A-ASSOCIATE-RJ PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
@@ -359,13 +384,11 @@ class AAssociateRjPDU(PDUBase):
         return 10
 
 
-class PDataTfPDU(PDUBase):
+class PDataTfPDU(object):
 
     """This class represents the P-DATA-TF PDU"""
 
     def __init__(self):
-        super(PDataTfPDU, self).__init__()
-
         self.pdu_type = 0x04    # Unsigned byte
         self.reserved = 0x00    # Unsigned byte
         self.pdu_length = None  # Unsigned int
@@ -374,31 +397,41 @@ class PDataTfPDU(PDUBase):
         self.presentation_data_value_items = []
 
     def __repr__(self):
-        tmp = ''.join(['P-DATA-TF PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type, ' PDU length: %d\n' % self.pdu_length])
-        tmp2 = ''.join(item.__repr__() for item in self.presentation_data_value_items)
+        tmp = ''.join(['P-DATA-TF PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
+                       ' PDU length: %d\n' % self.pdu_length])
+        tmp2 = ''.join(item.__repr__()
+                       for item in self.presentation_data_value_items)
         return '%s%s\n' % (tmp, tmp2)
 
-    def from_params(self, params):
-        # Params is an P_DATA_ServiceParameters object
-        for ii in params.presentation_data_value_list:
-            tmp = PresentationDataValueItem()
-            tmp.from_params(ii)
-            self.presentation_data_value_items.append(tmp)
-        self.pdu_length = 0
-        for ii in self.presentation_data_value_items:
-            self.pdu_length = self.pdu_length + ii.total_length()
+    @classmethod
+    def from_params(cls, params):
+        """Factory method. Create PDU from PDataServiceParameters instance
+
+        :rtype : PDataTfPDU
+        :param params: PDataServiceParameters instance
+        :return: PDU instance
+        """
+        instance = cls()
+        for value in params.presentation_data_value_list:
+            tmp = PresentationDataValueItem.from_params(value)
+            instance.presentation_data_value_items.append(tmp)
+        instance.pdu_length = 0
+        for item in instance.presentation_data_value_items:
+            instance.pdu_length = instance.pdu_length + item.total_length()
 
     def to_params(self):
         tmp = dulparams.PDataServiceParameters()
-        tmp.presentation_data_value_list = []
-        for ii in self.presentation_data_value_items:
-            tmp.presentation_data_value_list.append([ii.presentation_context_id, ii.presentation_data_value])
+        tmp.presentation_data_value_list = [[i.presentation_context_id,
+                                             i.presentation_data_value]
+                                            for i in self.presentation_data_value_items]
         return tmp
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved),
+        tmp = ''.join([struct.pack('B', self.pdu_type),
+                       struct.pack('B', self.reserved),
                        struct.pack('>I', self.pdu_length)])
-        tmp2 = ''.join([item.encode() for item in self.presentation_data_value_items])
+        tmp2 = ''.join([item.encode()
+                        for item in self.presentation_data_value_items])
         return tmp + tmp2
 
     @classmethod
@@ -406,41 +439,39 @@ class PDataTfPDU(PDUBase):
         """Factory method. Decodes P-DATA-TF PDU instance from raw string.
 
         :rtype : PDataTfPDU
-        :param rawstring: rawstring containing binary representation of the P-DATA-TF PDU
+        :param rawstring: rawstring containing binary representation of the
+        P-DATA-TF PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
         decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved, decoded_pdu.pdu_length = struct.unpack('> B B I', stream.read(6))
+        decoded_pdu.pdu_type, decoded_pdu.reserved, \
+            decoded_pdu.pdu_length = struct.unpack('> B B I', stream.read(6))
         length_read = 0
         while length_read != decoded_pdu.pdu_length:
             tmp = PresentationDataValueItem.decode(stream)
             length_read += tmp.total_length()
             decoded_pdu.presentation_data_value_items.append(tmp)
+        return decoded_pdu
 
     def total_length(self):
         return 6 + self.pdu_length
 
 
-class AReleaseRqPDU(PDUBase):
+class AReleaseRqPDU(object):
 
     """This class represents the A-RELEASE-RQ PDU"""
 
     def __init__(self):
-        super(AReleaseRqPDU, self).__init__()
-
         self.pdu_type = 0x05          # Unsigned byte
         self.reserved1 = 0x00         # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
         self.reserved2 = 0x00000000   # Unsigned int
 
     def __repr__(self):
-        return ''.join(['A-RELEASE-RQ PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
+        return ''.join(['A-RELEASE-RQ PDU\n',
+                        ' PDU type: 0x%02x\n' % self.pdu_type,
                         ' PDU length: %d\n' % self.pdu_length, '\n'])
-
-    def from_params(self, params=None):
-        # Params is an A_RELEASE_ServiceParameters object. It is optional.
-        pass
 
     def to_params(self):
         tmp = dulparams.AReleaseServiceParameters()
@@ -449,15 +480,18 @@ class AReleaseRqPDU(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length),struct.pack('>I', self.reserved2)])
+        return ''.join([struct.pack('B', self.pdu_type),
+                        struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length),
+                        struct.pack('>I', self.reserved2)])
 
     @classmethod
     def decode(cls, rawstring):
         """Factory method. Decodes A-RELEASE-RQ PDU instance from raw string.
 
         :rtype : AReleaseRqPDU
-        :param rawstring: rawstring containing binary representation of the A-RELEASE-RQ PDU
+        :param rawstring: rawstring containing binary representation of the
+        A-RELEASE-RQ PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
@@ -470,25 +504,20 @@ class AReleaseRqPDU(PDUBase):
         return 10
 
 
-class AReleaseRpPDU(PDUBase):
+class AReleaseRpPDU(object):
 
     """This class represents the A-RELEASE-RP PDU"""
 
     def __init__(self):
-        super(AReleaseRpPDU, self).__init__()
-
         self.pdu_type = 0x06          # Unsigned byte
         self.reserved1 = 0x00         # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
         self.reserved2 = 0x00000000   # Unsigned int
 
     def __repr__(self):
-        return ''.join(['A-RELEASE-RP PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
+        return ''.join(['A-RELEASE-RP PDU\n',
+                        ' PDU type: 0x%02x\n' % self.pdu_type,
                         ' PDU length: %d\n' % self.pdu_length + '\n'])
-
-    def from_params(self, params=None):
-        # Params is an A_RELEASE_ServiceParameters object. It is optional.
-        pass
 
     def to_params(self):
         tmp = dulparams.AReleaseServiceParameters()
@@ -497,15 +526,18 @@ class AReleaseRpPDU(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length), struct.pack('>I', self.reserved2)])
+        return ''.join([struct.pack('B', self.pdu_type),
+                        struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length),
+                        struct.pack('>I', self.reserved2)])
 
     @classmethod
     def decode(cls, rawstring):
         """Factory method. Decodes A-RELEASE-RP PDU instance from raw string.
 
         :rtype : AReleaseRpPDU
-        :param rawstring: rawstring containing binary representation of the A-RELEASE-RP PDU
+        :param rawstring: rawstring containing binary representation of the
+        A-RELEASE-RP PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
@@ -518,13 +550,11 @@ class AReleaseRpPDU(PDUBase):
         return 10
 
 
-class AAbortPDU(PDUBase):
+class AAbortPDU(object):
 
     """This class represents the A-ABORT PDU"""
 
     def __init__(self):
-        super(AAbortPDU, self).__init__()
-
         self.pdu_type = 0x07          # Unsigned byte
         self.reserved1 = 0x00         # Unsigned byte
         self.pdu_length = 0x00000004  # Unsigned int
@@ -534,17 +564,23 @@ class AAbortPDU(PDUBase):
         self.reason_diag = None       # Unsigned byte
 
     def __repr__(self):
-        return ''.join(['A-ABORT PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type, ' PDU length: %d\n' % self.pdu_length,
-                        ' Abort Source: %d\n' % self.abort_source, ' Reason/Diagnostic: %d\n' % self.reason_diag, '\n'])
+        return ''.join(['A-ABORT PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
+                        ' PDU length: %d\n' % self.pdu_length,
+                        ' Abort Source: %d\n' % self.abort_source,
+                        ' Reason/Diagnostic: %d\n' % self.reason_diag, '\n'])
 
-    def from_params(self, params):
-        # Params can be an AAbortServiceParameters or APAbortServiceParameters object.
-        if isinstance(params, dulparams.AAbortServiceParameters):  # User initiated abort
-            self.reason_diag = 0
-            self.abort_source = params.abort_source
-        elif isinstance(params, dulparams.APAbortServiceParameters):  # User provider initiated abort
-            self.abort_source = params.abort_source
-            self.reason_diag = None
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        # params can be an AAbortServiceParameters or
+        # APAbortServiceParameters object.
+        try:  # User initiated abort
+            instance.abort_source = params.abort_source
+            instance.reason_diag = 0
+        except AttributeError:  # User provider initiated abort
+            instance.abort_source = 0
+            instance.reason_diag = params.provider_reason
+        return instance
 
     def to_params(self):
         # Returns either a A-ABORT of an A-P-ABORT
@@ -559,9 +595,12 @@ class AAbortPDU(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type), struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length), struct.pack('B', self.reserved2),
-                        struct.pack('B', self.reserved3), struct.pack('B', self.abort_source),
+        return ''.join([struct.pack('B', self.pdu_type),
+                        struct.pack('B', self.reserved1),
+                        struct.pack('>I', self.pdu_length),
+                        struct.pack('B', self.reserved2),
+                        struct.pack('B', self.reserved3),
+                        struct.pack('B', self.abort_source),
                         struct.pack('B', self.reason_diag)])
 
     @classmethod
@@ -587,33 +626,37 @@ class AAbortPDU(PDUBase):
 # Items and sub-items classes
 
 
-class ApplicationContextItem(PDUBase):
+class ApplicationContextItem(object):
 
     def __init__(self):
-        super(ApplicationContextItem, self).__init__()
-
         self.item_type = 0x10                 # Unsigned byte
         self.reserved = 0x00                  # Unsigned byte
         self.item_length = None               # Unsigned short
         self.application_context_name = None  # String
 
     def __repr__(self):
-        return ''.join([' Application context item\n', '  Item type: 0x%02x\n' % self.item_type,
+        return ''.join([' Application context item\n',
+                        '  Item type: 0x%02x\n' % self.item_type,
                        '  Item length: %d\n' % self.item_length,
                        '  Presentation context ID: %s\n' % self.application_context_name])
 
-    def from_params(self, params):
+    @classmethod
+    def from_params(cls, params):
         # Params is a string
-        self.application_context_name = params
-        self.item_length = len(self.application_context_name)
+        instance = cls()
+        instance.application_context_name = params
+        instance.item_length = len(instance.application_context_name)
+        return instance
 
     def to_params(self):
         # Returns the application context name
         return self.application_context_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.application_context_name])
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length),
+                        self.application_context_name])
 
     @classmethod
     def decode(cls, stream):
@@ -624,7 +667,8 @@ class ApplicationContextItem(PDUBase):
         :return decoded item
         """
         decoded_obj = cls()
-        decoded_obj.item_type, decoded_obj.reserved, decoded_obj.item_length = struct.unpack('> B B H', stream.read(4))
+        decoded_obj.item_type, decoded_obj.reserved, \
+            decoded_obj.item_length = struct.unpack('> B B H', stream.read(4))
         decoded_obj.application_context_name = stream.read(decoded_obj.item_length)
         return decoded_obj
 
@@ -632,11 +676,9 @@ class ApplicationContextItem(PDUBase):
         return 4 + self.item_length
 
 
-class PresentationContextItemRQ(PDUBase):
+class PresentationContextItemRQ(object):
 
     def __init__(self):
-        super(PresentationContextItemRQ, self).__init__()
-
         self.item_type = 0x20                # Unsigned byte
         self.reserved1 = 0x00                # Unsigned byte
         self.item_length = None              # Unsigned short
@@ -652,38 +694,48 @@ class PresentationContextItemRQ(PDUBase):
         self.abstract_transfer_syntax_sub_items = []
 
     def __repr__(self):
-        tmp = ''.join([" Presentation context RQ item\n", "  Item type: 0x%02x\n" % self.item_type,
+        tmp = ''.join([" Presentation context RQ item\n",
+                       "  Item type: 0x%02x\n" % self.item_type,
                        "  Item length: %d\n" % self.item_length,
                        "  Presentation context ID: %d\n" % self.presentation_context_id])
-        tmp2 = ''.join([item.__repr__() for item in self.abstract_transfer_syntax_sub_items])
+        tmp2 = ''.join([item.__repr__()
+                        for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
 
-    def from_params(self, params):
-        # Params is a list of the form [ID, AbstractSyntaxName,
-        # [TransferSyntaxNames]]
-        self.presentation_context_id = params[0]
-        tmp_abs_syn = AbstractSyntaxSubItem()
-        tmp_abs_syn.from_params(params[1])
-        self.abstract_transfer_syntax_sub_items.append(tmp_abs_syn)
-        for ii in params[2]:
-            tmp_tr_syn = TransferSyntaxSubItem()
-            tmp_tr_syn.from_params(ii)
-            self.abstract_transfer_syntax_sub_items.append(tmp_tr_syn)
-        self.item_length = 4
-        for ii in self.abstract_transfer_syntax_sub_items:
-            self.item_length = self.item_length + ii.total_length()
+    @classmethod
+    def from_params(cls, params):
+        # params is a list of the form
+        # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
+        instance = cls()
+        instance.presentation_context_id = params[0]
+        tmp_abs_syn = AbstractSyntaxSubItem.from_params(params[1])
+        instance.abstract_transfer_syntax_sub_items.append(tmp_abs_syn)
+        for item in params[2]:
+            tmp_tr_syn = TransferSyntaxSubItem.from_params(item)
+            instance.abstract_transfer_syntax_sub_items.append(tmp_tr_syn)
+        instance.item_length = 4
+        for item in instance.abstract_transfer_syntax_sub_items:
+            instance.item_length = instance.item_length + item.total_length()
+        return instance
 
     def to_params(self):
-        # Returns a list of the form [ID, AbstractSyntaxName, [TransferSyntaxNames]]
-        return [self.presentation_context_id, self.abstract_transfer_syntax_sub_items[0].to_params(),
-                [item.to_params() for item in self.abstract_transfer_syntax_sub_items[1:]]]
+        # Returns a list of the form
+        # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
+        return [self.presentation_context_id,
+                self.abstract_transfer_syntax_sub_items[0].to_params(),
+                [item.to_params()
+                 for item in self.abstract_transfer_syntax_sub_items[1:]]]
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved1),
-                       struct.pack('>H', self.item_length), struct.pack('B', self.presentation_context_id),
-                       struct.pack('B', self.reserved2), struct.pack('B', self.reserved3),
+        tmp = ''.join([struct.pack('B', self.item_type),
+                       struct.pack('B', self.reserved1),
+                       struct.pack('>H', self.item_length),
+                       struct.pack('B', self.presentation_context_id),
+                       struct.pack('B', self.reserved2),
+                       struct.pack('B', self.reserved3),
                        struct.pack('B', self.reserved4)])
-        tmp2 = ''.join([item.encode() for item in self.abstract_transfer_syntax_sub_items])
+        tmp2 = ''.join([item.encode()
+                        for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
 
     @classmethod
@@ -713,11 +765,9 @@ class PresentationContextItemRQ(PDUBase):
         return 4 + self.item_length
 
 
-class PresentationContextItemAC(PDUBase):
+class PresentationContextItemAC(object):
 
     def __init__(self):
-        super(PresentationContextItemAC, self).__init__()
-
         self.item_type = 0x21                 # Unsigned byte
         self.reserved1 = 0x00                 # Unsigned byte
         self.item_length = None               # Unsigned short
@@ -728,28 +778,37 @@ class PresentationContextItemAC(PDUBase):
         self.transfer_syntax_sub_item = None  # TransferSyntaxSubItem object
 
     def __repr__(self):
-        return ''.join([' Presentation context AC item\n', '  Item type: 0x%02x\n' % self.item_type,
+        return ''.join([' Presentation context AC item\n',
+                        '  Item type: 0x%02x\n' % self.item_type,
                         '  Item length: %d\n' % self.item_length,
                         '  Presentation context ID: %d\n' % self.presentation_context_id,
-                        '  Result/Reason: %d\n' % self.result_reason, self.transfer_syntax_sub_item.__repr__()])
+                        '  Result/Reason: %d\n' % self.result_reason,
+                        self.transfer_syntax_sub_item.__repr__()])
 
-    def from_params(self, params):
-        # Params is a list of the form [ID, Response, TransferSyntax].
-        self.presentation_context_id = params[0]
-        self.result_reason = params[1]
-        self.transfer_syntax_sub_item = TransferSyntaxSubItem()
-        self.transfer_syntax_sub_item.from_params(params[2])
-        self.item_length = 4 + self.transfer_syntax_sub_item.total_length()
+    @classmethod
+    def from_params(cls, params):
+        # params is a list of the form [ID, Response, TransferSyntax].
+        instance = cls()
+        instance.presentation_context_id = params[0]
+        instance.result_reason = params[1]
+        instance.transfer_syntax_sub_item = TransferSyntaxSubItem.from_params(params[2])
+        instance.item_length = 4 + instance.transfer_syntax_sub_item.total_length()
+        return instance
 
     def to_params(self):
         # Returns a list of the form [ID, Response, TransferSyntax].
-        return [self.presentation_context_id, self.result_reason, self.transfer_syntax_sub_item.to_params()]
+        return [self.presentation_context_id, self.result_reason,
+                self.transfer_syntax_sub_item.to_params()]
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved1),
-                        struct.pack('>H', self.item_length), struct.pack('B', self.presentation_context_id),
-                        struct.pack('B', self.reserved2), struct.pack('B', self.result_reason),
-                        struct.pack('B', self.reserved3), self.transfer_syntax_sub_item.encode()])
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved1),
+                        struct.pack('>H', self.item_length),
+                        struct.pack('B', self.presentation_context_id),
+                        struct.pack('B', self.reserved2),
+                        struct.pack('B', self.result_reason),
+                        struct.pack('B', self.reserved3),
+                        self.transfer_syntax_sub_item.encode()])
 
     @classmethod
     def decode(cls, stream):
@@ -771,33 +830,37 @@ class PresentationContextItemAC(PDUBase):
         return 4 + self.item_length
 
 
-class AbstractSyntaxSubItem(PDUBase):
+class AbstractSyntaxSubItem(object):
 
     def __init__(self):
-        super(AbstractSyntaxSubItem, self).__init__()
-
         self.reserved = 0x00              # Unsigned byte
         self.item_type = 0x30             # Unsigned byte
         self.item_length = None           # Unsigned short
         self.abstract_syntax_name = None  # String
 
     def __repr__(self):
-        return ''.join(['  Abstract syntax sub item\n', '   Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Abstract syntax sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
                         '   Abstract syntax name: %s\n' % self.abstract_syntax_name])
 
-    def from_params(self, params):
-        # Params is a string
-        self.abstract_syntax_name = params
-        self.item_length = len(self.abstract_syntax_name)
+    @classmethod
+    def from_params(cls, params):
+        # params is a string
+        instance = cls()
+        instance.abstract_syntax_name = params
+        instance.item_length = len(instance.abstract_syntax_name)
+        return instance
 
     def to_params(self):
         # Returns the abstract syntax name
         return self.abstract_syntax_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.abstract_syntax_name])
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length),
+                        self.abstract_syntax_name])
 
     @classmethod
     def decode(cls, stream):
@@ -817,33 +880,37 @@ class AbstractSyntaxSubItem(PDUBase):
         return 4 + self.item_length
 
 
-class TransferSyntaxSubItem(PDUBase):
+class TransferSyntaxSubItem(object):
 
     def __init__(self):
-        super(TransferSyntaxSubItem, self).__init__()
-
         self.item_type = 0x40             # Unsigned byte
         self.reserved = 0x00              # Unsigned byte
         self.item_length = None           # Unsigned short
         self.transfer_syntax_name = None  # String
 
     def __repr__(self):
-        return ''.join(['  Transfer syntax sub item\n', '   Item type: 0x%02x\n' % self.item_type,
+        return ''.join(['  Transfer syntax sub item\n',
+                        '   Item type: 0x%02x\n' % self.item_type,
                         '   Item length: %d\n' % self.item_length,
                         '   Transfer syntax name: %s\n' % self.transfer_syntax_name])
 
-    def from_params(self, params):
-        # Params is a string.
-        self.transfer_syntax_name = params
-        self.item_length = len(self.transfer_syntax_name)
+    @classmethod
+    def from_params(cls, params):
+        # params is a string.
+        instance = cls()
+        instance.transfer_syntax_name = params
+        instance.item_length = len(instance.transfer_syntax_name)
+        return instance
 
     def to_params(self):
         # Returns the transfer syntax name
         return self.transfer_syntax_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.transfer_syntax_name])
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length),
+                        self.transfer_syntax_name])
 
     @classmethod
     def decode(cls, stream):
@@ -863,13 +930,11 @@ class TransferSyntaxSubItem(PDUBase):
         return 4 + self.item_length
 
 
-class UserInformationItem(PDUBase):
+class UserInformationItem(object):
 
     def __init__(self):
-        super(UserInformationItem, self).__init__()
-
-        self.item_type = 0x50  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
+        self.item_type = 0x50    # Unsigned byte
+        self.reserved = 0x00     # Unsigned byte
         self.item_length = None  # Unsigned short
 
         #  user_data is a list containing the following:
@@ -879,7 +944,8 @@ class UserInformationItem(PDUBase):
         self.user_data = []
 
     def __repr__(self):
-        tmp = [' User information item\n', '  Item type: 0x%02x\n' % self.item_type,
+        tmp = [' User information item\n',
+               '  Item type: 0x%02x\n' % self.item_type,
                '  Item length: %d\n' % self.item_length, '  User Data:\n ']
         if len(self.user_data) > 1:
             tmp.append(str(self.user_data[0]))
@@ -887,13 +953,16 @@ class UserInformationItem(PDUBase):
                 tmp.append('   User Data Item: ' + str(ii) + "\n")
         return ''.join(tmp)
 
-    def from_params(self, params):
-        # Params is a user_data
-        for ii in params:
-            self.user_data.append(ii.to_params())
-        self.item_length = 0
-        for ii in self.user_data:
-            self.item_length = self.item_length + ii.total_length()
+    @classmethod
+    def from_params(cls, params):
+        # params is a user_data
+        instance = cls()
+        for param in params:
+            instance.user_data.append(param.to_params())
+        instance.item_length = 0
+        for data in instance.user_data:
+            instance.item_length = instance.item_length + data.total_length()
+        return instance
 
     def to_params(self):
         tmp = []
@@ -902,7 +971,8 @@ class UserInformationItem(PDUBase):
         return tmp
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+        tmp = ''.join([struct.pack('B', self.item_type),
+                       struct.pack('B', self.reserved),
                        struct.pack('>H', self.item_length)])
         tmp2 = ''.join([data.encode() for data in self.user_data])
         return tmp + tmp2
@@ -919,37 +989,28 @@ class UserInformationItem(PDUBase):
         decoded_item.item_type, decoded_item.reserved, \
             decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
         # read the rest of user info
-        decoded_item.user_data = []
-        while next_sub_item_type(stream) is not None:
-            tmp = next_sub_item_type(stream)()
-            tmp.decode(stream)
-            decoded_item.user_data.append(tmp)
+        decoded_item.user_data = [sub_item for sub_item in sub_items(stream)]
         return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
 
 
-class MaximumLengthParameters(PDUBase):
+class MaximumLengthParameters(object):
 
     def __init__(self):
-        super(MaximumLengthParameters, self).__init__()
         self.maximum_length_received = None
 
     def __eq__(self, other):
         return self.maximum_length_received == other.maximum_length_received
 
     def to_params(self):
-        tmp = MaximumLengthSubItem()
-        tmp.from_params(self)
-        return tmp
+        return MaximumLengthSubItem.from_params(self)
 
 
-class MaximumLengthSubItem(PDUBase):
+class MaximumLengthSubItem(object):
 
     def __init__(self):
-        super(MaximumLengthSubItem, self).__init__()
-
         self.item_type = 0x51                # Unsigned byte
         self.reserved = 0x00                 # Unsigned byte
         self.item_length = 0x0004            # Unsigned short
@@ -960,8 +1021,11 @@ class MaximumLengthSubItem(PDUBase):
                         '    Item length: %d\n' % self.item_length,
                         '    Maximum Length Received: %d\n' % self.maximum_length_received])
 
-    def from_params(self, params):
-        self.maximum_length_received = params.maximum_length_received
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.maximum_length_received = params.maximum_length_received
+        return instance
 
     def to_params(self):
         tmp = MaximumLengthParameters()
@@ -969,8 +1033,10 @@ class MaximumLengthSubItem(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), struct.pack('>I', self.maximum_length_received)])
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved),
+                        struct.pack('>H', self.item_length),
+                        struct.pack('>I', self.maximum_length_received)])
 
     @classmethod
     def decode(cls, stream):
@@ -983,41 +1049,46 @@ class MaximumLengthSubItem(PDUBase):
         decoded_item = cls()
         decoded_item.item_type, decoded_item.reserved, \
             decoded_item.item_length, \
-            decoded_item.maximum_length_received = struct.unpack('> B B H I', stream.read(8))
+            decoded_item.maximum_length_received = struct.unpack('> B B H I',
+                                                                 stream.read(8))
         return decoded_item
 
     def total_length(self):
         return 0x08
 
 
-class PresentationDataValueItem(PDUBase):
+class PresentationDataValueItem(object):
 
     def __init__(self):
-        super(PresentationDataValueItem, self).__init__()
-
         self.item_length = None              # Unsigned int
         self.presentation_context_id = None  # Unsigned byte
         self.presentation_data_value = None  # String
 
     def __repr__(self):
-        return ''.join([' Presentation value data item\n', '  Item length: %d\n' % self.item_length,
+        return ''.join([' Presentation value data item\n',
+                        '  Item length: %d\n' % self.item_length,
                         '  Presentation context ID: %d\n' % self.presentation_context_id,
                         '  Presentation data value: %s ...\n' % self.presentation_data_value[:20]])
 
-    def from_params(self, params):
+    @classmethod
+    def from_params(cls, params):
         # Takes a PresentationDataValue object
-        self.presentation_context_id = params[0]
-        self.presentation_data_value = params[1]
-        self.item_length = 1 + len(self.presentation_data_value)
+        instance = cls()
+        instance.presentation_context_id = params[0]
+        instance.presentation_data_value = params[1]
+        instance.item_length = 1 + len(instance.presentation_data_value)
+        return instance
 
     def to_params(self):
         # Returns a PresentationDataValue
         tmp = PresentationDataValueItem()
         tmp.presentation_context_id = self.presentation_context_id
         tmp.presentation_data_value = self.presentation_data_value
+        return tmp
 
     def encode(self):
-        return ''.join([struct.pack('>I', self.item_length), struct.pack('B', self.presentation_context_id),
+        return ''.join([struct.pack('>I', self.item_length),
+                        struct.pack('B', self.presentation_context_id),
                         self.presentation_data_value])
 
     @classmethod
@@ -1040,7 +1111,7 @@ class PresentationDataValueItem(PDUBase):
         return 4 + self.item_length
 
 
-class GenericUserDataSubItem(PDUBase):
+class GenericUserDataSubItem(object):
 
     """
     This class is provided only to allow user data to converted to and from
@@ -1048,23 +1119,25 @@ class GenericUserDataSubItem(PDUBase):
     """
 
     def __init__(self):
-        super(GenericUserDataSubItem, self).__init__()
-
         self.item_type = None    # Unsigned byte
         self.reserved = 0x00     # Unsigned byte
         self.item_length = None  # Unsigned short
         self.user_data = None    # Raw string
 
     def __repr__(self):
-        tmp = ['User data item\n', '  Item type: %d\n' % self.item_type, '  Item length: %d\n' % self.item_length]
+        tmp = ['User data item\n', '  Item type: %d\n' % self.item_type,
+               '  Item length: %d\n' % self.item_length]
         if len(self.user_data) > 1:
             tmp.append('  User data: %s ...\n' % self.user_data[:10])
         return ''.join(tmp)
 
-    def from_params(self, params):
-        self.item_length = len(params.user_data)
-        self.user_data = params.user_data
-        self.item_type = params.item_type
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.item_length = len(params.user_data)
+        instance.user_data = params.user_data
+        instance.item_type = params.item_type
+        return instance
 
     def to_params(self):
         tmp = GenericUserDataSubItem()
@@ -1073,7 +1146,8 @@ class GenericUserDataSubItem(PDUBase):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type), struct.pack('B', self.reserved),
+        return ''.join([struct.pack('B', self.item_type),
+                        struct.pack('B', self.reserved),
                         struct.pack('>H', self.item_length), self.user_data])
 
     @classmethod
@@ -1087,13 +1161,23 @@ class GenericUserDataSubItem(PDUBase):
         decoded_item = cls()
         decoded_item.item_type, decoded_item.reserved, \
             decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        # User data value is left in raw string format. The Application Entity is
-        # responsible for dealing with it.
+        # User data value is left in raw string format. The Application Entity
+        # is responsible for dealing with it.
         decoded_item.user_data = stream.read(int(decoded_item.item_length) - 1)
         return decoded_item
 
     def total_length(self):
         return 4 + self.item_length
+
+
+SUB_ITEM_TYPES = {
+    0x52: dimseparameters.ImplementationClassUIDSubItem,
+    0x51: MaximumLengthSubItem,
+    0x55: dimseparameters.ImplementationVersionNameSubItem,
+    0x53: dimseparameters.AsynchronousOperationsWindowSubItem,
+    0x54: dimseparameters.ScpScuRoleSelectionSubItem,
+    0x56: dimseparameters.SOPClassExtentedNegociationSubItem
+}
 
 
 def next_type(stream):
@@ -1104,21 +1188,15 @@ def next_type(stream):
     return struct.unpack('B', char)[0]
 
 
-def next_sub_item_type(stream):
+def sub_items(stream):
     item_type = next_type(stream)
-    if item_type == 0x52:
-        return dimseparameters.ImplementationClassUIDSubItem
-    elif item_type == 0x51:
-        return MaximumLengthSubItem
-    elif item_type == 0x55:
-        return dimseparameters.ImplementationVersionNameSubItem
-    elif item_type == 0x53:
-        return dimseparameters.AsynchronousOperationsWindowSubItem
-    elif item_type == 0x54:
-        return dimseparameters.ScpScuRoleSelectionSubItem
-    elif item_type == 0x56:
-        return SOPClassExtentedNegociationSubItem
-    elif item_type is None:
-        return None
-    else:
-        raise RuntimeError('Invalid Sub Item', "0x%X" % item_type)
+    while item_type:
+        try:
+            tmp = SUB_ITEM_TYPES[item_type]()
+            tmp.decode(stream)
+            yield tmp
+            item_type = next_type(stream)
+        except KeyError:
+            # TODO replace this exception
+            raise Exception('Invalid Sub Item', "0x%X" % item_type)
+

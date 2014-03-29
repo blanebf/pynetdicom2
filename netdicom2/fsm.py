@@ -15,8 +15,6 @@ from netdicom2 import pdu
 import dulparameters
 
 
-
-
 # Finite State machine action definitions
 
 import logging
@@ -31,8 +29,7 @@ def ae_1(provider):
 
 def ae_2(provider):
     # Send A-ASSOCIATE-RQ PDU
-    provider.pdu = pdu.AAssociateRqPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.AAssociateRqPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -66,14 +63,12 @@ def ae_6(provider):
 
 def ae_7(provider):
     # Send A-ASSOCIATE-AC PDU
-    provider.pdu = pdu.AAssociateAcPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.AAssociateAcPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def ae_8(provider):
     # Send A-ASSOCIATE-RJ PDU and start ARTIM timer
-    provider.pdu = pdu.AAssociateRjPDU()
     # not sure about this ...
     if provider.primitive.diagnostic is not None:
         provider.primitive.result_source = 1
@@ -81,14 +76,13 @@ def ae_8(provider):
         provider.primitive.diagnostic = 1
         provider.primitive.result_source = 2
 
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.AAssociateRjPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def dt_1(provider):
     # Send P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.PDataTfPDU.from_params(provider.primitive)
     provider.primitive = None
     provider.remote_client_socket.send(provider.pdu.encode())
 
@@ -101,7 +95,6 @@ def dt_2(provider):
 def ar_1(provider):
     # Send A-RELEASE-RQ PDU
     provider.pdu = pdu.AReleaseRqPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -120,7 +113,6 @@ def ar_3(provider):
 def ar_4(provider):
     # Issue A-RELEASE-RP PDU and start ARTIM timer
     provider.pdu = pdu.AReleaseRpPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
     provider.timer.start()
 
@@ -137,8 +129,7 @@ def ar_6(provider):
 
 def ar_7(provider):
     # Issue P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.PDataTfPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -154,7 +145,6 @@ def ar_8(provider):
 def ar_9(provider):
     # Send A-RELEASE-RP PDU
     provider.pdu = pdu.AReleaseRpPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -166,11 +156,7 @@ def ar_10(provider):
 def aa_1(provider):
     # Send A-ABORT PDU (service-user source) and start (or restart
     # if already started) ARTIM timer.
-    provider.pdu = pdu.AAbortPDU()
-    # CHECK THIS ...
-    provider.pdu.abort_source = 1
-    provider.pdu.reason_diag = 0
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.AAbortPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
     provider.timer.restart()
 
@@ -211,8 +197,7 @@ def aa_6(provider):
 
 def aa_7(provider):
     # Send A-ABORT PDU.
-    provider.pdu = pdu.AAbortPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = pdu.AAbortPDU.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 

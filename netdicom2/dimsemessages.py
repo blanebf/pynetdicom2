@@ -39,13 +39,7 @@ from dicom.UID import ImplicitVRLittleEndian
 import dulparameters
 import dsutils
 
-
-
-
-
-#
 #  pydicom's dictionnary misses command tags. Add them.
-#
 from dicom._dicom_dict import DicomDictionary
 
 import logging
@@ -55,7 +49,6 @@ logger = logging.getLogger(__name__)
 
 
 DicomDictionary.update({
-
     0x00000000: ('UL', '1', 'CommandGroupLength', ''),
     0x00000002: ('UI', '1', 'Affected SOP class', ''),
     0x00000003: ('UI', '1', 'RequestedSOPClassUID', ''),
@@ -166,36 +159,31 @@ class DIMSEMessage(object):
             # must be able to read P-DATA with several PDVs
             self.id_ = vv[0]
             if unpack('b', vv[1][0])[0] in (1, 3):
-                logger.debug("  command fragment %s", self.id_)
+                logger.debug('  command fragment %s', self.id_)
                 self.encoded_command_set += vv[1][1:]
                 if unpack('b', vv[1][0])[0] == 3:
-                    logger.debug("  last command fragment %s", self.id_)
+                    logger.debug('  last command fragment %s', self.id_)
                     self.command_set = dsutils.decode(
                         self.encoded_command_set, self.ts.is_implicit_VR,
                         self.ts.is_little_endian)
-                    self.__class__ = MessageType[self.command_set[(0x0000, 0x0100)].value]
+                    self.__class__ = MESSAGE_TYPE[self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:
-                        # response: no dataset
-                        return True
+                        return True  # response: no dataset
             elif unpack('b', vv[1][0])[0] in (0, 2):
                 self.data_set += vv[1][1:]
-                logger.debug("  data fragment %s", self.id_)
+                logger.debug('  data fragment %s', self.id_)
                 if unpack('b', vv[1][0])[0] == 2:
-                    logger.debug("  last data fragment %s", self.id_)
+                    logger.debug('  last data fragment %s', self.id_)
                     return True
             else:
-                raise RuntimeError("Error")  # TODO: Replace exception type
+                raise Exception('Error')  # TODO: Replace exception type
 
         return False
 
     def set_length(self):
-        # compute length
-        l = 0
-        for ii in self.command_set.values()[1:]:
-            l += len(dsutils.encode_element(ii,
-                                            self.ts.is_implicit_VR,
-                                            self.ts.is_little_endian))
-        self.command_set[(0x0000, 0x0000)].value = l
+        it = (len(dsutils.encode_element(v, self.ts.is_implicit_VR, self.ts.is_little_endian))
+              for v in self.command_set.values()[1:])
+        self.command_set[(0x0000, 0x0000)].value = sum(it)
 
     def __repr__(self):
         return str(self.command_set) + '\n'
@@ -207,7 +195,6 @@ class CEchoRQMessage(DIMSEMessage):
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
                       ('Message ID', (0x0000, 0x0110), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
-    DataField = None
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -231,7 +218,6 @@ class CEchoRSPMessage(DIMSEMessage):
                       ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1)]
-    DataField = None
 
     def from_params(self, params):
         if params.AffectedSOPClassUID:
@@ -260,7 +246,6 @@ class CStoreRQMessage(DIMSEMessage):
                       ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1),
                       ('Move Originator Application Entity Title', (0x0000, 0x1030), 'AE', 1),
                       ('Move Originator Message ID', (0x0000, 0x1031), 'US', 1)]
-    DataField = 'Data Set'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -269,11 +254,11 @@ class CStoreRQMessage(DIMSEMessage):
         self.command_set[(0x0000, 0x0700)].value = params.priority
         self.command_set[(0x0000, 0x0800)].value = 0x0001
         self.command_set[(0x0000, 0x1000)].value = params.affected_sop_instance_uid
-        if params.MoveOriginatorApplicationEntityTitle:
+        if params.move_originator_application_entity_title:
             self.command_set[(0x0000, 0x1030)].value = params.move_originator_application_entity_title
         else:
             self.command_set[(0x0000, 0x1030)].value = ""
-        if params.MoveOriginatorMessageID:
+        if params.move_originator_message_id:
             self.command_set[(0x0000, 0x1031)].value = params.move_originator_message_id
         else:
             self.command_set[(0x0000, 0x1031)].value = ""
@@ -326,7 +311,6 @@ class CFindRQMessage(DIMSEMessage):
                       ('Message ID', (0x0000, 0x0110), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Priority', (0x0000, 0x0700), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -353,7 +337,6 @@ class CFindRSPMessage(DIMSEMessage):
                       ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Status', (0x0000, 0x0900), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid.value
@@ -383,7 +366,6 @@ class CGetRQMessage(DIMSEMessage):
                       ('Message ID', (0x0000, 0x0110), 'US', 1),
                       ('Priority', (0x0000, 0x0700), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -414,7 +396,6 @@ class CGetRSPMessage(DIMSEMessage):
                       ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
                       ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
                       ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -449,7 +430,6 @@ class CMoveRQMessage(DIMSEMessage):
                       ('Priority', (0x0000, 0x0700), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1),
                       ('Move Destination', (0x0000, 0x0600), 'AE', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -483,7 +463,6 @@ class CMoveRSPMessage(DIMSEMessage):
                       ('Number of Complete Sub-operations', (0x0000, 0x1021), 'US', 1),
                       ('Number of Failed Sub-operations', (0x0000, 0x1022), 'US', 1),
                       ('Number of Warning Sub-operations', (0x0000, 0x1023), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -515,7 +494,6 @@ class CCancelRQMessage(DIMSEMessage):
                       ('Command Field', (0x0000, 0x0100), 'US', 1),
                       ('Message ID Being Responded To', (0x0000, 0x0120), 'US', 1),
                       ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
-    DataField = 'identifier'
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0100)].value = 0x0FFF
@@ -548,7 +526,7 @@ class CCancelMoveRQMessage(CCancelRQMessage):
         return tmp
 
 
-MessageType = {
+MESSAGE_TYPE = {
     0x0001: CStoreRQMessage,
     0x8001: CStoreRSPMessage,
     0x0020: CFindRQMessage,
@@ -561,16 +539,3 @@ MessageType = {
     0x0030: CEchoRQMessage,
     0x8030: CEchoRSPMessage
 }
-
-
-if __name__ == '__main__':
-
-    c = dimseparameters.CEchoServiceParameters()
-    c.message_id = 0
-    c.affected_sop_class_uid = '12.1232.23.123.231.'
-
-    C_ECHO_msg = CEchoRQMessage()
-    C_ECHO_msg.from_params(c)
-    print C_ECHO_msg
-    print C_ECHO_msg.to_params()
-    print C_ECHO_msg.encode(1, 100)
