@@ -18,6 +18,7 @@ from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
 
 import sopclass
+import netdicom2.exceptions as exceptions
 from dulprovider import DULServiceProvider
 from netdicom2.dimseprovider import DIMSEServiceProvider
 from asceprovider import ACSEServiceProvider
@@ -123,8 +124,8 @@ class AssociationAcceptor(threading.Thread, Association):
                     pcid, sop_class, transfer_syntax = \
                         [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                 except IndexError:
-                    # TODO Replace exception
-                    raise Exception('SOP Class %s not supported as SCP' % uid)
+                    raise exceptions.ClassNotSupportedError(
+                        'SOP Class %s not supported as SCP' % uid)
                 obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class,
                                                       dimse=self.dimse,
                                                       pcid=pcid,
@@ -177,8 +178,8 @@ class AssociationRequester(Association):
             pcid, _, transfer_syntax = \
                 [x for x in self.sop_classes_as_scu if x[1] == uid][0]
         except IndexError:
-            # TODO: replace this exception
-            raise Exception('SOP Class %s not supported as SCU')
+            raise exceptions.ClassNotSupportedError(
+                'SOP Class %s not supported as SCU')
 
         obj = sopclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse,
                                         pcid=pcid,
@@ -191,8 +192,8 @@ class AssociationRequester(Association):
             pcid, _, transfer_syntax = \
                 [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
         except IndexError:
-            # TODO replace this exception
-            raise Exception('SOP Class %s not supported as SCU' % sop_class)
+            raise exceptions.ClassNotSupportedError(
+                'SOP Class %s not supported as SCU' % sop_class)
         obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class,
                                               dimse=self.dimse, pcid=pcid,
                                               transfer_syntax=transfer_syntax,

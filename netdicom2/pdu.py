@@ -62,6 +62,7 @@ import struct
 from cStringIO import StringIO
 
 import netdicom2.dulparameters as dulparams
+import netdicom2.exceptions as exceptions
 from netdicom2 import dimseparameters
 
 
@@ -181,8 +182,7 @@ class AAssociateRqPDU(object):
             elif item_type == 0x50:
                 tmp = UserInformationItem.decode(stream)
             else:
-                # TODO replace this exception
-                raise Exception('InvalidVariableItem')
+                raise exceptions.PDUProcessingError('Invalid variable item')
             decoded_pdu.variable_items.append(tmp)
             item_type = next_type(stream)
         return decoded_pdu
@@ -304,8 +304,7 @@ class AAssociateAcPDU(object):
             elif item_type == 0x50:
                 tmp = UserInformationItem.decode(stream)
             else:
-                # TODO replace this exception
-                raise Exception('InvalidVariableItem')
+                raise exceptions.PDUProcessingError('Invalid variable item')
             decoded_pdu.variable_items.append(tmp)
             item_type = next_type(stream)
         return decoded_pdu
@@ -1206,6 +1205,6 @@ def sub_items(stream):
             yield tmp
             item_type = next_type(stream)
         except KeyError:
-            # TODO replace this exception
-            raise Exception('Invalid Sub Item', "0x%X" % item_type)
+            raise exceptions.PDUProcessingError(
+                'Invalid sub-item', "0x%X" % item_type)
 

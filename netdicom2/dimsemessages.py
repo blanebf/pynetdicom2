@@ -96,7 +96,7 @@ class DIMSEMessage(object):
         self.command_set = None
         self.encoded_data_set = None
         self.data_set = ''
-        self.encoded_command_set = ''
+        self.encoded_command_set = []
         self.id_ = None
 
         self.ts = ImplicitVRLittleEndian  # imposed by standard.
@@ -131,8 +131,7 @@ class DIMSEMessage(object):
         pdatas.append(pdata)
 
         # fragment data set
-        #if self.__dict__.has_key('data_set') and self.data_set:
-        if 'data_set' in self.__dict__ and self.data_set is not None:
+        if hasattr(self, 'data_set') and self.data_set is not None:
             pdvs = fragment(max_pdu_length, self.data_set)
             assert ''.join(pdvs) == self.data_set
             for ii in pdvs[:-1]:
@@ -158,18 +157,19 @@ class DIMSEMessage(object):
         if pdata is None:
             return False
 
-        ii = pdata
-        for vv in ii.presentation_data_value_list:
+        for vv in pdata.presentation_data_value_list:
             # must be able to read P-DATA with several PDVs
             self.id_ = vv[0]
             if unpack('b', vv[1][0])[0] in (1, 3):
                 logger.debug('  command fragment %s', self.id_)
-                self.encoded_command_set += vv[1][1:]
+                self.encoded_command_set.append(vv[1][1:])
                 if unpack('b', vv[1][0])[0] == 3:
                     logger.debug('  last command fragment %s', self.id_)
                     self.command_set = dsutils.decode(
-                        self.encoded_command_set, self.ts.is_implicit_VR,
+                        ''.join(self.encoded_command_set),
+                        self.ts.is_implicit_VR,
                         self.ts.is_little_endian)
+                    self.encoded_data_set = []
                     self.__class__ = MESSAGE_TYPE[
                         self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:

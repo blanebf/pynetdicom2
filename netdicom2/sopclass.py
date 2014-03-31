@@ -8,6 +8,7 @@ import time
 import logging
 
 import dsutils
+import netdicom2.exceptions as exceptions
 from netdicom2 import dimseparameters
 
 
@@ -190,8 +191,7 @@ class VerificationServiceClass(ServiceClass):
         # send response
         try:
             self.ae.on_receive_echo(self)
-        except Exception:
-            # TODO Replace this exception block with something more sensible
+        except exceptions.EventHandlingError:
             logger.error('There was an exception on OnReceiveEcho callback')
         self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
 
@@ -243,8 +243,7 @@ class StorageServiceClass(ServiceClass):
                                 self.transfer_syntax.is_implicit_VR,
                                 self.transfer_syntax.is_little_endian)
             status = self.ae.on_receive_store(self, ds)
-        except Exception:
-            # TODO Replace this exception block with something more sensible
+        except exceptions.EventHandlingError:
             status = CannotUnderstand
         # make response
         rsp = dimseparameters.CStoreServiceParameters()
@@ -359,9 +358,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                     sop_class = SOP_CLASSES[d.SOPClassUID]
                     status = self.ae.on_receive_store(sop_class, d)
                     yield sop_class, d
-                except Exception:
-                    # TODO Replace this exception block with
-                    # something more sensible
+                except exceptions.EventHandlingError:
                     status = CannotUnderstand
 
                 rsp.status = int(status)

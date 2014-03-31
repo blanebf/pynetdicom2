@@ -7,7 +7,9 @@ class ServiceParam(object):
         pass
 
     def __repr__(self):
-        return ''.join(['%s %s\n' % (str(k), str(v)) for k, v in self.__dict__.iteritems() if not callable(v)])
+        return ''.join(['%s %s\n' % (str(k), str(v))
+                        for k, v in self.__dict__.iteritems()
+                        if not callable(v)])
 
 
 class AAssociateServiceParameters(ServiceParam):
