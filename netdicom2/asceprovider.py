@@ -12,8 +12,8 @@ import logging
 
 from dicom.UID import UID
 
-import dulparameters
-from pdu import MaximumLengthParameters
+import netdicom2.dulparameters as dulparameters
+import netdicom2.pdu as pdu
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ACSEServiceProvider(object):
         assoc_rq.application_context_name = self.application_context_name
         assoc_rq.calling_ae_title = self.local_ae['AET']
         assoc_rq.called_ae_title = self.remote_ae['AET']
-        max_pdu_length_par = MaximumLengthParameters()
+        max_pdu_length_par = pdu.MaximumLengthParameters()
         max_pdu_length_par.maximum_length_received = mp
         if users_pdu:
             assoc_rq.user_information = [max_pdu_length_par] + users_pdu
@@ -62,21 +62,18 @@ class ACSEServiceProvider(object):
         assoc_rq.called_presentation_address = (
             self.remote_ae['Address'], self.remote_ae['Port'])
         assoc_rq.presentation_context_definition_list = pcdl
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(pcdl)
-            # send A-Associate request
-            logger.debug("Sending Association Request")
+        logger.debug(pcdl)
+        # send A-Associate request
+        logger.debug("Sending Association Request")
         self.dul.send(assoc_rq)
 
         # get answer
-        if logger.isEnabledFor(logger.DEBUG):
-            logger.debug("Waiting for Association Response")
+        logger.debug("Waiting for Association Response")
 
         assoc_rsp = self.dul.receive(True, timeout)
         if not assoc_rsp:
             return False
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(assoc_rsp)
+        logger.debug(assoc_rsp)
 
         try:
             if assoc_rsp.result != 'Accepted':

@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -7,9 +7,9 @@
 import time
 import logging
 
-import dsutils
+import netdicom2.dsutils as dsutils
 import netdicom2.exceptions as exceptions
-from netdicom2 import dimseparameters
+import netdicom2.dimseparameters as dimseparameters
 
 
 logger = logging.getLogger(__name__)

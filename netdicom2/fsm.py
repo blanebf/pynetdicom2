@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -11,8 +11,8 @@ DICOM, Part 8, Section 7
 
 import socket
 
-from netdicom2 import pdu
-import dulparameters
+import netdicom2.pdu as pdu
+import netdicom2.dulparameters as dulparameters
 
 
 # Finite State machine action definitions
@@ -460,7 +460,7 @@ TransitionTable = {
     ('Evt19', 'Sta13'): 'AA-7'}
 
 
-class StateMachine:
+class StateMachine(object):
     def __init__(self, provider):
         self.current_state = 'Sta1'
         self.provider = provider
@@ -470,32 +470,30 @@ class StateMachine:
         try:
             action_name = TransitionTable[(event, self.current_state)]
         except KeyError:
-            logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state,
-                          states[self.current_state]))
-            logger.debug(
-                '%s: event: %s %s' % (self.provider.name, event, events[event]))
+            logger.debug('%s: current state is: %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
+            logger.debug('%s: event: %s %s', self.provider.name, event,
+                         events[event])
             raise
 
         action = actions[action_name]
         try:
-            logger.debug('')
-            logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state,
-                          states[self.current_state]))
-            logger.debug(
-                '%s: event: %s %s' % (self.provider.name, event, events[event]))
-            logger.debug('%s: entering action: (%s, %s) %s %s' %
-                         (self.provider.name, event, self.current_state,
-                          action_name, actions[action_name][0]))
+            logger.debug('%s: current state is: %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
+            logger.debug('%s: event: %s %s',
+                         self.provider.name, event, events[event])
+            logger.debug('%s: entering action: (%s, %s) %s %s',
+                         self.provider.name, event, self.current_state,
+                         action_name, actions[action_name][0])
             action[1](c)
-            #if type(action[2]) != type(()):
             if not isinstance(action[2], tuple):
                 # only one next state possible
                 self.current_state = action[2]
-            logger.debug('%s: action complete. State is now %s %s' %
-                         (self.provider.name, self.current_state,
-                          states[self.current_state]))
+            logger.debug('%s: action complete. State is now %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
         except Exception as e:
             self.provider.kill()
 

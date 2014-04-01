@@ -31,22 +31,21 @@
                            to_params                decode
 """
 
-from struct import pack, unpack
+import logging
+import struct
 
 from dicom.dataset import Dataset
 from dicom.UID import ImplicitVRLittleEndian
 
-import dulparameters
-import dsutils
+import netdicom2.dulparameters as dulparameters
+import netdicom2.dsutils as dsutils
+import netdicom2.dimseparameters as dimseparameters
 
-#  pydicom's dictionnary misses command tags. Add them.
 from dicom._dicom_dict import DicomDictionary
-
-import logging
-from netdicom2 import dimseparameters
 
 logger = logging.getLogger(__name__)
 
+#  pydicom's dictionnary misses command tags. Add them.
 DicomDictionary.update({
     0x00000000: ('UL', '1', 'CommandGroupLength', ''),
     0x00000002: ('UI', '1', 'Affected SOP class', ''),
@@ -121,13 +120,14 @@ class DIMSEMessage(object):
             # send only one pdv per pdata primitive
             pdata = dulparameters.PDataServiceParameters()
             # not last command fragment
-            pdata.presentation_data_value_list = [[self.id_, pack('b', 1) + ii]]
+            pdata.presentation_data_value_list = [[self.id_,
+                                                   struct.pack('b', 1) + ii]]
             pdatas.append(pdata)
         # last command fragment
         pdata = dulparameters.PDataServiceParameters()
         # last command fragment
         pdata.presentation_data_value_list = [
-            [self.id_, pack('b', 3) + pdvs[-1]]]
+            [self.id_, struct.pack('b', 3) + pdvs[-1]]]
         pdatas.append(pdata)
 
         # fragment data set
@@ -138,12 +138,12 @@ class DIMSEMessage(object):
                 pdata = dulparameters.PDataServiceParameters()
                 # not last data fragment
                 pdata.presentation_data_value_list = [
-                    [self.id_, pack('b', 0) + ii]]
+                    [self.id_, struct.pack('b', 0) + ii]]
                 pdatas.append(pdata)
             pdata = dulparameters.PDataServiceParameters()
             # last data fragment
             pdata.presentation_data_value_list = [
-                [self.id_, pack('b', 2) + pdvs[-1]]]
+                [self.id_, struct.pack('b', 2) + pdvs[-1]]]
             pdatas.append(pdata)
 
         return pdatas
@@ -160,10 +160,10 @@ class DIMSEMessage(object):
         for vv in pdata.presentation_data_value_list:
             # must be able to read P-DATA with several PDVs
             self.id_ = vv[0]
-            if unpack('b', vv[1][0])[0] in (1, 3):
+            if struct.unpack('b', vv[1][0])[0] in (1, 3):
                 logger.debug('  command fragment %s', self.id_)
                 self.encoded_command_set.append(vv[1][1:])
-                if unpack('b', vv[1][0])[0] == 3:
+                if struct.unpack('b', vv[1][0])[0] == 3:
                     logger.debug('  last command fragment %s', self.id_)
                     self.command_set = dsutils.decode(
                         ''.join(self.encoded_command_set),
@@ -174,10 +174,10 @@ class DIMSEMessage(object):
                         self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:
                         return True  # response: no dataset
-            elif unpack('b', vv[1][0])[0] in (0, 2):
+            elif struct.unpack('b', vv[1][0])[0] in (0, 2):
                 self.data_set += vv[1][1:]
                 logger.debug('  data fragment %s', self.id_)
-                if unpack('b', vv[1][0])[0] == 2:
+                if struct.unpack('b', vv[1][0])[0] == 2:
                     logger.debug('  last data fragment %s', self.id_)
                     return True
             else:
@@ -270,12 +270,12 @@ class CStoreRQMessage(DIMSEMessage):
             self.command_set[(0x0000,
                               0x1030)].value = params.move_originator_application_entity_title
         else:
-            self.command_set[(0x0000, 0x1030)].value = ""
+            self.command_set[(0x0000, 0x1030)].value = ''
         if params.move_originator_message_id:
             self.command_set[
                 (0x0000, 0x1031)].value = params.move_originator_message_id
         else:
-            self.command_set[(0x0000, 0x1031)].value = ""
+            self.command_set[(0x0000, 0x1031)].value = ''
         self.data_set = params.data_set
         self.set_length()
 

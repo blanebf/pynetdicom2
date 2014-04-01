@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -61,9 +61,9 @@ These classes are:
 import struct
 from cStringIO import StringIO
 
-import netdicom2.dulparameters as dulparams
+import netdicom2.dulparameters as dulparameters
 import netdicom2.exceptions as exceptions
-from netdicom2 import dimseparameters
+import netdicom2.dimseparameters as dimseparameters
 
 
 class AAssociateRqPDU(object):
@@ -126,7 +126,7 @@ class AAssociateRqPDU(object):
 
     def to_params(self):
         # Returns an A_ASSOCIATE_ServiceParameters object
-        assoc = dulparams.AAssociateServiceParameters()
+        assoc = dulparameters.AAssociateServiceParameters()
         assoc.calling_ae_title = self.calling_ae_title
         assoc.called_ae_title = self.called_ae_title
         assoc.application_context_name = self.variable_items[
@@ -248,7 +248,7 @@ class AAssociateAcPDU(object):
         return instance
 
     def to_params(self):
-        assoc = dulparams.AAssociateServiceParameters()
+        assoc = dulparameters.AAssociateServiceParameters()
         assoc.called_ae_title = self.reserved3
         assoc.calling_ae_title = self.reserved4
         assoc.application_context_name = self.variable_items[0].to_params()
@@ -349,7 +349,7 @@ class AAssociateRjPDU(object):
         return instance
 
     def to_params(self):
-        tmp = dulparams.AAssociateServiceParameters()
+        tmp = dulparameters.AAssociateServiceParameters()
         tmp.result = self.result
         tmp.result_source = self.source
         tmp.diagnostic = self.reason_diag
@@ -420,7 +420,7 @@ class PDataTfPDU(object):
             instance.pdu_length = instance.pdu_length + item.total_length()
 
     def to_params(self):
-        tmp = dulparams.PDataServiceParameters()
+        tmp = dulparameters.PDataServiceParameters()
         tmp.presentation_data_value_list = [[i.presentation_context_id,
                                              i.presentation_data_value]
                                             for i in
@@ -474,7 +474,7 @@ class AReleaseRqPDU(object):
                         ' PDU length: %d\n' % self.pdu_length, '\n'])
 
     def to_params(self):
-        tmp = dulparams.AReleaseServiceParameters()
+        tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
@@ -519,7 +519,7 @@ class AReleaseRpPDU(object):
                         ' PDU length: %d\n' % self.pdu_length + '\n'])
 
     def to_params(self):
-        tmp = dulparams.AReleaseServiceParameters()
+        tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
@@ -583,10 +583,10 @@ class AAbortPDU(object):
     def to_params(self):
         # Returns either a A-ABORT of an A-P-ABORT
         if self.abort_source is not None:
-            tmp = dulparams.AAbortServiceParameters()
+            tmp = dulparameters.AAbortServiceParameters()
             tmp.abort_source = self.abort_source
         elif self.reason_diag is not None:
-            tmp = dulparams.APAbortServiceParameters()
+            tmp = dulparameters.APAbortServiceParameters()
             tmp.provider_reason = self.reason_diag
         else:
             raise RuntimeError('Unknown abort source')

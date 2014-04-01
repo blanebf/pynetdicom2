@@ -1,9 +1,8 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
-#
 
 import threading
 import socket
@@ -17,12 +16,12 @@ import contextlib
 from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
 
-import sopclass
+import netdicom2.sopclass as sopclass
 import netdicom2.exceptions as exceptions
-from dulprovider import DULServiceProvider
-from netdicom2.dimseprovider import DIMSEServiceProvider
-from asceprovider import ACSEServiceProvider
-import dimseparameters
+import netdicom2.dulprovider as dulprovider
+import netdicom2.dimseprovider as dimseprovider
+import netdicom2.asceprovider as asceprovider
+import netdicom2.dimseparameters as dimseparameters
 
 
 class Association(object):
@@ -40,11 +39,11 @@ class Association(object):
         :param dul_socket: socket for DUL provider or None if it's not needed
         """
         super(Association, self).__init__()
-        self.dul = DULServiceProvider(dul_socket)
+        self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
         self.association_established = False
-        self.asce = ACSEServiceProvider(self.dul)
-        self.dimse = DIMSEServiceProvider(self.dul)
+        self.asce = asceprovider.ACSEServiceProvider(self.dul)
+        self.dimse = dimseprovider.DIMSEServiceProvider(self.dul)
 
     def kill(self):
         """Stops internal DUL service provider.

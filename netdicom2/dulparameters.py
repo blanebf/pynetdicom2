@@ -1,3 +1,8 @@
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
+# Copyright (c) 2012 Patrice Munger
+# This file is part of pynetdicom, released under a modified MIT license.
+#    See the file license.txt included with this distribution, also
+#    available at http://pynetdicom.googlecode.com
 # DUL Service Parameters
 # 3.8 Section 7
 
@@ -59,34 +64,3 @@ class PDataServiceParameters(object):
     def __init__(self):
         # should be of the form [ [ID, pdv], [ID, pdv] ... ]
         self.presentation_data_value_list = None
-
-
-A_ASSOCIATE_ResultValues = (
-    'accepted',
-    'rejected (permanent)',
-    'rejected (transient)')
-A_ASSOCIATE_ResultSourceValues = (
-    'UL service-user',
-    'UL service provider (ACSE)',
-    'UL service provider (Presentation)')
-A_ASSOCIATE_DiagnosticValues = (
-    # if result_source == 0
-    ('no-reason given', 'application-context-name not supported',
-     'calling-AE-title not recognized',
-     'called-AE-title not recognized',
-     'calling-AE-qualifier not recognized',
-     'calling-AP-invocation-identifier not recognized',
-     'calling-AE-invocation-identifier not recognized',
-     'called-AE-qualifier not recognized',
-     'called-AP-invocation-identifier not recognized',
-     'called-AE-invocation-identifier not recognized'),
-    # if reseult_source == 1
-    ('no-reason-given',
-     'no-common-UL version'),
-    # if result_source == 2
-    ('no-reason-given',
-     'temporary-congestion',
-     'local-limit-exceeded',
-     'called-(Presentation)-address-unknown',
-     'Presentation-protocol version not supported',
-     'no-(Presentation) Service Access Point (SAP) available'))

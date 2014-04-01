@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -23,11 +23,10 @@ import Queue
 import logging
 import struct
 
-from netdicom2 import pdu
-
-import timer
-import fsm
-import netdicom2.dulparameters
+import netdicom2.timer as timer
+import netdicom2.fsm as fsm
+import netdicom2.pdu as pdu
+import netdicom2.dulparameters as dulparameters
 
 
 logger = logging.getLogger(__name__)
@@ -198,17 +197,14 @@ class DULServiceProvider(Thread):
                 self.event.append('Evt19')
 
     def check_timer(self):
-        #logger.debug('%s: checking timer' % (self.name))
         if self.timer.check() is False:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug('%s: timer expired' % self.name)
+            logger.debug('%s: timer expired', self.name)
             self.event.append('Evt18')  # Timer expired
             return True
         else:
             return False
 
     def check_incoming_primitive(self):
-        #logger.debug('%s: checking incoming primitive' % (self.name))
         # look at self.ReceivePrimitive for incoming primitives
         try:
             self.primitive = self.from_service_user.get(False, None)
@@ -218,7 +214,6 @@ class DULServiceProvider(Thread):
             return False
 
     def check_network(self):
-        #logger.debug('%s: checking network' % (self.name))
         if self.state_machine.current_state == 'Sta13':
             # wainting for connection to close
             if self.remote_client_socket is None:
@@ -255,7 +250,7 @@ class DULServiceProvider(Thread):
             return False
 
     def run(self):
-        logger.debug('%s: DUL loop started' % self.name)
+        logger.debug('%s: DUL loop started', self.name)
         while not self.is_killed:
             time.sleep(0.001)
             # catch an event
@@ -266,25 +261,25 @@ class DULServiceProvider(Thread):
             except IndexError:
                 continue
             self.state_machine.action(evt, self)
-        logger.debug('%s: DUL loop ended' % self.name)
+        logger.debug('%s: DUL loop ended', self.name)
 
 
 def primitive_to_event(primitive):
-    if isinstance(primitive, netdicom2.dulparameters.AAssociateServiceParameters):
+    if isinstance(primitive, dulparameters.AAssociateServiceParameters):
         if primitive.result is None:
             return 'Evt1'  # A-ASSOCIATE Request
         elif primitive.result == 0:
             return 'Evt7'  # A-ASSOCIATE Response (accept)
         else:
             return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, netdicom2.dulparameters.AReleaseServiceParameters):
+    elif isinstance(primitive, dulparameters.AReleaseServiceParameters):
         if primitive.result is None:
             return 'Evt11'  # A-Release Request
         else:
             return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, netdicom2.dulparameters.AAbortServiceParameters):
+    elif isinstance(primitive, dulparameters.AAbortServiceParameters):
         return 'Evt15'
-    elif isinstance(primitive, netdicom2.dulparameters.PDataServiceParameters):
+    elif isinstance(primitive, dulparameters.PDataServiceParameters):
         return 'Evt9'
     else:
         raise InvalidPrimitive
