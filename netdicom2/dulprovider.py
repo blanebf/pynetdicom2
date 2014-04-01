@@ -27,7 +27,7 @@ from netdicom2 import pdu
 
 import timer
 import fsm
-import netdicom2.dulparameters as dulparams
+import netdicom2.dulparameters
 
 
 logger = logging.getLogger(__name__)
@@ -270,21 +270,21 @@ class DULServiceProvider(Thread):
 
 
 def primitive_to_event(primitive):
-    if isinstance(primitive, dulparams.AAssociateServiceParameters):
+    if isinstance(primitive, netdicom2.dulparameters.AAssociateServiceParameters):
         if primitive.result is None:
             return 'Evt1'  # A-ASSOCIATE Request
         elif primitive.result == 0:
             return 'Evt7'  # A-ASSOCIATE Response (accept)
         else:
             return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, dulparams.AReleaseServiceParameters):
+    elif isinstance(primitive, netdicom2.dulparameters.AReleaseServiceParameters):
         if primitive.result is None:
             return 'Evt11'  # A-Release Request
         else:
             return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, dulparams.AAbortServiceParameters):
+    elif isinstance(primitive, netdicom2.dulparameters.AAbortServiceParameters):
         return 'Evt15'
-    elif isinstance(primitive, dulparams.PDataServiceParameters):
+    elif isinstance(primitive, netdicom2.dulparameters.PDataServiceParameters):
         return 'Evt9'
     else:
         raise InvalidPrimitive
