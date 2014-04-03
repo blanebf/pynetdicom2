@@ -111,8 +111,7 @@ class AAssociateRqPDU(object):
 
         # Make presentation contexts
         for context in params.presentation_context_definition_list:
-            tmp_pres_cont = PresentationContextItemRQ()
-            tmp_pres_cont.from_params(context)
+            tmp_pres_cont = PresentationContextItemRQ.from_params(context)
             instance.variable_items.append(tmp_pres_cont)
 
         # Make user information
@@ -418,6 +417,7 @@ class PDataTfPDU(object):
         instance.pdu_length = 0
         for item in instance.presentation_data_value_items:
             instance.pdu_length = instance.pdu_length + item.total_length()
+        return instance
 
     def to_params(self):
         tmp = dulparameters.PDataServiceParameters()
@@ -1184,7 +1184,7 @@ SUB_ITEM_TYPES = {
     0x55: dimseparameters.ImplementationVersionNameSubItem,
     0x53: dimseparameters.AsynchronousOperationsWindowSubItem,
     0x54: dimseparameters.ScpScuRoleSelectionSubItem,
-    0x56: dimseparameters.SOPClassExtentedNegociationSubItem
+    0x56: dimseparameters.SOPClassExtendedNegotiationSubItem
 }
 
 
@@ -1200,9 +1200,7 @@ def sub_items(stream):
     item_type = next_type(stream)
     while item_type:
         try:
-            tmp = SUB_ITEM_TYPES[item_type]()
-            tmp.decode(stream)
-            yield tmp
+            yield SUB_ITEM_TYPES[item_type].decode(stream)
             item_type = next_type(stream)
         except KeyError:
             raise exceptions.PDUProcessingError(

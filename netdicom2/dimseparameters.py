@@ -182,9 +182,7 @@ class ImplementationClassUIDParameters(object):
         self.implementation_class_uid = None
 
     def to_params(self):
-        tmp = ImplementationClassUIDSubItem()
-        tmp.from_params(self)
-        return tmp
+        return ImplementationClassUIDSubItem.from_params(self)
 
 
 class ImplementationClassUIDSubItem(object):
@@ -200,9 +198,12 @@ class ImplementationClassUIDSubItem(object):
                         '   Item length: %d\n' % self.item_length,
                         '   SOP class UID length: %s\n' % self.implementation_class_uid])
 
-    def from_params(self, params):
-        self.implementation_class_uid = params.implementation_class_uid
-        self.item_length = len(self.implementation_class_uid)
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.implementation_class_uid = params.implementation_class_uid
+        instance.item_length = len(instance.implementation_class_uid)
+        return instance
 
     def to_params(self):
         tmp = ImplementationClassUIDParameters()
@@ -215,10 +216,13 @@ class ImplementationClassUIDSubItem(object):
              struct.pack('>H', self.item_length),
              self.implementation_class_uid])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack(
-            '> B B H', stream.read(4))
-        self.implementation_class_uid = stream.read(self.item_length)
+    @classmethod
+    def decode(cls, stream):
+        instance = cls()
+        instance.item_type, instance.reserved, \
+            instance.item_length = struct.unpack('> B B H', stream.read(4))
+        instance.implementation_class_uid = stream.read(instance.item_length)
+        return instance
 
     def total_length(self):
         return 4 + self.item_length
@@ -229,9 +233,7 @@ class ImplementationVersionNameParameters(object):
         self.implementation_version_name = None
 
     def to_params(self):
-        tmp = ImplementationVersionNameSubItem()
-        tmp.from_params(self)
-        return tmp
+        return ImplementationVersionNameSubItem.from_params(self)
 
 
 class ImplementationVersionNameSubItem(object):
@@ -247,9 +249,12 @@ class ImplementationVersionNameSubItem(object):
                         '   Item length: %d\n' % self.item_length,
                         '   SOP class UID length: %s\n' % self.implementation_version_name])
 
-    def from_params(self, params):
-        self.implementation_version_name = params.implementation_version_name
-        self.item_length = len(self.implementation_version_name)
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.implementation_version_name = params.implementation_version_name
+        instance.item_length = len(instance.implementation_version_name)
+        return instance
 
     def to_params(self):
         tmp = ImplementationVersionNameParameters()
@@ -262,10 +267,13 @@ class ImplementationVersionNameSubItem(object):
              struct.pack('>H', self.item_length),
              self.implementation_version_name])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length = struct.unpack(
-            '> B B H', stream.read(4))
-        self.implementation_version_name = stream.read(self.item_length)
+    @classmethod
+    def decode(cls, stream):
+        instance = cls()
+        instance.item_type, instance.reserved, \
+            instance.item_length = struct.unpack('> B B H', stream.read(4))
+        instance.implementation_version_name = stream.read(instance.item_length)
+        return instance
 
     def total_length(self):
         return 4 + self.item_length
@@ -286,9 +294,12 @@ class AsynchronousOperationsWindowSubItem(object):
                         '   Maximum number of operations invoked: %d\n' % self.maximum_number_operations_invoked,
                         '   Maximum number of operations performed: %d\n' % self.maximum_number_operations_performed])
 
-    def from_params(self, params):
-        self.maximum_number_operations_invoked = params.maximum_number_operations_invoked
-        self.maximum_number_operations_performed = params.maximum_number_operations_performed
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.maximum_number_operations_invoked = params.maximum_number_operations_invoked
+        instance.maximum_number_operations_performed = params.maximum_number_operations_performed
+        return instance
 
     def to_params(self):
         tmp = AsynchronousOperationsWindowSubItem()
@@ -303,11 +314,13 @@ class AsynchronousOperationsWindowSubItem(object):
              struct.pack('>H', self.maximum_number_operations_invoked),
              struct.pack('>H', self.maximum_number_operations_performed)])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length, \
-            self.maximum_number_operations_invoked, \
-            self.maximum_number_operations_performed = struct.unpack('> B B H H H',
-                                                                     stream.read(8))
+    @classmethod
+    def decode(cls, stream):
+        instance = cls()
+        instance.item_type, instance.reserved, instance.item_length, \
+            instance.maximum_number_operations_invoked, \
+            instance.maximum_number_operations_performed = struct.unpack('> B B H H H',
+                                                                         stream.read(8))
 
     def total_length(self):
         return 4 + self.item_length
@@ -320,9 +333,7 @@ class ScpScuRoleSelectionParameters(object):
         self.scp_role = None
 
     def to_params(self):
-        tmp = ScpScuRoleSelectionSubItem()
-        tmp.from_params(self)
-        return tmp
+        return ScpScuRoleSelectionSubItem.from_params(self)
 
 
 class ScpScuRoleSelectionSubItem(object):
@@ -344,12 +355,15 @@ class ScpScuRoleSelectionSubItem(object):
                         '   SCU Role: %d\n' % self.scu_role,
                         '   SCP Role: %d' % self.scp_role])
 
-    def from_params(self, params):
-        self.sop_class_uid = params.sop_class_uid
-        self.scu_role = params.scu_role
-        self.scp_role = params.scp_role
-        self.item_length = 4 + len(self.sop_class_uid)
-        self.uid_length = len(self.sop_class_uid)
+    @classmethod
+    def from_params(cls, params):
+        instance = cls()
+        instance.sop_class_uid = params.sop_class_uid
+        instance.scu_role = params.scu_role
+        instance.scp_role = params.scp_role
+        instance.item_length = 4 + len(instance.sop_class_uid)
+        instance.uid_length = len(instance.sop_class_uid)
+        return instance
 
     def to_params(self):
         tmp = ScpScuRoleSelectionParameters()
@@ -366,18 +380,23 @@ class ScpScuRoleSelectionSubItem(object):
              self.sop_class_uid,
              struct.pack('B B', self.scu_role, self.scp_role)])
 
-    def decode(self, stream):
-        self.item_type, self.reserved, self.item_length, \
-            self.uid_length = struct.unpack('> B B H H', stream.read(6))
-        self.sop_class_uid = stream.read(self.uid_length)
-        self.scu_role, self.scp_role = struct.unpack('B B', stream.read(2))
+    @classmethod
+    def decode(cls, stream):
+        instance = cls()
+        instance.item_type, instance.reserved, instance.item_length, \
+            instance.uid_length = struct.unpack('> B B H H', stream.read(6))
+        instance.sop_class_uid = stream.read(instance.uid_length)
+        instance.scu_role, instance.scp_role = struct.unpack('B B',
+                                                             stream.read(2))
+        return instance
 
     def total_length(self):
         return 4 + self.item_length
 
 
 # needs to be re-worked
-# class SOPClassExtentedNegociationSubItem:
+class SOPClassExtendedNegotiationSubItem(object):
+    pass
 #    def __init__(self):
 # self.item_type = 0x56                                   # Unsigned byte
 # self.reserved = 0x00                                   # Unsigned byte - 0x00

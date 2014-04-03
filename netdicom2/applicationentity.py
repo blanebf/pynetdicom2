@@ -90,7 +90,8 @@ class AssociationAcceptor(threading.Thread, Association):
         :param local_ae: local AE title
         :param client_socket: client socket
         """
-        super(AssociationAcceptor, self).__init__(local_ae, client_socket)
+        Association.__init__(self, local_ae, client_socket)
+        threading.Thread.__init__(self)
         self.client_socket = client_socket
         self._kill = False
         self.sop_classes_as_scp = []
@@ -132,10 +133,10 @@ class AssociationAcceptor(threading.Thread, Association):
                                                       max_pdu_length=self.asce.max_pdu_length,
                                                       asce=self.asce)
                 obj.scp(dimse_msg)  # run SCP
-                if self.asce.check_release():
-                    self.kill()
-                if self.asce.check_abort():
-                    self.kill()
+            if self.asce.check_release():
+                self.kill()
+            if self.asce.check_abort():
+                self.kill()
 
 
 class AssociationRequester(Association):
@@ -270,7 +271,8 @@ class AE(threading.Thread):
                 # got an incoming connection
                 client_socket, remote_address = self.local_server_socket.accept()
                 # create a new association
-                self.associations.append(Association(self, client_socket))
+                self.associations.append(AssociationAcceptor(self,
+                                                             client_socket))
 
             # delete dead associations
             for association in self.associations:

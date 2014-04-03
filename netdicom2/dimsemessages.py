@@ -227,7 +227,7 @@ class CEchoRSPMessage(DIMSEMessage):
                       ('Status', (0x0000, 0x0900), 'US', 1)]
 
     def from_params(self, params):
-        if params.AffectedSOPClassUID:
+        if params.affected_sop_class_uid:
             self.command_set[
                 (0x0000, 0x0002)].value = params.affected_sop_class_uid
         self.command_set[(0x0000, 0x0100)].value = 0x8030

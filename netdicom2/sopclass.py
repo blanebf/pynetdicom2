@@ -3,7 +3,25 @@
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
-#
+"""
+Module contains implementation of the DICOM service classes. Module
+also contains useful constants for message statuses and service
+SOP Class UIDs.
+
+All services implementation subclass base ServiceClass class. Base class
+uses a little bit of meta-class magic, that helps to define service supported
+SOP Classes in a declarative manner (just list supported UIDs in sop_classes
+class attribute.
+
+If user wants to define their own custom service class they should inherit
+from ServiceClass, list supported UIDs in sop_class attributes. Expected status
+codes should also be listed in statuses class attribute.
+Each service class should have scu(...) and scp(...) methods if it is intended
+to be used as either SCU and(or) SCP respectively.
+Currently supported service classes are: Verification (as SCU and SCP),
+Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
+(as SCU and SCP).
+"""
 import time
 import logging
 
@@ -16,16 +34,38 @@ logger = logging.getLogger(__name__)
 
 
 class Status(object):
+    """Class represents message status.
+
+    This a helper class that provides convenience methods for printing and
+    converting status codes.
+    """
+
     def __init__(self, type_, description, code_range):
+        """Initializes new Status instance
+
+        :param type_: status type (Success, Pending, Warning, Failure)
+        :param description: status description
+        :param code_range: status code range
+        """
         self.type_ = type_
         self.description = description
         self.code_range = code_range
 
     def __int__(self):
+        """Converts status to integer (takes status lower value in range and
+        returns it.
+
+        :return: lower value in code range
+        """
         return self.code_range[0]
 
     def __repr__(self):
-        return self.type_ + ' ' + self.description
+        """Returns status string representation:
+        <status type> <status description>
+
+        :return: status string representation
+        """
+        return '%s %s' % (self.type_, self.description)
 
 
 SUCCESS = Status('Success', 'Sub-operations Complete - No Failure or Warnings',
@@ -132,18 +172,35 @@ SOP_CLASSES = {}  # Initialized later
 
 
 class ServiceClassMeta(type):
+    """Simple metaclass for ServiceClass-based class.
+
+    Metaclass takes 'sop_classes' class attribute and registers created class
+    in module-level SOP_CLASSES dictionary for SOP Class UIDs listed in
+    the attribute
+    """
+
     def __new__(mcs, name, bases, dct):
+        """Handles creation and registration of the new ServiceClass class
+
+        :param name: class name
+        :param bases: base class names
+        :param dct: attribute dictionary
+        :return: new ServiceClass class
+        """
         new_class = type.__new__(mcs, name, bases, dct)
         try:
             SOP_CLASSES.update(
                 {sop_class: new_class for sop_class in dct['sop_classes']})
         except KeyError:
             pass
-        finally:
-            return new_class
+        return new_class
 
 
 class ServiceClass(object):
+    """Base class for all service classes.
+
+    Class provides basic initialization and several utility methods.
+    """
     __metaclass__ = ServiceClassMeta
 
     statuses = []
@@ -151,6 +208,16 @@ class ServiceClass(object):
 
     def __init__(self, ae, uid, dimse, pcid, transfer_syntax,
                  max_pdu_length=16000, asce=None):
+        """
+
+        :param ae: AE instance that this service class belongs to
+        :param uid: service SOP Class UID
+        :param dimse: provider for DIMSE messages
+        :param pcid:
+        :param transfer_syntax: service transfer syntax
+        :param max_pdu_length: maximum PDU length. Defaults to 16000
+        :param asce: association messages provider
+        """
         self.ae = ae
         self.uid = uid
         self.dimse = dimse
@@ -160,6 +227,14 @@ class ServiceClass(object):
         self.asce = asce
 
     def code_to_status(self, code):
+        """Converts code to status
+
+        If unexpected code is passed (code does not fall into any of the ranges
+        of statuses that are listed in statuses class attribute) method
+        returns 'Failure' status object.
+        :param code: status code
+        :return: status object converted from code
+        """
         for status in self.statuses:
             if code in status.code_range:
                 return status
@@ -167,9 +242,17 @@ class ServiceClass(object):
                       xrange(code, code))
 
     def check_asce(self):
+        """Checks if association provider was initialized.
+
+        If it was not, then service can not be used as SCP
+
+        :raise exceptions.NetDICOMError: if association provider was not
+        initialized
+        """
         if not self.asce:
-            raise Exception('Association is not specified. '
-                            'Service does not support provider class')
+            raise exceptions.NetDICOMError('Association is not specified. '
+                                           'Service does not support provider '
+                                           'class')
 
 
 class VerificationServiceClass(ServiceClass):

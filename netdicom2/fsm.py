@@ -494,8 +494,10 @@ class StateMachine(object):
             logger.debug('%s: action complete. State is now %s %s',
                          self.provider.name, self.current_state,
                          states[self.current_state])
-        except Exception as e:
-            self.provider.kill()
+        #except Exception as e:
+        #    self.provider.kill()
+        finally:
+            pass
 
     def next_state(self, state):
         self.current_state = state
