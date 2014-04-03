@@ -58,6 +58,7 @@ These classes are:
         PresentationDataValueItem
 """
 
+import itertools
 import struct
 from cStringIO import StringIO
 
@@ -69,21 +70,25 @@ import netdicom2.dimseparameters as dimseparameters
 class AAssociateRqPDU(object):
     """This class represents the A-ASSOCIATE-RQ PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x01  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = None  # Unsigned int
-        self.protocol_version = 1  # Unsigned short
-        self.reserved2 = 0x00  # Unsigned short
-        self.called_ae_title = None  # string of length 16
-        self.calling_ae_title = None  # string of length 16
-        self.reserved3 = (0, 0, 0, 0, 0, 0, 0, 0)  # 32 bytes
+    def __init__(self, pdu_length, called_ae_title, calling_ae_title, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x01)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = pdu_length  # unsigned int
 
-        # VariablesItems is a list containing the following:
+        # unsigned short
+        self.protocol_version = kwargs.get('protocol_version', 1)
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned short
+        self.called_ae_title = called_ae_title  # string of length 16
+        self.calling_ae_title = calling_ae_title  # string of length 16
+
+        # 32 bytes
+        self.reserved3 = kwargs.get('reserved3', (0, 0, 0, 0, 0, 0, 0, 0))
+
+        # variable_items is a list containing the following:
         #   1 ApplicationContextItem
         #   1 or more PresentationContextItemRQ
         #   1 UserInformationItem
-        self.variable_items = []
+        self.variable_items = kwargs.get('variable_items', [])
 
     def __repr__(self):
         tmp = ''.join(['A-ASSOCIATE-RQ PDU\n',
@@ -102,26 +107,16 @@ class AAssociateRqPDU(object):
         :param params: AAssociateServiceParameters instance
         :return: PDU instance
         """
-        instance = cls()
-        instance.calling_ae_title = params.calling_ae_title
-        instance.called_ae_title = params.called_ae_title
-        tmp_app_cont = ApplicationContextItem.from_params(
-            params.application_context_name)
-        instance.variable_items.append(tmp_app_cont)
+        variable_items = list(itertools.chain(
+            [ApplicationContextItem.from_params(
+                params.application_context_name)],
+            [PresentationContextItemRQ.from_params(c)
+             for c in params.presentation_context_definition_list],
+            [UserInformationItem.from_params(params.user_information)]))
 
-        # Make presentation contexts
-        for context in params.presentation_context_definition_list:
-            tmp_pres_cont = PresentationContextItemRQ.from_params(context)
-            instance.variable_items.append(tmp_pres_cont)
-
-        # Make user information
-        tmp_user_info = UserInformationItem.from_params(params.user_information)
-        instance.variable_items.append(tmp_user_info)
-
-        instance.pdu_length = 68
-        for item in instance.variable_items:
-            instance.pdu_length = instance.pdu_length + item.total_length()
-        return instance
+        pdu_length = 68 + sum((i.total_length() for i in variable_items))
+        return cls(pdu_length, params.called_ae_title, params.calling_ae_title,
+                   variable_items=variable_items)
 
     def to_params(self):
         # Returns an A_ASSOCIATE_ServiceParameters object
@@ -162,29 +157,29 @@ class AAssociateRqPDU(object):
         :return: decoded PDU
         :raise RuntimeError:
         """
-        stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, \
-            decoded_pdu.pdu_length, decoded_pdu.protocol_version, \
-            decoded_pdu.reserved2, decoded_pdu.called_ae_title, \
-            decoded_pdu.calling_ae_title = struct.unpack('> B B I H H 16s 16s',
-                                                         stream.read(42))
-        decoded_pdu.reserved3 = struct.unpack('> 8I', stream.read(32))
-        decoded_pdu.called_ae_title = decoded_pdu.called_ae_title.strip('\0')
-        decoded_pdu.calling_ae_title = decoded_pdu.calling_ae_title.strip('\0')
-        item_type = next_type(stream)
-        while item_type:
-            if item_type == 0x10:
-                tmp = ApplicationContextItem.decode(stream)
-            elif item_type == 0x20:
-                tmp = PresentationContextItemRQ.decode(stream)
-            elif item_type == 0x50:
-                tmp = UserInformationItem.decode(stream)
-            else:
-                raise exceptions.PDUProcessingError('Invalid variable item')
-            decoded_pdu.variable_items.append(tmp)
+        def iter_items():
             item_type = next_type(stream)
-        return decoded_pdu
+            while item_type:
+                if item_type == 0x10:
+                    yield ApplicationContextItem.decode(stream)
+                elif item_type == 0x20:
+                    yield PresentationContextItemRQ.decode(stream)
+                elif item_type == 0x50:
+                    yield UserInformationItem.decode(stream)
+                else:
+                    raise exceptions.PDUProcessingError('Invalid variable item')
+                item_type = next_type(stream)
+
+        stream = StringIO(rawstring)
+        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length',
+                         'protocol_version', 'reserved2', 'called_ae_title',
+                         'calling_ae_title'],
+                    struct.unpack('> B B I H H 16s 16s', stream.read(42))))
+        args['reserved3'] = struct.unpack('> 8I', stream.read(32))
+        args['called_ae_title'] = args['called_ae_title'].strip('\0')
+        args['calling_ae_title'] = args['calling_ae_title'].strip('\0')
+        args['variable_items'] = list(iter_items())
+        return cls(**args)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -193,21 +188,25 @@ class AAssociateRqPDU(object):
 class AAssociateAcPDU(object):
     """This class represents the A-ASSOCIATE-AC PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x02  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = None  # Unsigned int
-        self.protocol_version = 1  # Unsigned short
-        self.reserved2 = 0x00  # Unsigned short
-        self.reserved3 = None  # string of length 16
-        self.reserved4 = None  # string of length 16
-        self.reserved5 = (0x0000, 0x0000, 0x0000, 0x0000)  # 32 bytes
+    def __init__(self, pdu_length, reserved3, reserved4, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x02)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = pdu_length  # unsigned int
 
-        # VariablesItems is a list containing the following:
+        # unsigned short
+        self.protocol_version = kwargs.get('protocol_version', 1)
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned short
+        self.reserved3 = reserved3  # string of length 16
+        self.reserved4 = reserved4  # string of length 16
+
+        # 32 bytes
+        self.reserved5 = kwargs.get('reserved5',
+                                    (0x0000, 0x0000, 0x0000, 0x0000))
+        # variable_items is a list containing the following:
         #   1 ApplicationContextItem
         #   1 or more PresentationContextItemAC
         #   1 UserInformationItem
-        self.variable_items = []
+        self.variable_items = kwargs.get('variable_items', [])
 
     def __repr__(self):
         tmp = ''.join(['A-ASSOCIATE-AC PDU\n',
@@ -226,25 +225,16 @@ class AAssociateAcPDU(object):
         :param params: AAssociateServiceParameters instance
         :return: PDU instance
         """
-        instance = cls()
-        instance.reserved3 = params.called_ae_title
-        instance.reserved4 = params.calling_ae_title
-        # Make application context
-        tmp_app_cont = ApplicationContextItem.from_params(
-            params.application_context_name)
-        instance.variable_items.append(tmp_app_cont)
-        # Make presentation contexts
-        for context in params.presentation_context_definition_result_list:
-            tmp_pres_cont = PresentationContextItemAC.from_params(context)
-            instance.variable_items.append(tmp_pres_cont)
-        # Make user information
-        tmp_user_info = UserInformationItem.from_params(params.user_information)
-        instance.variable_items.append(tmp_user_info)
-        # Compute PDU length
-        instance.pdu_length = 68
-        for item in instance.variable_items:
-            instance.pdu_length = instance.pdu_length + item.total_length()
-        return instance
+        variable_items = list(itertools.chain(
+            [ApplicationContextItem.from_params(
+                params.application_context_name)],
+            [PresentationContextItemAC.from_params(c)
+             for c in params.presentation_context_definition_result_list],
+            [UserInformationItem.from_params(params.user_information)]))
+
+        pdu_length = 68 + sum((i.total_length() for i in variable_items))
+        return cls(pdu_length, params.called_ae_title, params.calling_ae_title,
+                   variable_items=variable_items)
 
     def to_params(self):
         assoc = dulparameters.AAssociateServiceParameters()
@@ -286,27 +276,27 @@ class AAssociateAcPDU(object):
         :return: decoded PDU
         :raise RuntimeError:
         """
-        stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
-            decoded_pdu.protocol_version, decoded_pdu.reserved2, \
-            decoded_pdu.reserved3, \
-            decoded_pdu.reserved4 = struct.unpack('> B B I H H 16s 16s',
-                                                  stream.read(42))
-        decoded_pdu.reserved5 = struct.unpack('>8I', stream.read(32))
-        item_type = next_type(stream)
-        while item_type:
-            if item_type == 0x10:
-                tmp = ApplicationContextItem.decode(stream)
-            elif item_type == 0x21:
-                tmp = PresentationContextItemAC.decode(stream)
-            elif item_type == 0x50:
-                tmp = UserInformationItem.decode(stream)
-            else:
-                raise exceptions.PDUProcessingError('Invalid variable item')
-            decoded_pdu.variable_items.append(tmp)
+        def iter_items():
             item_type = next_type(stream)
-        return decoded_pdu
+            while item_type:
+                if item_type == 0x10:
+                    yield ApplicationContextItem.decode(stream)
+                elif item_type == 0x21:
+                    yield PresentationContextItemAC.decode(stream)
+                elif item_type == 0x50:
+                    yield UserInformationItem.decode(stream)
+                else:
+                    raise exceptions.PDUProcessingError('Invalid variable item')
+                item_type = next_type(stream)
+
+        stream = StringIO(rawstring)
+        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length',
+                         'protocol_version', 'reserved2', 'reserved3',
+                         'reserved4'],
+                        struct.unpack('> B B I H H 16s 16s', stream.read(42))))
+        args['reserved5'] = struct.unpack('>8I', stream.read(32))
+        args['variable_items'] = list(iter_items())
+        return cls(**args)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -315,14 +305,14 @@ class AAssociateAcPDU(object):
 class AAssociateRjPDU(object):
     """This class represents the A-ASSOCIATE-RJ PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x03  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00  # Unsigned byte
-        self.result = None  # Unsigned byte
-        self.source = None  # Unsigned byte
-        self.reason_diag = None  # Unsigned byte
+    def __init__(self, result, source, reason_diag, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x03)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
+        self.result = result  # unsigned byte
+        self.source = source  # unsigned byte
+        self.reason_diag = reason_diag  # unsigned byte
 
     def __repr__(self):
         return ''.join(['A-ASSOCIATE-RJ PDU\n',
@@ -341,11 +331,7 @@ class AAssociateRjPDU(object):
         :param params: AAssociateServiceParameters instance
         :return: PDU instance
         """
-        instance = cls()
-        instance.result = params.result
-        instance.source = params.result_source
-        instance.reason_diag = params.diagnostic
-        return instance
+        return cls(params.result, params.result_source, params.diagnostic)
 
     def to_params(self):
         tmp = dulparameters.AAssociateServiceParameters()
@@ -373,12 +359,10 @@ class AAssociateRjPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
-            decoded_pdu.reserved2, decoded_pdu.result, decoded_pdu.source, \
-            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B',
-                                                    stream.read(10))
-        return decoded_pdu
+        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length', 'reserved2',
+                         'result', 'source', 'reason_diag'],
+                        struct.unpack('> B B I B B B B', stream.read(10))))
+        return cls(**args)
 
     def total_length(self):
         return 10
