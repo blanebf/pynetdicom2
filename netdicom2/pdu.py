@@ -135,17 +135,12 @@ class AAssociateRqPDU(object):
         return assoc
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type),
-                       struct.pack('B', self.reserved1),
-                       struct.pack('>I', self.pdu_length),
-                       struct.pack('>H', self.protocol_version),
-                       struct.pack('>H', self.reserved2),
-                       struct.pack('16s', self.called_ae_title),
-                       struct.pack('16s', self.calling_ae_title),
-                       struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
-
-        tmp2 = ''.join([item.encode() for item in self.variable_items])
-        return tmp + tmp2
+        return struct.pack('>B B I H H 16s 16s 8I', self.pdu_type,
+                           self.reserved1, self.pdu_length,
+                           self.protocol_version, self.reserved2,
+                           self.called_ae_title,
+                           self.calling_ae_title, *self.reserved3) \
+            + ''.join([item.encode() for item in self.variable_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -171,15 +166,19 @@ class AAssociateRqPDU(object):
                 item_type = next_type(stream)
 
         stream = StringIO(rawstring)
-        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length',
-                         'protocol_version', 'reserved2', 'called_ae_title',
-                         'calling_ae_title'],
-                    struct.unpack('> B B I H H 16s 16s', stream.read(42))))
-        args['reserved3'] = struct.unpack('> 8I', stream.read(32))
-        args['called_ae_title'] = args['called_ae_title'].strip('\0')
-        args['calling_ae_title'] = args['calling_ae_title'].strip('\0')
-        args['variable_items'] = list(iter_items())
-        return cls(**args)
+        pdu_type, reserved1, pdu_length, protocol_version, \
+            reserved2, called_ae_title, \
+            calling_ae_title = struct.unpack('> B B I H H 16s 16s',
+                                             stream.read(42))
+        reserved3 = struct.unpack('> 8I', stream.read(32))
+        called_ae_title = called_ae_title.strip('\0')
+        calling_ae_title = calling_ae_title.strip('\0')
+        variable_items = list(iter_items())
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, protocol_version=protocol_version,
+                   reserved2=reserved2, called_ae_title=called_ae_title,
+                   calling_ae_title=calling_ae_title, reserved3=reserved3,
+                   variable_items=variable_items)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -200,8 +199,8 @@ class AAssociateAcPDU(object):
         self.reserved4 = reserved4  # string of length 16
 
         # 32 bytes
-        self.reserved5 = kwargs.get('reserved5',
-                                    (0x0000, 0x0000, 0x0000, 0x0000))
+        self.reserved5 = kwargs.get('reserved5', (0, 0, 0, 0, 0, 0, 0, 0))
+
         # variable_items is a list containing the following:
         #   1 ApplicationContextItem
         #   1 or more PresentationContextItemAC
@@ -253,18 +252,11 @@ class AAssociateAcPDU(object):
         return assoc
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type),
-                       struct.pack('B', self.reserved1),
-                       struct.pack('>I', self.pdu_length),
-                       struct.pack('>H', self.protocol_version),
-                       struct.pack('>H', self.reserved2),
-                       struct.pack('16s', self.reserved3),
-                       struct.pack('16s', self.reserved4),
-                       struct.pack('>8I', 0, 0, 0, 0, 0, 0, 0, 0)])
-
-        # variable item elements
-        tmp2 = ''.join([item.encode() for item in self.variable_items])
-        return tmp + tmp2
+        return struct.pack('>B B I H H 16s 16s 8I', self.pdu_type,
+                           self.reserved1, self.pdu_length,
+                           self.protocol_version, self.reserved2,
+                           self.reserved3, self.reserved4, *self.reserved5) \
+            + ''.join([item.encode() for item in self.variable_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -290,13 +282,16 @@ class AAssociateAcPDU(object):
                 item_type = next_type(stream)
 
         stream = StringIO(rawstring)
-        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length',
-                         'protocol_version', 'reserved2', 'reserved3',
-                         'reserved4'],
-                        struct.unpack('> B B I H H 16s 16s', stream.read(42))))
-        args['reserved5'] = struct.unpack('>8I', stream.read(32))
-        args['variable_items'] = list(iter_items())
-        return cls(**args)
+        pdu_type, reserved1, pdu_length, protocol_version, reserved2, \
+            reserved3, reserved4 = struct.unpack('> B B I H H 16s 16s',
+                                                 stream.read(42))
+        reserved5 = struct.unpack('>8I', stream.read(32))
+        variable_items = list(iter_items())
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, protocol_version=protocol_version,
+                   reserved2=reserved2, reserved3=reserved3,
+                   reserved4=reserved4, reserved5=reserved5,
+                   variable_items=variable_items)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -341,13 +336,9 @@ class AAssociateRjPDU(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type),
-                        struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length),
-                        struct.pack('B', self.reserved2),
-                        struct.pack('B', self.result),
-                        struct.pack('B', self.source),
-                        struct.pack('B', self.reason_diag)])
+        return struct.pack('>B B I B B B B', self.pdu_type, self.reserved1,
+                           self.pdu_length, self.reserved2, self.result,
+                           self.source, self.reason_diag)
 
     @classmethod
     def decode(cls, rawstring):
@@ -359,25 +350,33 @@ class AAssociateRjPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        args = dict(zip(['pdu_type', 'reserved1', 'pdu_length', 'reserved2',
-                         'result', 'source', 'reason_diag'],
-                        struct.unpack('> B B I B B B B', stream.read(10))))
-        return cls(**args)
+        pdu_type, reserved1, pdu_length, reserved2, result, source, \
+            reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, reserved2=reserved2,
+                   result=result, source=source, reason_diag=reason_diag)
 
-    def total_length(self):
+    @staticmethod
+    def total_length():
+        """Returns PDU total length.
+
+        This PDU has a fixed length of 10, so method always returns 10
+        regardless of specific instance
+        :return: PDU total length
+        """
         return 10
 
 
 class PDataTfPDU(object):
     """This class represents the P-DATA-TF PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x04  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.pdu_length = None  # Unsigned int
+    def __init__(self, pdu_length, presentation_data_value_items, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x04)  # unsigned byte
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.pdu_length = pdu_length  # unsigned int
 
         # List of one of more PresentationDataValueItem
-        self.presentation_data_value_items = []
+        self.presentation_data_value_items = presentation_data_value_items
 
     def __repr__(self):
         tmp = ''.join(['P-DATA-TF PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
@@ -394,14 +393,10 @@ class PDataTfPDU(object):
         :param params: PDataServiceParameters instance
         :return: PDU instance
         """
-        instance = cls()
-        for value in params.presentation_data_value_list:
-            tmp = PresentationDataValueItem.from_params(value)
-            instance.presentation_data_value_items.append(tmp)
-        instance.pdu_length = 0
-        for item in instance.presentation_data_value_items:
-            instance.pdu_length = instance.pdu_length + item.total_length()
-        return instance
+        value_items = [PresentationDataValueItem.from_params(v)
+                       for v in params.presentation_data_value_list]
+        pdu_length = sum((i.total_length() for i in value_items))
+        return cls(pdu_length, value_items)
 
     def to_params(self):
         tmp = dulparameters.PDataServiceParameters()
@@ -412,12 +407,10 @@ class PDataTfPDU(object):
         return tmp
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.pdu_type),
-                       struct.pack('B', self.reserved),
-                       struct.pack('>I', self.pdu_length)])
-        tmp2 = ''.join([item.encode()
-                        for item in self.presentation_data_value_items])
-        return tmp + tmp2
+        return struct.pack('>B B I', self.pdu_type, self.reserved,
+                           self.pdu_length)\
+            + ''.join([item.encode()
+                       for item in self.presentation_data_value_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -428,16 +421,19 @@ class PDataTfPDU(object):
         P-DATA-TF PDU
         :return: decoded PDU
         """
+        def iter_items():
+            length_read = 0
+            while length_read != pdu_length:
+                item = PresentationDataValueItem.decode(stream)
+                length_read += item.total_length()
+                yield item
+
         stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved, \
-            decoded_pdu.pdu_length = struct.unpack('> B B I', stream.read(6))
-        length_read = 0
-        while length_read != decoded_pdu.pdu_length:
-            tmp = PresentationDataValueItem.decode(stream)
-            length_read += tmp.total_length()
-            decoded_pdu.presentation_data_value_items.append(tmp)
-        return decoded_pdu
+        pdu_type, reserved, pdu_length = struct.unpack('> B B I',
+                                                       stream.read(6))
+        presentation_data_value_items = list(iter_items())
+        return cls(pdu_type=pdu_type, reserved=reserved, pdu_length=pdu_length,
+                   presentation_data_value_items=presentation_data_value_items)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -446,28 +442,33 @@ class PDataTfPDU(object):
 class AReleaseRqPDU(object):
     """This class represents the A-RELEASE-RQ PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x05  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00000000  # Unsigned int
+    def __init__(self, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x05)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
+        self.reserved2 = kwargs.get('reserved2', 0x00000000)  # unsigned int
 
     def __repr__(self):
         return ''.join(['A-RELEASE-RQ PDU\n',
                         ' PDU type: 0x%02x\n' % self.pdu_type,
                         ' PDU length: %d\n' % self.pdu_length, '\n'])
 
-    def to_params(self):
+    @staticmethod
+    def to_params():
+        """Converts PDU to service parameters.
+
+        Note that method is static, because A-RELEASE-RQ PDU has no
+        variable parameters.
+        :return: PDU converted to service parameters
+        """
         tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type),
-                        struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length),
-                        struct.pack('>I', self.reserved2)])
+        return struct.pack('>B B I I', self.pdu_type, self.reserved1,
+                           self.pdu_length, self.reserved2)
 
     @classmethod
     def decode(cls, rawstring):
@@ -479,40 +480,53 @@ class AReleaseRqPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
-            decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
-        return decoded_pdu
+        pdu_type, reserved1, pdu_length, \
+            reserved2 = struct.unpack('> B B I I', stream.read(10))
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, reserved2=reserved2)
 
-    def total_length(self):
+    @staticmethod
+    def total_length():
+        """Returns PDU total length.
+
+        This PDU has a fixed length of 10, so method always returns 10
+        regardless of specific instance
+        :rtype : int
+        :return: PDU total length
+        """
         return 10
 
 
 class AReleaseRpPDU(object):
     """This class represents the A-RELEASE-RP PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x06  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00000000  # Unsigned int
+    def __init__(self, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x06)   # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
+        self.reserved2 = kwargs.get('reserved2', 0x00000000)  # unsigned int
 
     def __repr__(self):
         return ''.join(['A-RELEASE-RP PDU\n',
                         ' PDU type: 0x%02x\n' % self.pdu_type,
                         ' PDU length: %d\n' % self.pdu_length + '\n'])
 
-    def to_params(self):
+    @staticmethod
+    def to_params():
+        """Converts PDU to service parameters.
+
+        Note that method is static, because A-RELEASE-RP PDU has no
+        variable parameters.
+        :return: PDU converted to service parameters
+        """
         tmp = dulparameters.AReleaseServiceParameters()
         tmp.reason = 'normal'
         tmp.result = 'affirmative'
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type),
-                        struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length),
-                        struct.pack('>I', self.reserved2)])
+        return struct.pack('>B B I I', self.pdu_type, self.reserved1,
+                           self.pdu_length, self.reserved2)
 
     @classmethod
     def decode(cls, rawstring):
@@ -524,26 +538,34 @@ class AReleaseRpPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, decoded_pdu.pdu_length, \
-            decoded_pdu.reserved2 = struct.unpack('> B B I I', stream.read(10))
-        return decoded_pdu
+        pdu_type, reserved1, pdu_length, \
+            reserved2 = struct.unpack('> B B I I', stream.read(10))
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, reserved2=reserved2)
 
-    def total_length(self):
+    @staticmethod
+    def total_length():
+        """Returns PDU total length.
+
+        This PDU has a fixed length of 10, so method always returns 10
+        regardless of specific instance
+        :rtype : int
+        :return: PDU total length
+        """
         return 10
 
 
 class AAbortPDU(object):
     """This class represents the A-ABORT PDU"""
 
-    def __init__(self):
-        self.pdu_type = 0x07  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.pdu_length = 0x00000004  # Unsigned int
-        self.reserved2 = 0x00  # Unsigned byte
-        self.reserved3 = 0x00  # Unsigned byte
-        self.abort_source = None  # Unsigned byte
-        self.reason_diag = None  # Unsigned byte
+    def __init__(self, source, reason, **kwargs):
+        self.pdu_type = kwargs.get('pdu_type', 0x07)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
+        self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
+        self.abort_source = source  # unsigned byte
+        self.reason_diag = reason  # unsigned byte
 
     def __repr__(self):
         return ''.join(['A-ABORT PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
@@ -553,16 +575,12 @@ class AAbortPDU(object):
 
     @classmethod
     def from_params(cls, params):
-        instance = cls()
         # params can be an AAbortServiceParameters or
         # APAbortServiceParameters object.
         try:  # User initiated abort
-            instance.abort_source = params.abort_source
-            instance.reason_diag = 0
+            return cls(params.abort_source, 0)
         except AttributeError:  # User provider initiated abort
-            instance.abort_source = 0
-            instance.reason_diag = params.provider_reason
-        return instance
+            return cls(0, params.provider_reason)
 
     def to_params(self):
         # Returns either a A-ABORT of an A-P-ABORT
@@ -577,13 +595,9 @@ class AAbortPDU(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.pdu_type),
-                        struct.pack('B', self.reserved1),
-                        struct.pack('>I', self.pdu_length),
-                        struct.pack('B', self.reserved2),
-                        struct.pack('B', self.reserved3),
-                        struct.pack('B', self.abort_source),
-                        struct.pack('B', self.reason_diag)])
+        return struct.pack('>B B I B B B B', self.pdu_type, self.reserved1,
+                           self.pdu_length, self.reserved2, self.reserved3,
+                           self.abort_source, self.reason_diag)
 
     @classmethod
     def decode(cls, rawstring):
@@ -595,15 +609,22 @@ class AAbortPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        decoded_pdu = cls()
-        decoded_pdu.pdu_type, decoded_pdu.reserved1, \
-            decoded_pdu.pdu_length, decoded_pdu.reserved2, \
-            decoded_pdu.reserved3, decoded_pdu.abort_source, \
-            decoded_pdu.reason_diag = struct.unpack('> B B I B B B B',
-                                                    stream.read(10))
-        return decoded_pdu
+        pdu_type, reserved1, pdu_length, reserved2, reserved3, abort_source, \
+            reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
+        return cls(pdu_type=pdu_type, reserved1=reserved1,
+                   pdu_length=pdu_length, reserved2=reserved2,
+                   reserved3=reserved3, abort_source=abort_source,
+                   reason_diag=reason_diag)
 
-    def total_length(self):
+    @staticmethod
+    def total_length():
+        """Returns PDU total length.
+
+        This PDU has a fixed length of 10, so method always returns 10
+        regardless of specific instance
+        :rtype : int
+        :return: PDU total length
+        """
         return 10
 
 
@@ -611,11 +632,11 @@ class AAbortPDU(object):
 
 
 class ApplicationContextItem(object):
-    def __init__(self):
-        self.item_type = 0x10  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.application_context_name = None  # String
+    def __init__(self, item_length, application_context_name, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x10)  # unsigned byte
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.application_context_name = application_context_name  # string
 
     def __repr__(self):
         return ''.join([' Application context item\n',
@@ -627,20 +648,15 @@ class ApplicationContextItem(object):
     @classmethod
     def from_params(cls, params):
         # Params is a string
-        instance = cls()
-        instance.application_context_name = params
-        instance.item_length = len(instance.application_context_name)
-        return instance
+        return cls(len(params), params)
 
     def to_params(self):
         # Returns the application context name
         return self.application_context_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length),
-                        self.application_context_name])
+        return struct.pack('>B B H', self.item_type, self.reserved,
+                           self.item_length) + self.application_context_name
 
     @classmethod
     def decode(cls, stream):
@@ -650,32 +666,34 @@ class ApplicationContextItem(object):
         :param stream: raw data stream
         :return decoded item
         """
-        decoded_obj = cls()
-        decoded_obj.item_type, decoded_obj.reserved, \
-            decoded_obj.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_obj.application_context_name = stream.read(
-            decoded_obj.item_length)
-        return decoded_obj
+        item_type, reserved, item_length = struct.unpack('> B B H',
+                                                         stream.read(4))
+        application_context_name = stream.read(item_length)
+        return cls(item_type=item_type, reserved=reserved,
+                   item_length=item_length,
+                   application_context_name=application_context_name)
 
     def total_length(self):
         return 4 + self.item_length
 
 
 class PresentationContextItemRQ(object):
-    def __init__(self):
-        self.item_type = 0x20  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.presentation_context_id = None  # Unsigned byte
+    def __init__(self, item_length, presentation_context_id,
+                 abstract_transfer_syntax_sub_items, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x20)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.presentation_context_id = presentation_context_id  # unsigned byte
 
-        self.reserved2 = 0x00  # Unsigned byte
-        self.reserved3 = 0x00  # Unsigned byte
-        self.reserved4 = 0x00  # Unsigned byte
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
+        self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
+        self.reserved4 = kwargs.get('reserved4', 0x00)  # unsigned byte
+
         # abstract_transfer_syntax_sub_items is a list
         # containing the following elements:
-        #         One AbstractSyntaxSubItem
-        #     One of more TransferSyntaxSubItem
-        self.abstract_transfer_syntax_sub_items = []
+        #  - one AbstractSyntaxSubItem
+        #  - one of more TransferSyntaxSubItem
+        self.abstract_transfer_syntax_sub_items = abstract_transfer_syntax_sub_items
 
     def __repr__(self):
         tmp = ''.join([" Presentation context RQ item\n",
@@ -691,17 +709,10 @@ class PresentationContextItemRQ(object):
     def from_params(cls, params):
         # params is a list of the form
         # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
-        instance = cls()
-        instance.presentation_context_id = params[0]
-        tmp_abs_syn = AbstractSyntaxSubItem.from_params(params[1])
-        instance.abstract_transfer_syntax_sub_items.append(tmp_abs_syn)
-        for item in params[2]:
-            tmp_tr_syn = TransferSyntaxSubItem.from_params(item)
-            instance.abstract_transfer_syntax_sub_items.append(tmp_tr_syn)
-        instance.item_length = 4
-        for item in instance.abstract_transfer_syntax_sub_items:
-            instance.item_length = instance.item_length + item.total_length()
-        return instance
+        ts_sub_items = [AbstractSyntaxSubItem.from_params(params[1])] +\
+                       [TransferSyntaxSubItem.from_params(i) for i in params[2]]
+        item_length = 4 + sum(i.total_length() for i in ts_sub_items)
+        return cls(item_length, params[0], ts_sub_items)
 
     def to_params(self):
         # Returns a list of the form
@@ -712,16 +723,11 @@ class PresentationContextItemRQ(object):
                  for item in self.abstract_transfer_syntax_sub_items[1:]]]
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.item_type),
-                       struct.pack('B', self.reserved1),
-                       struct.pack('>H', self.item_length),
-                       struct.pack('B', self.presentation_context_id),
-                       struct.pack('B', self.reserved2),
-                       struct.pack('B', self.reserved3),
-                       struct.pack('B', self.reserved4)])
-        tmp2 = ''.join([item.encode()
-                        for item in self.abstract_transfer_syntax_sub_items])
-        return tmp + tmp2
+        return struct.pack('>B B H B B B B', self.item_type, self.reserved1,
+                           self.item_length, self.presentation_context_id,
+                           self.reserved2, self.reserved3, self.reserved4)\
+            + ''.join([item.encode()
+                       for item in self.abstract_transfer_syntax_sub_items])
 
     @classmethod
     def decode(cls, stream):
@@ -731,36 +737,41 @@ class PresentationContextItemRQ(object):
         :param stream: raw data stream
         :return: decoded context item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved1, \
-            decoded_item.item_length, \
-            decoded_item.presentation_context_id, \
-            decoded_item.reserved2, decoded_item.reserved3, \
-            decoded_item.reserved4 = struct.unpack('> B B H B B B B',
-                                                   stream.read(8))
-        tmp = AbstractSyntaxSubItem.decode(stream)
-        decoded_item.abstract_transfer_syntax_sub_items.append(tmp)
-        next_item_type = next_type(stream)
-        while next_item_type == 0x40:
-            tmp = TransferSyntaxSubItem.decode(stream)
-            decoded_item.abstract_transfer_syntax_sub_items.append(tmp)
+        def iter_items():
+            yield AbstractSyntaxSubItem.decode(stream)
             next_item_type = next_type(stream)
-        return decoded_item
+            while next_item_type == 0x40:
+                yield TransferSyntaxSubItem.decode(stream)
+                next_item_type = next_type(stream)
+
+        item_type, reserved1, item_length, presentation_context_id, \
+            reserved2, reserved3, \
+            reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
+        abstract_transfer_syntax_sub_items = list(iter_items())
+        return cls(item_type=item_type, reserved1=reserved1,
+                   item_length=item_length,
+                   presentation_context_id=presentation_context_id,
+                   reserved2=reserved2, reserved3=reserved3,
+                   reserved4=reserved4,
+                   abstract_transfer_syntax_sub_items=abstract_transfer_syntax_sub_items)
 
     def total_length(self):
         return 4 + self.item_length
 
 
 class PresentationContextItemAC(object):
-    def __init__(self):
-        self.item_type = 0x21  # Unsigned byte
-        self.reserved1 = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.presentation_context_id = None  # Unsigned byte
-        self.reserved2 = 0x00  # Unsigned byte
-        self.result_reason = None  # Unsigned byte
-        self.reserved3 = 0x00  # Unsigned byte
-        self.transfer_syntax_sub_item = None  # TransferSyntaxSubItem object
+    def __init__(self, item_length, presentation_context_id, result_reason,
+                 transfer_syntax_sub_item, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x21)  # unsigned byte
+        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.presentation_context_id = presentation_context_id  # unsigned byte
+        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
+        self.result_reason = result_reason  # unsigned byte
+        self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
+
+        # TransferSyntaxSubItem object
+        self.transfer_syntax_sub_item = transfer_syntax_sub_item
 
     def __repr__(self):
         return ''.join([' Presentation context AC item\n',
@@ -774,13 +785,9 @@ class PresentationContextItemAC(object):
     @classmethod
     def from_params(cls, params):
         # params is a list of the form [ID, Response, TransferSyntax].
-        instance = cls()
-        instance.presentation_context_id = params[0]
-        instance.result_reason = params[1]
-        instance.transfer_syntax_sub_item = TransferSyntaxSubItem.from_params(
-            params[2])
-        instance.item_length = 4 + instance.transfer_syntax_sub_item.total_length()
-        return instance
+        ts_sub_item = TransferSyntaxSubItem.from_params(params[2])
+        item_length = 4 + ts_sub_item.total_length()
+        return cls(item_length, params[0], params[1], ts_sub_item)
 
     def to_params(self):
         # Returns a list of the form [ID, Response, TransferSyntax].
@@ -788,13 +795,11 @@ class PresentationContextItemAC(object):
                 self.transfer_syntax_sub_item.to_params()]
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved1),
-                        struct.pack('>H', self.item_length),
-                        struct.pack('B', self.presentation_context_id),
-                        struct.pack('B', self.reserved2),
-                        struct.pack('B', self.result_reason),
-                        struct.pack('B', self.reserved3),
+        return ''.join([struct.pack('>B B H B B B B', self.item_type,
+                                    self.reserved1, self.item_length,
+                                    self.presentation_context_id,
+                                    self.reserved2, self.result_reason,
+                                    self.reserved3),
                         self.transfer_syntax_sub_item.encode()])
 
     @classmethod
@@ -805,26 +810,27 @@ class PresentationContextItemAC(object):
         :param stream: raw data stream
         :return: decoded context item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved1, \
-            decoded_item.item_length, decoded_item.presentation_context_id, \
-            decoded_item.reserved2, decoded_item.result_reason, \
-            decoded_item.reserved3 = struct.unpack('> B B H B B B B',
-                                                   stream.read(8))
-        decoded_item.transfer_syntax_sub_item = TransferSyntaxSubItem.decode(
-            stream)
-        return decoded_item
+        item_type, reserved1, item_length, presentation_context_id, \
+            reserved2, result_reason, \
+            reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
+        transfer_syntax_sub_item = TransferSyntaxSubItem.decode(stream)
+        return cls(item_type=item_type, reserved1=reserved1,
+                   item_length=item_length,
+                   presentation_context_id=presentation_context_id,
+                   reserved2=reserved2, result_reason=result_reason,
+                   reserved3=reserved3,
+                   transfer_syntax_sub_item=transfer_syntax_sub_item)
 
     def total_length(self):
         return 4 + self.item_length
 
 
 class AbstractSyntaxSubItem(object):
-    def __init__(self):
-        self.reserved = 0x00  # Unsigned byte
-        self.item_type = 0x30  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.abstract_syntax_name = None  # String
+    def __init__(self, item_length, abstract_syntax_name, **kwargs):
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.item_type = kwargs.get('item_type', 0x30)  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.abstract_syntax_name = abstract_syntax_name  # string
 
     def __repr__(self):
         return ''.join(['  Abstract syntax sub item\n',
@@ -836,19 +842,15 @@ class AbstractSyntaxSubItem(object):
     @classmethod
     def from_params(cls, params):
         # params is a string
-        instance = cls()
-        instance.abstract_syntax_name = params
-        instance.item_length = len(instance.abstract_syntax_name)
-        return instance
+        return cls(len(params), params)
 
     def to_params(self):
         # Returns the abstract syntax name
         return self.abstract_syntax_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length),
+        return ''.join([struct.pack('>B B H', self.item_type, self.reserved,
+                                    self.item_length),
                         self.abstract_syntax_name])
 
     @classmethod
@@ -859,23 +861,23 @@ class AbstractSyntaxSubItem(object):
         :param stream: raw data stream
         :return: decoded abstract syntax sub-item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved, \
-            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_item.abstract_syntax_name = stream.read(
-            decoded_item.item_length)
-        return decoded_item
+        item_type, reserved, item_length = struct.unpack('> B B H',
+                                                         stream.read(4))
+        abstract_syntax_name = stream.read(item_length)
+        return cls(item_type=item_type, reserved=reserved,
+                   item_length=item_length,
+                   abstract_syntax_name=abstract_syntax_name)
 
     def total_length(self):
         return 4 + self.item_length
 
 
 class TransferSyntaxSubItem(object):
-    def __init__(self):
-        self.item_type = 0x40  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.transfer_syntax_name = None  # String
+    def __init__(self, item_length, transfer_syntax_name, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x40)  # unsigned byte
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.transfer_syntax_name = transfer_syntax_name  # string
 
     def __repr__(self):
         return ''.join(['  Transfer syntax sub item\n',
@@ -887,19 +889,15 @@ class TransferSyntaxSubItem(object):
     @classmethod
     def from_params(cls, params):
         # params is a string.
-        instance = cls()
-        instance.transfer_syntax_name = params
-        instance.item_length = len(instance.transfer_syntax_name)
-        return instance
+        return cls(len(params), params)
 
     def to_params(self):
         # Returns the transfer syntax name
         return self.transfer_syntax_name
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length),
+        return ''.join([struct.pack('>B B H', self.item_type, self.reserved,
+                                    self.item_length),
                         self.transfer_syntax_name])
 
     @classmethod
@@ -910,28 +908,28 @@ class TransferSyntaxSubItem(object):
         :param stream: raw data stream
         :return: decoded transfer syntax sub-item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved, \
-            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        decoded_item.transfer_syntax_name = stream.read(
-            decoded_item.item_length)
-        return decoded_item
+        item_type, reserved, \
+            item_length = struct.unpack('> B B H', stream.read(4))
+        transfer_syntax_name = stream.read(item_length)
+        return cls(item_type=item_type, reserved=reserved,
+                   item_length=item_length,
+                   transfer_syntax_name=transfer_syntax_name)
 
     def total_length(self):
         return 4 + self.item_length
 
 
 class UserInformationItem(object):
-    def __init__(self):
-        self.item_type = 0x50  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
+    def __init__(self, item_length, user_data, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x50)  # unsigned byte
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.item_length = item_length  # unsigned short
 
         #  user_data is a list containing the following:
         #  1 MaximumLengthItem
         #  0 or more raw strings encoding user data items
         # List of sub items
-        self.user_data = []
+        self.user_data = user_data
 
     def __repr__(self):
         tmp = [' User information item\n',
@@ -946,13 +944,9 @@ class UserInformationItem(object):
     @classmethod
     def from_params(cls, params):
         # params is a user_data
-        instance = cls()
-        for param in params:
-            instance.user_data.append(param.to_params())
-        instance.item_length = 0
-        for data in instance.user_data:
-            instance.item_length = instance.item_length + data.total_length()
-        return instance
+        user_data = [p.to_params() for p in params]
+        item_length = sum(i.total_length() for i in user_data)
+        return cls(item_length, user_data)
 
     def to_params(self):
         tmp = []
@@ -961,11 +955,10 @@ class UserInformationItem(object):
         return tmp
 
     def encode(self):
-        tmp = ''.join([struct.pack('B', self.item_type),
-                       struct.pack('B', self.reserved),
-                       struct.pack('>H', self.item_length)])
-        tmp2 = ''.join([data.encode() for data in self.user_data])
-        return tmp + tmp2
+        return struct.pack('>B B H', self.item_type, self.reserved,
+                           self.item_length) \
+            + ''.join([data.encode() for data in self.user_data])
+
 
     @classmethod
     def decode(cls, stream):
@@ -975,12 +968,13 @@ class UserInformationItem(object):
         :param stream: raw data stream
         :return: decoded user information item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved, \
-            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
+        item_type, reserved, \
+            item_length = struct.unpack('> B B H', stream.read(4))
+
         # read the rest of user info
-        decoded_item.user_data = [sub_item for sub_item in sub_items(stream)]
-        return decoded_item
+        user_data = [sub_item for sub_item in sub_items(stream)]
+        return cls(item_type=item_type, reserved=reserved,
+                   item_length=item_length, user_data=user_data)
 
     def total_length(self):
         return 4 + self.item_length
@@ -998,11 +992,11 @@ class MaximumLengthParameters(object):
 
 
 class MaximumLengthSubItem(object):
-    def __init__(self):
-        self.item_type = 0x51  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.item_length = 0x0004  # Unsigned short
-        self.maximum_length_received = None  # Unsigned int
+    def __init__(self, maximum_length_received, **kwargs):
+        self.item_type = kwargs.get('item_type', 0x51)  # unsigned byte
+        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
+        self.item_length = kwargs.get('item_length', 0x0004)  # unsigned short
+        self.maximum_length_received = maximum_length_received  # unsigned int
 
     def __repr__(self):
         return ''.join(['  Maximum length sub item\n',
@@ -1013,9 +1007,7 @@ class MaximumLengthSubItem(object):
 
     @classmethod
     def from_params(cls, params):
-        instance = cls()
-        instance.maximum_length_received = params.maximum_length_received
-        return instance
+        return cls(params.maximum_length_received)
 
     def to_params(self):
         tmp = MaximumLengthParameters()
@@ -1023,10 +1015,8 @@ class MaximumLengthSubItem(object):
         return tmp
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length),
-                        struct.pack('>I', self.maximum_length_received)])
+        return struct.pack('>B B H I', self.item_type, self.reserved,
+                           self.item_length, self.maximum_length_received)
 
     @classmethod
     def decode(cls, stream):
@@ -1036,22 +1026,30 @@ class MaximumLengthSubItem(object):
         :param stream: raw data stream
         :return: decoded maximum length sub-item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved, \
-            decoded_item.item_length, \
-            decoded_item.maximum_length_received = struct.unpack('> B B H I',
-                                                                 stream.read(8))
-        return decoded_item
+        item_type, reserved, item_length, \
+            maximum_length_received = struct.unpack('> B B H I', stream.read(8))
+        return cls(item_type=item_type, reserved=reserved,
+                   item_length=item_length,
+                   maximum_length_received=maximum_length_received)
 
-    def total_length(self):
+    @staticmethod
+    def total_length():
+        """Returns item total length.
+
+        This item has a fixed length of 8, so method always returns 8 regardless
+        of specific instance
+        :rtype : int
+        :return: item total length
+        """
         return 0x08
 
 
 class PresentationDataValueItem(object):
-    def __init__(self):
-        self.item_length = None  # Unsigned int
-        self.presentation_context_id = None  # Unsigned byte
-        self.presentation_data_value = None  # String
+    def __init__(self, item_length, presentation_context_id,
+                 presentation_data_value):
+        self.item_length = item_length  # unsigned int
+        self.presentation_context_id = presentation_context_id  # unsigned byte
+        self.presentation_data_value = presentation_data_value  # string
 
     def __repr__(self):
         return ''.join([' Presentation value data item\n',
@@ -1063,42 +1061,36 @@ class PresentationDataValueItem(object):
 
     @classmethod
     def from_params(cls, params):
-        # Takes a PresentationDataValue object
-        instance = cls()
-        instance.presentation_context_id = params[0]
-        instance.presentation_data_value = params[1]
-        instance.item_length = 1 + len(instance.presentation_data_value)
-        return instance
+        # takes a PresentationDataValue object
+        return cls(1 + len(params[1]), params[0], params[1])
 
     def to_params(self):
         # Returns a PresentationDataValue
-        tmp = PresentationDataValueItem()
-        tmp.presentation_context_id = self.presentation_context_id
-        tmp.presentation_data_value = self.presentation_data_value
-        return tmp
+        return PresentationDataValueItem(self.item_length,
+                                         self.presentation_context_id,
+                                         self.presentation_data_value)
 
     def encode(self):
-        return ''.join([struct.pack('>I', self.item_length),
-                        struct.pack('B', self.presentation_context_id),
+        return ''.join([struct.pack('>I B', self.item_length,
+                                    self.presentation_context_id),
                         self.presentation_data_value])
 
     @classmethod
     def decode(cls, stream):
         """Decodes presentation data value item from data stream
 
+        Presentation data value is left in raw string format.
+        The Application Entity is responsible for dealing with it.
         :rtype : PresentationDataValueItem
         :param stream: raw data stream
         :return: decoded presentation data value item
         """
-        decoded_item = cls()
-        decoded_item.item_length, \
-            decoded_item.presentation_context_id = struct.unpack('> I B',
-                                                                 stream.read(5))
-        # Presentation data value is left in raw string format.
-        # The Application Entity is responsible for dealing with it.
-        decoded_item.presentation_data_value = stream.read(
-            int(decoded_item.item_length) - 1)
-        return decoded_item
+        item_length, \
+            presentation_context_id = struct.unpack('> I B', stream.read(5))
+
+        presentation_data_value = stream.read(int(item_length) - 1)
+        return cls(item_length, presentation_context_id,
+                   presentation_data_value)
 
     def total_length(self):
         return 4 + self.item_length
@@ -1110,11 +1102,11 @@ class GenericUserDataSubItem(object):
     PDUs. The actual data is not interpreted. This is left to the user.
     """
 
-    def __init__(self):
-        self.item_type = None  # Unsigned byte
-        self.reserved = 0x00  # Unsigned byte
-        self.item_length = None  # Unsigned short
-        self.user_data = None  # Raw string
+    def __init__(self, item_type, item_length, user_data, reserved=0x00):
+        self.item_type = item_type  # unsigned byte
+        self.reserved = reserved  # unsigned byte
+        self.item_length = item_length  # unsigned short
+        self.user_data = user_data  # raw string
 
     def __repr__(self):
         tmp = ['User data item\n', '  Item type: %d\n' % self.item_type,
@@ -1125,38 +1117,32 @@ class GenericUserDataSubItem(object):
 
     @classmethod
     def from_params(cls, params):
-        instance = cls()
-        instance.item_length = len(params.user_data)
-        instance.user_data = params.user_data
-        instance.item_type = params.item_type
-        return instance
+        return cls(params.item_type, len(params.user_data), params.user_data)
 
     def to_params(self):
-        tmp = GenericUserDataSubItem()
-        tmp.item_type = self.item_type
-        tmp.user_data = self.user_data
-        return tmp
+        return GenericUserDataSubItem(item_type=self.item_type,
+                                      item_length=self.item_length,
+                                      user_data=self.user_data)
 
     def encode(self):
-        return ''.join([struct.pack('B', self.item_type),
-                        struct.pack('B', self.reserved),
-                        struct.pack('>H', self.item_length), self.user_data])
+        return ''.join([struct.pack('>B B H', self.item_type, self.reserved,
+                                    self.item_length), self.user_data])
 
     @classmethod
     def decode(cls, stream):
         """Decodes generic data sub-item from data stream
 
+        User data value is left in raw string format. The Application Entity
+        is responsible for dealing with it.
         :rtype : GenericUserDataSubItem
         :param stream: raw data stream
         :return: decoded generic data sub-item
         """
-        decoded_item = cls()
-        decoded_item.item_type, decoded_item.reserved, \
-            decoded_item.item_length = struct.unpack('> B B H', stream.read(4))
-        # User data value is left in raw string format. The Application Entity
-        # is responsible for dealing with it.
-        decoded_item.user_data = stream.read(int(decoded_item.item_length) - 1)
-        return decoded_item
+        item_type, reserved, item_length = struct.unpack('> B B H',
+                                                         stream.read(4))
+        user_data = stream.read(int(item_length) - 1)
+        return cls(item_type=item_type, item_length=item_length,
+                   user_data=user_data, reserved=reserved)
 
     def total_length(self):
         return 4 + self.item_length
@@ -1189,4 +1175,3 @@ def sub_items(stream):
         except KeyError:
             raise exceptions.PDUProcessingError(
                 'Invalid sub-item', "0x%X" % item_type)
-
