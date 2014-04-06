@@ -10,8 +10,6 @@ import logging
 
 import netdicom2.dimsemessages as dimsemessages
 import netdicom2.dulparameters as dulparameters
-import netdicom2.dimseparameters as dimseparameters
-import netdicom2.exceptions as exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -26,44 +24,11 @@ class DIMSEServiceProvider(object):
     def send(self, primitive, id_, max_pdu_length):
         # take a DIMSE primitive, convert it to one or more DUL primitive
         # and send it
-        dimse_msg = None
-        if isinstance(primitive, dimseparameters.CEchoServiceParameters):
-            if primitive.message_id is not None:
-                dimse_msg = dimsemessages.CEchoRQMessage()
-            else:
-                dimse_msg = dimsemessages.CEchoRSPMessage()
-        if isinstance(primitive, dimseparameters.CStoreServiceParameters):
-            if primitive.message_id is not None:
-                dimse_msg = dimsemessages.CStoreRQMessage()
-            else:
-                dimse_msg = dimsemessages.CStoreRSPMessage()
-        if isinstance(primitive, dimseparameters.CFindServiceParameters):
-            if primitive.message_id is not None:
-                dimse_msg = dimsemessages.CFindRQMessage()
-            else:
-                dimse_msg = dimsemessages.CFindRSPMessage()
-        if isinstance(primitive, dimseparameters.CGetServiceParameters):
-            if primitive.message_id is not None:
-                dimse_msg = dimsemessages.CGetRQMessage()
-            else:
-                dimse_msg = dimsemessages.CGetRSPMessage()
-        if isinstance(primitive, dimseparameters.CMoveServiceParameters):
-            if primitive.message_id is not None:
-                dimse_msg = dimsemessages.CMoveRQMessage()
-            else:
-                dimse_msg = dimsemessages.CMoveRSPMessage()
-
-        if dimse_msg is None:
-            raise exceptions.DIMSEProcessingError("Failed to get message")
-
-        logger.debug('DIMSE message of class %s', dimse_msg.__class__)
-        dimse_msg.from_params(primitive)
-        logger.debug('DIMSE message: %s', str(dimse_msg))
-        pdatas = dimse_msg.encode(id_, max_pdu_length)
-        logger.debug('encoded %d fragments', len(pdatas))
-        for ii, pp in enumerate(pdatas):
-            logger.debug('sending pdata %d of %d', ii + 1, len(pdatas))
-            self.dul.send(pp)
+        dimse_msg = primitive.to_message()
+        p_data_list = dimse_msg.encode(id_, max_pdu_length)
+        logger.debug('encoded %d fragments', len(p_data_list))
+        for p_data in p_data_list:
+            self.dul.send(p_data)
         logger.debug('DIMSE message sent')
 
     def receive(self, wait=False, timeout=None):

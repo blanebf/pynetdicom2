@@ -39,7 +39,7 @@ from dicom.UID import ImplicitVRLittleEndian
 
 import netdicom2.dulparameters as dulparameters
 import netdicom2.dsutils as dsutils
-import netdicom2.dimseparameters as dimseparameters
+import netdicom2.dimseparameters
 import netdicom2.exceptions as exceptions
 
 from dicom._dicom_dict import DicomDictionary
@@ -126,7 +126,6 @@ class DIMSEMessage(object):
             pdatas.append(pdata)
         # last command fragment
         pdata = dulparameters.PDataServiceParameters()
-        # last command fragment
         pdata.presentation_data_value_list = [
             [self.id_, struct.pack('b', 3) + pdvs[-1]]]
         pdatas.append(pdata)
@@ -212,7 +211,7 @@ class CEchoRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CEchoServiceParameters()
+        tmp = netdicom2.dimseparameters.CEchoServiceParameters()
         tmp.message_id = self.command_set.get((0x0000, 0x0110))
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         return tmp
@@ -239,7 +238,7 @@ class CEchoRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CEchoServiceParameters()
+        tmp = netdicom2.dimseparameters.CEchoServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
@@ -281,7 +280,7 @@ class CStoreRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CStoreServiceParameters()
+        tmp = netdicom2.dimseparameters.CStoreServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.affected_sop_instance_uid = self.command_set.get((0x0000, 0x1000))
         tmp.priority = self.command_set.get((0x0000, 0x0700))
@@ -314,7 +313,7 @@ class CStoreRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CStoreServiceParameters()
+        tmp = netdicom2.dimseparameters.CStoreServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
@@ -342,7 +341,7 @@ class CFindRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CFindServiceParameters()
+        tmp = netdicom2.dimseparameters.CFindServiceParameters()
         tmp.affected_sop_class_uid = self.command_set[(0x0000, 0x0002)]
         tmp.priority = self.command_set.get((0x0000, 0x0700))
         tmp.identifier = self.data_set
@@ -374,7 +373,7 @@ class CFindRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CFindServiceParameters()
+        tmp = netdicom2.dimseparameters.CFindServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
@@ -401,7 +400,7 @@ class CGetRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CGetServiceParameters()
+        tmp = netdicom2.dimseparameters.CGetServiceParameters()
         tmp.message_id = self.command_set.get((0x0000, 0x0110)).value
         tmp.affected_sop_class_uid = self.command_set.get(
             (0x0000, 0x0002)).value
@@ -445,7 +444,7 @@ class CGetRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CGetServiceParameters()
+        tmp = netdicom2.dimseparameters.CGetServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
@@ -483,7 +482,7 @@ class CMoveRQMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CMoveServiceParameters()
+        tmp = netdicom2.dimseparameters.CMoveServiceParameters()
         tmp.message_id = self.command_set.get((0x0000, 0x0110))
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.priority = self.command_set.get((0x0000, 0x0700))
@@ -527,7 +526,7 @@ class CMoveRSPMessage(DIMSEMessage):
         self.set_length()
 
     def to_params(self):
-        tmp = dimseparameters.CMoveServiceParameters()
+        tmp = netdicom2.dimseparameters.CMoveServiceParameters()
         tmp.affected_sop_class_uid = self.command_set.get((0x0000, 0x0002))
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
@@ -561,21 +560,21 @@ class CCancelRQMessage(DIMSEMessage):
 
 class CCancelFindRQMessage(CCancelRQMessage):
     def to_params(self):
-        tmp = dimseparameters.CFindServiceParameters()
+        tmp = netdicom2.dimseparameters.CFindServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
 
 class CCancelGetRQMessage(CCancelRQMessage):
     def to_params(self):
-        tmp = dimseparameters.CGetServiceParameters()
+        tmp = netdicom2.dimseparameters.CGetServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
 
 class CCancelMoveRQMessage(CCancelRQMessage):
     def to_params(self):
-        tmp = dimseparameters.CMoveServiceParameters()
+        tmp = netdicom2.dimseparameters.CMoveServiceParameters()
         tmp.message_id_being_responded_to = self.command_set[(0x0000, 0x0120)]
         return tmp
 
