@@ -14,7 +14,7 @@ loop whose events will drive the state machine.
 
 import collections
 
-from threading import Thread
+import threading
 import socket
 import time
 import os
@@ -27,13 +27,10 @@ import netdicom2.timer as timer
 import netdicom2.fsm as fsm
 import netdicom2.pdu as pdu
 import netdicom2.dulparameters as dulparameters
+import netdicom2.exceptions as exceptions
 
 
 logger = logging.getLogger(__name__)
-
-
-class InvalidPrimitive(Exception):
-    pass
 
 
 def recv_n(sock, n):
@@ -44,7 +41,7 @@ def recv_n(sock, n):
         ret.append(tmp)
         read_length += len(tmp)
     if read_length != n:
-        raise RuntimeError('Low level Network ERROR: ')
+        raise exceptions.NetDICOMError('Low level network error')
     return ''.join(ret)
 
 
@@ -59,7 +56,7 @@ PDU_TYPES = {
 }
 
 
-class DULServiceProvider(Thread):
+class DULServiceProvider(threading.Thread):
     def __init__(self, socket_=None, port=None, name=''):
         """
         Three ways to call DULServiceProvider. If a port number is given,
@@ -282,4 +279,4 @@ def primitive_to_event(primitive):
     elif isinstance(primitive, dulparameters.PDataServiceParameters):
         return 'Evt9'
     else:
-        raise InvalidPrimitive
+        raise exceptions.NetDICOMError('Invalid primitive')

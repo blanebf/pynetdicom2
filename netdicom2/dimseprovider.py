@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -11,6 +11,7 @@ import logging
 import netdicom2.dimsemessages as dimsemessages
 import netdicom2.dulparameters as dulparameters
 import netdicom2.dimseparameters as dimseparameters
+import netdicom2.exceptions as exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -53,8 +54,7 @@ class DIMSEServiceProvider(object):
                 dimse_msg = dimsemessages.CMoveRSPMessage()
 
         if dimse_msg is None:
-            # TODO: Replace exception type
-            raise RuntimeError("Failed to get message")
+            raise exceptions.DIMSEProcessingError("Failed to get message")
 
         logger.debug('DIMSE message of class %s', dimse_msg.__class__)
         dimse_msg.from_params(primitive)

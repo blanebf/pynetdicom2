@@ -91,13 +91,11 @@ class AAssociateRqPDU(object):
         self.variable_items = kwargs.get('variable_items', [])
 
     def __repr__(self):
-        tmp = ''.join(['A-ASSOCIATE-RQ PDU\n',
-                       ' PDU type: 0x%02x\n' % self.pdu_type,
-                       ' PDU length: %d\n' % self.pdu_length,
-                       ' Called AE title: %s\n' % self.called_ae_title,
-                       ' Calling AE title: %s\n' % self.calling_ae_title])
-        tmp2 = ''.join([item.__repr__() for item in self.variable_items])
-        return '%s%s\n' % (tmp, tmp2)
+        tmp = 'A-ASSOCIATE-RQ PDU {{type: 0x{self.pdu_type:02x}, length: ' \
+              '{self.pdu_length:d}, called AE title: {self.called_ae_title},' \
+              ' calling AE title: {self.calling_ae_title} '.format(self=self)
+        tmp2 = ''.join([repr(item) for item in self.variable_items])
+        return '{0} variable items: {1}}}'.format(tmp, tmp2)
 
     @classmethod
     def from_params(cls, params):
@@ -213,7 +211,7 @@ class AAssociateAcPDU(object):
                        ' PDU length: %d\n' % self.pdu_length,
                        ' Called AE title: %s\n' % self.reserved3,
                        ' Calling AE title: %s\n' % self.reserved4])
-        tmp2 = ''.join([item.__repr__() for item in self.variable_items])
+        tmp2 = ''.join([repr(item) for item in self.variable_items])
         return '%s%s\n' % (tmp, tmp2)
 
     @classmethod
@@ -381,7 +379,7 @@ class PDataTfPDU(object):
     def __repr__(self):
         tmp = ''.join(['P-DATA-TF PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
                        ' PDU length: %d\n' % self.pdu_length])
-        tmp2 = ''.join(item.__repr__()
+        tmp2 = ''.join(repr(item)
                        for item in self.presentation_data_value_items)
         return '%s%s\n' % (tmp, tmp2)
 
@@ -701,7 +699,7 @@ class PresentationContextItemRQ(object):
                        "  Item length: %d\n" % self.item_length,
                        "  Presentation context ID: %d\n" %
                        self.presentation_context_id])
-        tmp2 = ''.join([item.__repr__()
+        tmp2 = ''.join([repr(item)
                         for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
 
@@ -780,7 +778,7 @@ class PresentationContextItemAC(object):
                         '  Presentation context ID: %d\n' %
                         self.presentation_context_id,
                         '  Result/Reason: %d\n' % self.result_reason,
-                        self.transfer_syntax_sub_item.__repr__()])
+                        repr(self.transfer_syntax_sub_item)])
 
     @classmethod
     def from_params(cls, params):
@@ -958,7 +956,6 @@ class UserInformationItem(object):
         return struct.pack('>B B H', self.item_type, self.reserved,
                            self.item_length) \
             + ''.join([data.encode() for data in self.user_data])
-
 
     @classmethod
     def decode(cls, stream):

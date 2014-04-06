@@ -40,6 +40,7 @@ from dicom.UID import ImplicitVRLittleEndian
 import netdicom2.dulparameters as dulparameters
 import netdicom2.dsutils as dsutils
 import netdicom2.dimseparameters as dimseparameters
+import netdicom2.exceptions as exceptions
 
 from dicom._dicom_dict import DicomDictionary
 
@@ -181,7 +182,7 @@ class DIMSEMessage(object):
                     logger.debug('  last data fragment %s', self.id_)
                     return True
             else:
-                raise Exception('Error')  # TODO: Replace exception type
+                raise exceptions.DIMSEProcessingError('Error')
 
         return False
 
