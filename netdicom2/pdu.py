@@ -283,6 +283,8 @@ class AAssociateAcPDU(object):
         pdu_type, reserved1, pdu_length, protocol_version, reserved2, \
             reserved3, reserved4 = struct.unpack('> B B I H H 16s 16s',
                                                  stream.read(42))
+        reserved3 = reserved3.strip('\0')
+        reserved4 = reserved4.strip('\0')
         reserved5 = struct.unpack('>8I', stream.read(32))
         variable_items = list(iter_items())
         return cls(pdu_type=pdu_type, reserved1=reserved1,
@@ -918,10 +920,12 @@ class TransferSyntaxSubItem(object):
 
 
 class UserInformationItem(object):
-    def __init__(self, item_length, user_data, **kwargs):
+    def __init__(self, user_data, **kwargs):
         self.item_type = kwargs.get('item_type', 0x50)  # unsigned byte
         self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
-        self.item_length = item_length  # unsigned short
+
+        # unsigned short
+        self.item_length = sum(i.total_length() for i in user_data)
 
         #  user_data is a list containing the following:
         #  1 MaximumLengthItem
@@ -942,9 +946,7 @@ class UserInformationItem(object):
     @classmethod
     def from_params(cls, params):
         # params is a user_data
-        user_data = [p.to_params() for p in params]
-        item_length = sum(i.total_length() for i in user_data)
-        return cls(item_length, user_data)
+        return cls([p.to_params() for p in params])
 
     def to_params(self):
         tmp = []
@@ -970,8 +972,7 @@ class UserInformationItem(object):
 
         # read the rest of user info
         user_data = [sub_item for sub_item in sub_items(stream)]
-        return cls(item_type=item_type, reserved=reserved,
-                   item_length=item_length, user_data=user_data)
+        return cls(item_type=item_type, reserved=reserved, user_data=user_data)
 
     def total_length(self):
         return 4 + self.item_length
@@ -1042,9 +1043,8 @@ class MaximumLengthSubItem(object):
 
 
 class PresentationDataValueItem(object):
-    def __init__(self, item_length, presentation_context_id,
-                 presentation_data_value):
-        self.item_length = item_length  # unsigned int
+    def __init__(self, presentation_context_id, presentation_data_value):
+        self.item_length = len(presentation_data_value) + 1 # unsigned int
         self.presentation_context_id = presentation_context_id  # unsigned byte
         self.presentation_data_value = presentation_data_value  # string
 
@@ -1059,12 +1059,11 @@ class PresentationDataValueItem(object):
     @classmethod
     def from_params(cls, params):
         # takes a PresentationDataValue object
-        return cls(1 + len(params[1]), params[0], params[1])
+        return cls(params[0], params[1])
 
     def to_params(self):
         # Returns a PresentationDataValue
-        return PresentationDataValueItem(self.item_length,
-                                         self.presentation_context_id,
+        return PresentationDataValueItem(self.presentation_context_id,
                                          self.presentation_data_value)
 
     def encode(self):
@@ -1086,8 +1085,7 @@ class PresentationDataValueItem(object):
             presentation_context_id = struct.unpack('> I B', stream.read(5))
 
         presentation_data_value = stream.read(int(item_length) - 1)
-        return cls(item_length, presentation_context_id,
-                   presentation_data_value)
+        return cls(presentation_context_id, presentation_data_value)
 
     def total_length(self):
         return 4 + self.item_length
@@ -1099,10 +1097,10 @@ class GenericUserDataSubItem(object):
     PDUs. The actual data is not interpreted. This is left to the user.
     """
 
-    def __init__(self, item_type, item_length, user_data, reserved=0x00):
+    def __init__(self, item_type, user_data, reserved=0x00):
         self.item_type = item_type  # unsigned byte
         self.reserved = reserved  # unsigned byte
-        self.item_length = item_length  # unsigned short
+        self.item_length = len(user_data)  # unsigned short
         self.user_data = user_data  # raw string
 
     def __repr__(self):
@@ -1114,11 +1112,10 @@ class GenericUserDataSubItem(object):
 
     @classmethod
     def from_params(cls, params):
-        return cls(params.item_type, len(params.user_data), params.user_data)
+        return cls(params.item_type, params.user_data)
 
     def to_params(self):
         return GenericUserDataSubItem(item_type=self.item_type,
-                                      item_length=self.item_length,
                                       user_data=self.user_data)
 
     def encode(self):
@@ -1137,9 +1134,8 @@ class GenericUserDataSubItem(object):
         """
         item_type, reserved, item_length = struct.unpack('> B B H',
                                                          stream.read(4))
-        user_data = stream.read(int(item_length) - 1)
-        return cls(item_type=item_type, item_length=item_length,
-                   user_data=user_data, reserved=reserved)
+        user_data = stream.read(int(item_length))
+        return cls(item_type=item_type, user_data=user_data, reserved=reserved)
 
     def total_length(self):
         return 4 + self.item_length

@@ -257,6 +257,12 @@ class AE(threading.Thread):
         # list of active association objects
         self.associations = []
 
+    def __enter__(self):
+        self.start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.quit()
+
     def run(self):
         if not self.supported_sop_classes_as_scp:
             # no need to loop. This is just a client AE.
