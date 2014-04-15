@@ -3,6 +3,7 @@ __author__ = 'Blane'
 import unittest
 import cStringIO
 import netdicom2.pdu
+import netdicom2.dimseparameters
 
 
 class PDUEncodingTestCase(unittest.TestCase):
@@ -13,10 +14,7 @@ class PDUEncodingTestCase(unittest.TestCase):
     def decode_and_compare(self, pdu):
         self.compare_pdu(pdu, type(pdu).decode(pdu.encode()))
 
-    def decode_and_compare_sub_item(self, item):
-        encoded = item.encode()
-        stream = cStringIO.StringIO(encoded)
-        self.compare_pdu(item, type(item).decode(stream))
+
 
     def test_a_associate_rq_pdu(self):
         pdu = netdicom2.pdu.AAssociateRqPDU(called_ae_title='aet1',
@@ -28,6 +26,15 @@ class PDUEncodingTestCase(unittest.TestCase):
         pdu = netdicom2.pdu.AAssociateAcPDU(pdu_length=16000, reserved3='aet1',
                                             reserved4='aet2')
         self.decode_and_compare(pdu)
+
+
+class SubItemEncodingTestCase(unittest.TestCase):
+    def decode_and_compare_sub_item(self, item):
+        encoded = item.encode()
+        stream = cStringIO.StringIO(encoded)
+        item2 = type(item).decode(stream)
+        self.assertIsInstance(item, item2.__class__)
+        self.assertEqual(item.__dict__, item2.__dict__)
 
     def test_user_information_item(self):
         item = netdicom2.pdu.UserInformationItem(item_length=0,
@@ -49,6 +56,21 @@ class PDUEncodingTestCase(unittest.TestCase):
         test_string = 'test data'
         item = netdicom2.pdu.GenericUserDataSubItem(item_type=0x5,
                                                     user_data=test_string)
+        self.decode_and_compare_sub_item(item)
+
+    def test_user_identity_negotiation(self):
+        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItem(
+            'user', 'password')
+        self.decode_and_compare_sub_item(item)
+
+    def test_user_identity_negotiation_name_only(self):
+        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItem(
+            'user', user_identity_type=1)
+        self.decode_and_compare_sub_item(item)
+
+    def test_user_identity_negotiation_ac(self):
+        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItemAc(
+            'test_key')
         self.decode_and_compare_sub_item(item)
 
 if __name__ == '__main__':
