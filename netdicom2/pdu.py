@@ -65,6 +65,7 @@ from cStringIO import StringIO
 import netdicom2.dulparameters as dulparameters
 import netdicom2.exceptions as exceptions
 import netdicom2.dimseparameters as dimseparameters
+import netdicom2.userdataitems as userdataitems
 
 
 class AAssociateRqPDU(object):
@@ -925,7 +926,7 @@ class UserInformationItem(object):
         self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
 
         # unsigned short
-        self.item_length = sum(i.total_length() for i in user_data)
+        self.item_length = sum(i.total_length for i in user_data)
 
         #  user_data is a list containing the following:
         #  1 MaximumLengthItem
@@ -946,13 +947,10 @@ class UserInformationItem(object):
     @classmethod
     def from_params(cls, params):
         # params is a user_data
-        return cls([p.to_params() for p in params])
+        return cls(list(params))
 
     def to_params(self):
-        tmp = []
-        for ii in self.user_data:
-            tmp.append(ii.to_params())
-        return tmp
+        return list(self.user_data)
 
     def encode(self):
         return struct.pack('>B B H', self.item_type, self.reserved,
@@ -978,73 +976,9 @@ class UserInformationItem(object):
         return 4 + self.item_length
 
 
-class MaximumLengthParameters(object):
-    def __init__(self):
-        self.maximum_length_received = None
-
-    def __eq__(self, other):
-        return self.maximum_length_received == other.maximum_length_received
-
-    def to_params(self):
-        return MaximumLengthSubItem.from_params(self)
-
-
-class MaximumLengthSubItem(object):
-    def __init__(self, maximum_length_received, **kwargs):
-        self.item_type = kwargs.get('item_type', 0x51)  # unsigned byte
-        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
-        self.item_length = kwargs.get('item_length', 0x0004)  # unsigned short
-        self.maximum_length_received = maximum_length_received  # unsigned int
-
-    def __repr__(self):
-        return ''.join(['  Maximum length sub item\n',
-                        '    Item type: 0x%02x\n' % self.item_type,
-                        '    Item length: %d\n' % self.item_length,
-                        '    Maximum Length Received: %d\n' %
-                        self.maximum_length_received])
-
-    @classmethod
-    def from_params(cls, params):
-        return cls(params.maximum_length_received)
-
-    def to_params(self):
-        tmp = MaximumLengthParameters()
-        tmp.maximum_length_received = self.maximum_length_received
-        return tmp
-
-    def encode(self):
-        return struct.pack('>B B H I', self.item_type, self.reserved,
-                           self.item_length, self.maximum_length_received)
-
-    @classmethod
-    def decode(cls, stream):
-        """Decodes maximum length sub-item from data stream
-
-        :rtype : MaximumLengthSubItem
-        :param stream: raw data stream
-        :return: decoded maximum length sub-item
-        """
-        item_type, reserved, item_length, \
-            maximum_length_received = struct.unpack('> B B H I', stream.read(8))
-        return cls(item_type=item_type, reserved=reserved,
-                   item_length=item_length,
-                   maximum_length_received=maximum_length_received)
-
-    @staticmethod
-    def total_length():
-        """Returns item total length.
-
-        This item has a fixed length of 8, so method always returns 8 regardless
-        of specific instance
-        :rtype : int
-        :return: item total length
-        """
-        return 0x08
-
-
 class PresentationDataValueItem(object):
     def __init__(self, presentation_context_id, presentation_data_value):
-        self.item_length = len(presentation_data_value) + 1 # unsigned int
+        self.item_length = len(presentation_data_value) + 1  # unsigned int
         self.presentation_context_id = presentation_context_id  # unsigned byte
         self.presentation_data_value = presentation_data_value  # string
 
@@ -1142,12 +1076,12 @@ class GenericUserDataSubItem(object):
 
 
 SUB_ITEM_TYPES = {
-    0x52: dimseparameters.ImplementationClassUIDSubItem,
-    0x51: MaximumLengthSubItem,
-    0x55: dimseparameters.ImplementationVersionNameSubItem,
-    0x53: dimseparameters.AsynchronousOperationsWindowSubItem,
-    0x54: dimseparameters.ScpScuRoleSelectionSubItem,
-    0x56: dimseparameters.SOPClassExtendedNegotiationSubItem
+    0x52: userdataitems.ImplementationClassUIDSubItem,
+    0x51: userdataitems.MaximumLengthSubItem,
+    0x55: userdataitems.ImplementationVersionNameSubItem,
+    0x53: userdataitems.AsynchronousOperationsWindowSubItem,
+    0x54: userdataitems.ScpScuRoleSelectionSubItem,
+    0x56: userdataitems.SOPClassExtendedNegotiationSubItem
 }
 
 

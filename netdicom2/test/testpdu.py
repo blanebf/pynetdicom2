@@ -4,6 +4,7 @@ import unittest
 import cStringIO
 import netdicom2.pdu
 import netdicom2.dimseparameters
+import netdicom2.userdataitems
 
 
 class PDUEncodingTestCase(unittest.TestCase):
@@ -13,8 +14,6 @@ class PDUEncodingTestCase(unittest.TestCase):
 
     def decode_and_compare(self, pdu):
         self.compare_pdu(pdu, type(pdu).decode(pdu.encode()))
-
-
 
     def test_a_associate_rq_pdu(self):
         pdu = netdicom2.pdu.AAssociateRqPDU(called_ae_title='aet1',
@@ -28,7 +27,7 @@ class PDUEncodingTestCase(unittest.TestCase):
         self.decode_and_compare(pdu)
 
 
-class SubItemEncodingTestCase(unittest.TestCase):
+class TestSubItemEncodingTestCase(unittest.TestCase):
     def decode_and_compare_sub_item(self, item):
         encoded = item.encode()
         stream = cStringIO.StringIO(encoded)
@@ -39,10 +38,6 @@ class SubItemEncodingTestCase(unittest.TestCase):
     def test_user_information_item(self):
         item = netdicom2.pdu.UserInformationItem(item_length=0,
                                                  user_data=[])
-        self.decode_and_compare_sub_item(item)
-
-    def test_maximum_length_sub_item(self):
-        item = netdicom2.pdu.MaximumLengthSubItem(maximum_length_received=5)
         self.decode_and_compare_sub_item(item)
 
     def test_presentation_data_value_item(self):
@@ -58,18 +53,38 @@ class SubItemEncodingTestCase(unittest.TestCase):
                                                     user_data=test_string)
         self.decode_and_compare_sub_item(item)
 
+    def test_maximum_length_sub_item(self):
+        item = netdicom2.userdataitems.MaximumLengthSubItem(
+            maximum_length_received=5)
+        self.decode_and_compare_sub_item(item)
+
+    def test_scp_scu_role_selection_sub_item(self):
+        item = netdicom2.userdataitems.ScpScuRoleSelectionSubItem(
+            sop_class_uid='1.2.3.4.5', scp_role=1, scu_role=1)
+        self.decode_and_compare_sub_item(item)
+
+    def test_implementation_version_name_sub_item(self):
+        item = netdicom2.userdataitems.ImplementationClassUIDSubItem(
+            implementation_class_uid='1.2.3.4.5')
+        self.decode_and_compare_sub_item(item)
+
+    def test_asynchronous_operations_window_sub_item(self):
+        item = netdicom2.userdataitems.AsynchronousOperationsWindowSubItem(
+            max_num_ops_invoked=5, max_num_ops_performed=7)
+        self.decode_and_compare_sub_item(item)
+
     def test_user_identity_negotiation(self):
-        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItem(
+        item = netdicom2.userdataitems.UserIdentityNegotiationSubItem(
             'user', 'password')
         self.decode_and_compare_sub_item(item)
 
     def test_user_identity_negotiation_name_only(self):
-        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItem(
+        item = netdicom2.userdataitems.UserIdentityNegotiationSubItem(
             'user', user_identity_type=1)
         self.decode_and_compare_sub_item(item)
 
     def test_user_identity_negotiation_ac(self):
-        item = netdicom2.dimseparameters.UserIdentityNegotiationSubItemAc(
+        item = netdicom2.userdataitems.UserIdentityNegotiationSubItemAc(
             'test_key')
         self.decode_and_compare_sub_item(item)
 

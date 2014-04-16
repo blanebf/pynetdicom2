@@ -209,9 +209,7 @@ def aa_8(provider):
     # Send A-ABORT PDU (service-provider source), issue and A-P-ABORT
     # indication, and start ARTIM timer.
     # Send A-ABORT PDU
-    provider.pdu = pdu.AAbortPDU()
-    provider.pdu.source = 2
-    provider.pdu.reason_diag = 0  # No reason given
+    provider.pdu = pdu.AAbortPDU(source=2, reason=0)  # No reason given
     if provider.remote_client_socket:
         provider.remote_client_socket.send(provider.pdu.encode())
         # Issue A-P-ABORT indication

@@ -14,6 +14,7 @@ from dicom.UID import UID
 
 import netdicom2.dulparameters as dulparameters
 import netdicom2.pdu as pdu
+import netdicom2.userdataitems as userdataitems
 
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,7 @@ class ACSEServiceProvider(object):
         assoc_rq.application_context_name = self.application_context_name
         assoc_rq.calling_ae_title = self.local_ae['AET']
         assoc_rq.called_ae_title = self.remote_ae['AET']
-        max_pdu_length_par = pdu.MaximumLengthParameters()
-        max_pdu_length_par.maximum_length_received = mp
+        max_pdu_length_par = userdataitems.MaximumLengthSubItem(mp)
         if users_pdu:
             assoc_rq.user_information = [max_pdu_length_par] + users_pdu
         else:

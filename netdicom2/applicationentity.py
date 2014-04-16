@@ -22,6 +22,7 @@ import netdicom2.dulprovider as dulprovider
 import netdicom2.dimseprovider as dimseprovider
 import netdicom2.asceprovider as asceprovider
 import netdicom2.dimseparameters as dimseparameters
+import netdicom2.userdataitems as userdataitems
 
 
 class Association(object):
@@ -149,13 +150,8 @@ class AssociationRequester(Association):
         self._request()
 
     def _request(self):
-        ext = []
-        for ii in self.ae.acceptable_presentation_contexts:
-            tmp = dimseparameters.ScpScuRoleSelectionParameters()
-            tmp.sop_class_uid = ii[0]
-            tmp.scu_role = 0
-            tmp.scp_role = 1
-            ext.append(tmp)
+        ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
+               for i in self.ae.acceptable_presentation_contexts]
 
         ans = self.asce.request(self.ae.local_ae, self.remote_ae,
                                 self.ae.max_pdu_length,
