@@ -64,8 +64,27 @@ from cStringIO import StringIO
 
 import netdicom2.dulparameters as dulparameters
 import netdicom2.exceptions as exceptions
-import netdicom2.dimseparameters as dimseparameters
 import netdicom2.userdataitems as userdataitems
+
+
+SUB_ITEM_TYPES = {
+    0x52: userdataitems.ImplementationClassUIDSubItem,
+    0x51: userdataitems.MaximumLengthSubItem,
+    0x55: userdataitems.ImplementationVersionNameSubItem,
+    0x53: userdataitems.AsynchronousOperationsWindowSubItem,
+    0x54: userdataitems.ScpScuRoleSelectionSubItem,
+    0x56: userdataitems.SOPClassExtendedNegotiationSubItem,
+    0x58: userdataitems.UserIdentityNegotiationSubItem,
+    0x59: userdataitems.UserIdentityNegotiationSubItemAc
+}
+
+
+def next_type(stream):
+    char = stream.read(1)
+    if char == '':
+        return None  # we are at the end of the file
+    stream.seek(-1, 1)
+    return struct.unpack('B', char)[0]
 
 
 class AAssociateRqPDU(object):
@@ -957,6 +976,17 @@ class UserInformationItem(object):
                            self.item_length) \
             + ''.join([data.encode() for data in self.user_data])
 
+    @staticmethod
+    def sub_items(stream):
+        item_type = next_type(stream)
+        while item_type:
+            try:
+                yield SUB_ITEM_TYPES[item_type].decode(stream)
+                item_type = next_type(stream)
+            except KeyError:
+                raise exceptions.PDUProcessingError(
+                    'Invalid sub-item', "0x%X" % item_type)
+
     @classmethod
     def decode(cls, stream):
         """Decodes user information item from data stream
@@ -965,11 +995,12 @@ class UserInformationItem(object):
         :param stream: raw data stream
         :return: decoded user information item
         """
+
         item_type, reserved, \
             item_length = struct.unpack('> B B H', stream.read(4))
 
         # read the rest of user info
-        user_data = [sub_item for sub_item in sub_items(stream)]
+        user_data = [sub_item for sub_item in cls.sub_items(stream)]
         return cls(item_type=item_type, reserved=reserved, user_data=user_data)
 
     def total_length(self):
@@ -1073,32 +1104,3 @@ class GenericUserDataSubItem(object):
 
     def total_length(self):
         return 4 + self.item_length
-
-
-SUB_ITEM_TYPES = {
-    0x52: userdataitems.ImplementationClassUIDSubItem,
-    0x51: userdataitems.MaximumLengthSubItem,
-    0x55: userdataitems.ImplementationVersionNameSubItem,
-    0x53: userdataitems.AsynchronousOperationsWindowSubItem,
-    0x54: userdataitems.ScpScuRoleSelectionSubItem,
-    0x56: userdataitems.SOPClassExtendedNegotiationSubItem
-}
-
-
-def next_type(stream):
-    char = stream.read(1)
-    if char == '':
-        return None  # we are at the end of the file
-    stream.seek(-1, 1)
-    return struct.unpack('B', char)[0]
-
-
-def sub_items(stream):
-    item_type = next_type(stream)
-    while item_type:
-        try:
-            yield SUB_ITEM_TYPES[item_type].decode(stream)
-            item_type = next_type(stream)
-        except KeyError:
-            raise exceptions.PDUProcessingError(
-                'Invalid sub-item', "0x%X" % item_type)
