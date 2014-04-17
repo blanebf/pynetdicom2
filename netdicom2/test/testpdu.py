@@ -7,7 +7,7 @@ import netdicom2.dimseparameters
 import netdicom2.userdataitems
 
 
-class PDUEncodingTestCase(unittest.TestCase):
+class TestPDUEncoding(unittest.TestCase):
     def compare_pdu(self, pdu1, pdu2):
         self.assertIsInstance(pdu1, pdu2.__class__)
         self.assertEqual(pdu1.__dict__, pdu2.__dict__)
@@ -27,7 +27,7 @@ class PDUEncodingTestCase(unittest.TestCase):
         self.decode_and_compare(pdu)
 
 
-class TestSubItemEncodingTestCase(unittest.TestCase):
+class TestSubItemEncoding(unittest.TestCase):
     def decode_and_compare_sub_item(self, item):
         encoded = item.encode()
         stream = cStringIO.StringIO(encoded)

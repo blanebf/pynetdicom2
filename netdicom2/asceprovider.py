@@ -13,21 +13,10 @@ import logging
 from dicom.UID import UID
 
 import netdicom2.dulparameters as dulparameters
-import netdicom2.pdu as pdu
 import netdicom2.userdataitems as userdataitems
 
 
 logger = logging.getLogger(__name__)
-
-
-class AssociationRefused(Exception):
-    def __init__(self, data=None):
-        self.data = data
-
-
-class NoAcceptablePresentationContext(Exception):
-    def __init__(self, data=None):
-        self.data = data
 
 
 class ACSEServiceProvider(object):

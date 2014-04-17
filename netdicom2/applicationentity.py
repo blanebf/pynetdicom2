@@ -21,7 +21,6 @@ import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
 import netdicom2.dimseprovider as dimseprovider
 import netdicom2.asceprovider as asceprovider
-import netdicom2.dimseparameters as dimseparameters
 import netdicom2.userdataitems as userdataitems
 
 
