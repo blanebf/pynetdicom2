@@ -49,8 +49,8 @@ class TestSubItemEncoding(unittest.TestCase):
 
     def test_generic_user_data_sub_item(self):
         test_string = 'test data'
-        item = netdicom2.pdu.GenericUserDataSubItem(item_type=0x5,
-                                                    user_data=test_string)
+        item = netdicom2.userdataitems.GenericUserDataSubItem(
+            item_type=0x5, user_data=test_string)
         self.decode_and_compare_sub_item(item)
 
     def test_maximum_length_sub_item(self):

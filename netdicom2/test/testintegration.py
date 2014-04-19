@@ -16,8 +16,7 @@ class CEchoTestCase(unittest.TestCase):
         ae2 = ae.AE('AET2', 11113, [], [sc.VERIFICATION_SOP_CLASS])
         with ae1:
             with ae2:
-                remote_ae = {'Address': '127.0.0.1', 'Port': 11113,
-                             'AET': 'AET2'}
+                remote_ae = dict(address='127.0.0.1', port=11113, aet='AET2')
                 with ae1.request_association(remote_ae) as assoc:
                     self.assertIsNotNone(assoc)
                     service = assoc.get_scu(sc.VERIFICATION_SOP_CLASS)

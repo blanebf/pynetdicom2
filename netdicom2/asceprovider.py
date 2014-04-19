@@ -39,19 +39,30 @@ class ACSEServiceProvider(object):
         # build association service parameters object
         assoc_rq = dulparameters.AAssociateServiceParameters()
         assoc_rq.application_context_name = self.application_context_name
-        assoc_rq.calling_ae_title = self.local_ae['AET']
-        assoc_rq.called_ae_title = self.remote_ae['AET']
+        assoc_rq.calling_ae_title = self.local_ae['aet']
+        assoc_rq.called_ae_title = self.remote_ae['aet']
         max_pdu_length_par = userdataitems.MaximumLengthSubItem(mp)
         if users_pdu:
             assoc_rq.user_information = [max_pdu_length_par] + users_pdu
         else:
             assoc_rq.user_information = [max_pdu_length_par]
+        username = remote_ae.get('username')
+        password = remote_ae.get('password')
+
+        if username and password:
+            assoc_rq.user_information.append(
+                userdataitems.UserIdentityNegotiationSubItem(username,
+                                                             password))
+        elif username:
+            assoc_rq.user_information.append(
+                userdataitems.UserIdentityNegotiationSubItem(
+                    username, user_identity_type=1))
+
         assoc_rq.calling_presentation_address = (
-            self.local_ae['Address'], self.local_ae['Port'])
+            self.local_ae['address'], self.local_ae['port'])
         assoc_rq.called_presentation_address = (
-            self.remote_ae['Address'], self.remote_ae['Port'])
+            self.remote_ae['address'], self.remote_ae['port'])
         assoc_rq.presentation_context_definition_list = pcdl
-        logger.debug(pcdl)
         # send A-Associate request
         logger.debug("Sending Association Request")
         self.dul.send(assoc_rq)

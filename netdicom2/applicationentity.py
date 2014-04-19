@@ -212,13 +212,13 @@ class AE(threading.Thread):
             supported_transfer_syntax = [ExplicitVRLittleEndian,
                                          ImplicitVRLittleEndian,
                                          ExplicitVRBigEndian]
-        self.local_ae = {'Address': platform.node(), 'Port': port,
-                         'AET': ae_title}
+        self.local_ae = {'address': platform.node(), 'port': port,
+                         'aet': ae_title}
         self.supported_sop_classes_as_scu = sop_scu
         self.supported_sop_classes_as_scp = sop_scp
         self.supported_transfer_syntax = supported_transfer_syntax
         self.max_number_of_associations = 25
-        threading.Thread.__init__(self, name=self.local_ae['AET'])
+        threading.Thread.__init__(self, name=self.local_ae['aet'])
 
         self.local_server_socket = socket.socket(socket.AF_INET,
                                                  socket.SOCK_STREAM)
