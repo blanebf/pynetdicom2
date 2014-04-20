@@ -58,10 +58,10 @@ class ACSEServiceProvider(object):
                 userdataitems.UserIdentityNegotiationSubItem(
                     username, user_identity_type=1))
 
-        assoc_rq.calling_presentation_address = (
-            self.local_ae['address'], self.local_ae['port'])
-        assoc_rq.called_presentation_address = (
-            self.remote_ae['address'], self.remote_ae['port'])
+        assoc_rq.calling_presentation_address = (self.local_ae['address'],
+                                                 self.local_ae['port'])
+        assoc_rq.called_presentation_address = (self.remote_ae['address'],
+                                                self.remote_ae['port'])
         assoc_rq.presentation_context_definition_list = pcdl
         # send A-Associate request
         logger.debug("Sending Association Request")
@@ -97,21 +97,17 @@ class ACSEServiceProvider(object):
                     (cc[0], uid, UID(cc[2])))
         return True
 
-    def accept(self, acceptable_presentation_contexts=None, wait=True):
+    def accept(self, assoc_req, acceptable_presentation_contexts=None):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
         acceptable_presentation_contexts"""
-        assoc = self.dul.receive(wait=True)
-        if not assoc:
-            return None
-
-        self.max_pdu_length = assoc.user_information[0].maximum_length_received
+        self.max_pdu_length = assoc_req.user_information[0].maximum_length_received
 
         # analyse proposed presentation contexts
         rsp = []
         self.accepted_presentation_contexts = []
         acceptable_sop = [x[0] for x in acceptable_presentation_contexts]
-        for ii in assoc.presentation_context_definition_list:
+        for ii in assoc_req.presentation_context_definition_list:
             proposed_sop = ii[1]
             proposed_ts = ii[2]
             if proposed_sop in acceptable_sop:
@@ -131,13 +127,20 @@ class ACSEServiceProvider(object):
                 rsp.append((ii[0], 1, ''))
 
         # Send response
-        res = assoc
+        res = assoc_req
         res.presentation_context_definition_list = []
         res.presentation_context_definition_result_list = rsp
         res.result = 0
-        res.user_information = assoc.user_information
+        res.user_information = assoc_req.user_information
         self.dul.send(res)
         return True
+
+    def reject(self, result, source, diag):
+        response = dulparameters.AAssociateServiceParameters()
+        response.result = result
+        response.result_source = source
+        response.diagnostic = diag
+        self.dul.send(response)
 
     def release(self, reason):
         """Requests the release of the associations and waits for
@@ -147,13 +150,11 @@ class ACSEServiceProvider(object):
         self.dul.send(rel)
         rsp = self.dul.receive(wait=True)
         return rsp
-        # self.dul.kill()
 
     def abort(self):
         """Signifies the abortion of the association."""
         self.dul.send(dulparameters.AAbortServiceParameters())
         time.sleep(0.5)
-        # self.dul.kill()
 
     def check_release(self):
         """Checks for release request from the remote AE. Upon reception of

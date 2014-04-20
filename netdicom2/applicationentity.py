@@ -106,9 +106,16 @@ class AssociationAcceptor(threading.Thread, Association):
         super(AssociationAcceptor, self).kill()
 
     def run(self):
-        self.asce.accept(self.ae.acceptable_presentation_contexts)
-        # call back
-        self.ae.on_association_request(self)
+        assoc_req = self.dul.receive(wait=True)
+        result, source, diag = self.ae.on_association_request(assoc_req)
+        if result == 0:
+            self.asce.accept(assoc_req,
+                             self.ae.acceptable_presentation_contexts)
+        else:
+            self.asce.reject(result, source, diag)
+            self.kill()
+            return
+
         # build list of SOPClasses supported
         self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
                                    self.asce.accepted_presentation_contexts]
@@ -125,13 +132,11 @@ class AssociationAcceptor(threading.Thread, Association):
                         [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
                 except IndexError:
                     raise exceptions.ClassNotSupportedError(
-                        'SOP Class %s not supported as SCP' % uid)
-                obj = sopclass.SOP_CLASSES[uid.value](ae=self.ae, uid=sop_class,
-                                                      dimse=self.dimse,
-                                                      pcid=pcid,
-                                                      transfer_syntax=transfer_syntax,
-                                                      max_pdu_length=self.asce.max_pdu_length,
-                                                      asce=self.asce)
+                        'SOP Class {0} not supported as SCP'.format(uid))
+                obj = sopclass.SOP_CLASSES[uid.value](
+                    ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
+                    transfer_syntax=transfer_syntax,
+                    max_pdu_length=self.asce.max_pdu_length)
                 obj.scp(dimse_msg)  # run SCP
             if self.asce.check_release():
                 self.kill()
@@ -319,13 +324,32 @@ class AE(threading.Thread):
         assoc.release(0)
 
     def on_association_request(self, assoc):
-        pass
+        """Returns result of association request.
+
+        Based on return value association accept or association reject PDU is
+        sent in response. Default implementation of the method accepts all
+        incoming association requests.
+
+        :param assoc: association request parameters
+        :return: tuple of the following values: Result, Source, Reason/Diag. as
+        described in PS 3.8 (9.3.4 A-ASSOCIATE-RJ PDU STRUCTURE). If association
+        is accepted the first value of the tuple (result) should be 0.
+        """
+        return 0, 0, 0
 
     def on_association_response(self, result):
         pass
 
     def on_receive_echo(self, service):
-        pass
+        """Default handling of C-ECHO command. Always returns SUCCESS code
+
+        User should override this method in sub-class to provide custom
+        handling of the command.
+
+        :param service: service instance that received C-ECHO
+        :return: status that should be sent in response
+        """
+        return sopclass.SUCCESS
 
     def on_receive_store(self, service, ds):
         pass

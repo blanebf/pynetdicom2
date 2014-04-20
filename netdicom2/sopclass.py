@@ -40,14 +40,14 @@ class Status(object):
     converting status codes.
     """
 
-    def __init__(self, type_, description, code_range):
+    def __init__(self, status_type, description, code_range):
         """Initializes new Status instance
 
-        :param type_: status type (Success, Pending, Warning, Failure)
+        :param status_type: status type (Success, Pending, Warning, Failure)
         :param description: status description
         :param code_range: status code range
         """
-        self.type_ = type_
+        self.status_type = status_type
         self.description = description
         self.code_range = code_range
 
@@ -60,12 +60,13 @@ class Status(object):
         return self.code_range[0]
 
     def __repr__(self):
-        """Returns status string representation:
-        <status type> <status description>
+        """Returns status string representation
 
         :return: status string representation
         """
-        return '%s %s' % (self.type_, self.description)
+        return 'Status(status_type={self.status_type}, ' \
+               'description={self.description}, ' \
+               'code_range={self.code_range})'.format(self=self)
 
 
 SUCCESS = Status('Success', 'Sub-operations Complete - No Failure or Warnings',
@@ -207,16 +208,15 @@ class ServiceClass(object):
     sop_classes = []
 
     def __init__(self, ae, uid, dimse, pcid, transfer_syntax,
-                 max_pdu_length=16000, asce=None):
+                 max_pdu_length=16000):
         """
 
         :param ae: AE instance that this service class belongs to
         :param uid: service SOP Class UID
         :param dimse: provider for DIMSE messages
-        :param pcid:
+        :param pcid: presentation context ID
         :param transfer_syntax: service transfer syntax
         :param max_pdu_length: maximum PDU length. Defaults to 16000
-        :param asce: association messages provider
         """
         self.ae = ae
         self.uid = uid
@@ -224,7 +224,6 @@ class ServiceClass(object):
         self.pcid = pcid
         self.transfer_syntax = transfer_syntax
         self.max_pdu_length = max_pdu_length
-        self.asce = asce
 
     def code_to_status(self, code):
         """Converts code to status
@@ -241,46 +240,49 @@ class ServiceClass(object):
         return Status('Failure', 'Unknown or unexpected status',
                       xrange(code, code))
 
-    def check_asce(self):
-        """Checks if association provider was initialized.
-
-        If it was not, then service can not be used as SCP
-
-        :raise exceptions.NetDICOMError: if association provider was not
-        initialized
-        """
-        if not self.asce:
-            raise exceptions.NetDICOMError('Association is not specified. '
-                                           'Service does not support provider '
-                                           'class')
-
 
 class VerificationServiceClass(ServiceClass):
-    statuses = [SUCCESS]
+    """Implementation of verification service SOP Class.
+
+    Class provides implementation for both SCU as SCP roles.
+    """
+    statuses = [SUCCESS, UNABLE_TO_PROCESS]
     sop_classes = [VERIFICATION_SOP_CLASS]
 
-    def scu(self, id_):
+    def scu(self, msg_id):
+        """Sends verification request and returns it's status result
+
+        :param msg_id: message ID
+        :return: status in response message. `SUCCESS` if verification was
+        successfully completed.
+        """
         c_echo = dimseparameters.CEchoServiceParameters()
-        c_echo.message_id = id_
+        c_echo.message_id = msg_id
         c_echo.affected_sop_class_uid = self.uid
 
         self.dimse.send(c_echo, self.pcid, self.max_pdu_length)
 
-        ans, id_ = self.dimse.receive(wait=True)
+        ans, msg_id = self.dimse.receive(wait=True)
         return self.code_to_status(ans.status)
 
     def scp(self, msg):
-        self.check_asce()
+        """Process received C-ECHO.
+
+        Method delegates actual handling of C-ECHO to AE instance by calling
+        its `on_receive_echo` method and expecting response status from it.
+
+        :param msg: incoming C-ECHO message
+        """
+        try:
+            status = self.ae.on_receive_echo(self)
+        except exceptions.EventHandlingError:
+            status = UNABLE_TO_PROCESS
+            logger.error('There was an exception on on_receive_echo callback')
+
         rsp = dimseparameters.CEchoServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
-        rsp.status = SUCCESS
-
-        # send response
-        try:
-            self.ae.on_receive_echo(self)
-        except exceptions.EventHandlingError:
-            logger.error('There was an exception on OnReceiveEcho callback')
-        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        rsp.status = status
+        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
 
 class StorageServiceClass(ServiceClass):
@@ -326,7 +328,6 @@ class StorageServiceClass(ServiceClass):
         return self.code_to_status(ans.status.value)
 
     def scp(self, msg):
-        self.check_asce()
         try:
             ds = dsutils.decode(msg.dataset,
                                 self.transfer_syntax.is_implicit_VR,
@@ -340,7 +341,7 @@ class StorageServiceClass(ServiceClass):
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(status)
-        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
 
 class QueryRetrieveServiceClass(ServiceClass):
@@ -375,13 +376,12 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
             d = dsutils.decode(ans.identifier,
                                self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
-            status = self.code_to_status(ans.status.value).type_
+            status = self.code_to_status(ans.status.value).status_type
             yield status, d
             if status != 'Pending':
                 break
 
     def scp(self, msg):
-        self.check_asce()
         ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
@@ -397,14 +397,14 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
                                             self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)
             # send response
-            self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
             time.sleep(0.001)
 
         rsp = dimseparameters.CFindServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
 
 class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
@@ -431,7 +431,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
             # receive c-store
             msg, id_ = self.dimse.receive(wait=True)
             if isinstance(msg, dimseparameters.CGetServiceParameters):
-                if self.code_to_status(msg.status.value).type_ == 'Pending':
+                if self.code_to_status(msg.status.value).status_type == 'Pending':
                     pass  # pending. intermediate C-GET response
                 else:
                     break  # last answer
@@ -482,13 +482,12 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
             ans, id_ = self.dimse.receive(wait=False)
             if not ans:
                 continue
-            status = self.code_to_status(ans.status.value).type_
+            status = self.code_to_status(ans.status.value).status_type
             if status != 'Pending':
                 break
             yield status
 
     def scp(self, msg):
-        self.check_asce()
         ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
@@ -518,7 +517,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
             completed += 1
 
             # send response
-            self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
         rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
@@ -528,7 +527,7 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         rsp.number_of_failed_sub_operations = failed
         rsp.number_of_warning_sub_operations = warning
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
         assoc.release(0)
 
 
@@ -562,13 +561,12 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
             d = dsutils.decode(ans.identifier,
                                self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
-            status = self.code_to_status(ans.status.value).type_
+            status = self.code_to_status(ans.status.value).status_type
             yield status, d
             if status != 'Pending':
                 break
 
     def scp(self, msg):
-        self.check_asce()
         ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
@@ -584,7 +582,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
                                             self.transfer_syntax.is_implicit_VR,
                                             self.transfer_syntax.is_little_endian)
             # send response
-            self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
             time.sleep(0.001)
 
         # send final response
@@ -592,4 +590,4 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.asce.max_pdu_length)
+        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
