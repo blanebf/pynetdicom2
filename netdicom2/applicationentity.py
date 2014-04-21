@@ -281,8 +281,10 @@ class AE(threading.Thread):
                                                              client_socket))
 
             # delete dead associations
+            # TODO Fix removing dead  associations
             for association in self.associations:
-                if not association.isAlive():
+                if hasattr(association, 'isAlive') and \
+                        not association.isAlive():
                     self.associations.remove(association)
             if not count % 50:
                 gc.collect()
