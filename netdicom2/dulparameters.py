@@ -40,26 +40,6 @@ class AAssociateServiceParameters(ServiceParam):
         self.session_requirements = ''
 
 
-class AReleaseServiceParameters(object):
-
-    def __init__(self):
-        self.reason = None
-        self.result = None   # Must be None for Request and Indication
-                             # Must be "affirmative" for Response and
-                             # Confirmation
-
-
-class AAbortServiceParameters(object):
-    def __init__(self):
-        self.abort_source = None
-        self.user_information = None
-
-
-class APAbortServiceParameters(object):
-    def __init__(self):
-        self.provider_reason = None
-
-
 class PDataServiceParameters(object):
     def __init__(self):
         # should be of the form [ [ID, pdv], [ID, pdv] ... ]

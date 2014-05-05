@@ -269,12 +269,12 @@ def primitive_to_event(primitive):
             return 'Evt7'  # A-ASSOCIATE Response (accept)
         else:
             return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, dulparameters.AReleaseServiceParameters):
-        if primitive.result is None:
+    elif isinstance(primitive, pdu.AReleasePDUBase):
+        if primitive.pdu_type == pdu.AReleaseRqPDU.pdu_type:
             return 'Evt11'  # A-Release Request
         else:
             return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, dulparameters.AAbortServiceParameters):
+    elif isinstance(primitive, pdu.AAbortPDU):
         return 'Evt15'
     elif isinstance(primitive, dulparameters.PDataServiceParameters):
         return 'Evt9'

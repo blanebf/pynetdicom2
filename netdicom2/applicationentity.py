@@ -19,9 +19,11 @@ from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
 import netdicom2.sopclass as sopclass
 import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
+import netdicom2.dulparameters as dulparameters
 import netdicom2.dimseprovider as dimseprovider
 import netdicom2.asceprovider as asceprovider
 import netdicom2.userdataitems as userdataitems
+import netdicom2.pdu as pdu
 
 
 class Association(object):
@@ -45,6 +47,17 @@ class Association(object):
         self.asce = asceprovider.ACSEServiceProvider(self.dul)
         self.dimse = dimseprovider.DIMSEServiceProvider(self.dul)
 
+    def get_dul_message(self):
+        dul_msg = self.dul.receive(True)
+        if isinstance(dul_msg, dulparameters.PDataServiceParameters):
+            return dul_msg
+        elif isinstance(dul_msg, pdu.AReleaseRqPDU):
+            pass  # TODO Raise release exception
+        elif isinstance(dul_msg, pdu.AAbortPDU):
+            pass  # TODO Raise abort exception
+        else:
+            pass  # TODO Raise generic exception
+
     def kill(self):
         """Stops internal DUL service provider.
 
@@ -58,24 +71,18 @@ class Association(object):
             time.sleep(0.001)
         self.dul.kill()
 
-    def release(self, reason):
-        """Releases association with specified reason.
+    def release(self):
+        """Releases association.
+
+        Requests the release of the associations and waits for
+        confirmation
 
         :rtype : None
-        :param reason: release reason
         """
-        self.asce.release(reason)
+        self.dul.send(pdu.AReleaseRqPDU())
+        rsp = self.dul.receive(wait=True)
         self.kill()
-
-    def abort(self, reason):
-        """Aborts association with specified reason
-
-        :rtype : None
-        :param reason: abort reason
-        """
-        # self.asce.abort(reason) TODO: Look into passing abort reason
-        self.asce.abort()
-        self.kill()
+        return rsp
 
 
 class AssociationAcceptor(threading.Thread, Association):
@@ -93,7 +100,7 @@ class AssociationAcceptor(threading.Thread, Association):
         Association.__init__(self, local_ae, client_socket)
         threading.Thread.__init__(self)
         self.client_socket = client_socket
-        self._kill = False
+        self.is_killed = False
         self.sop_classes_as_scp = []
         self.start()
 
@@ -102,19 +109,28 @@ class AssociationAcceptor(threading.Thread, Association):
 
         :rtype : None
         """
-        self._kill = True
+        self.is_killed = True
         super(AssociationAcceptor, self).kill()
+
+    def abort(self, reason):
+        """Aborts association with specified reason
+
+        :rtype : None
+        :param reason: abort reason
+        """
+        self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
+        self.kill()
 
     def run(self):
         assoc_req = self.dul.receive(wait=True)
-        result, source, diag = self.ae.on_association_request(assoc_req)
-        if result == 0:
-            self.asce.accept(assoc_req,
-                             self.ae.acceptable_presentation_contexts)
-        else:
-            self.asce.reject(result, source, diag)
+        try:
+            self.ae.on_association_request(assoc_req)
+        except exceptions.AssociationRejectedError as e:
+            self.asce.reject(e.result, e.source, e.diagnostic)
             self.kill()
             return
+
+        self.asce.accept(assoc_req, self.ae.acceptable_presentation_contexts)
 
         # build list of SOPClasses supported
         self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
@@ -122,7 +138,7 @@ class AssociationAcceptor(threading.Thread, Association):
         self.association_established = True
 
         # association established. Listening on local and remote interfaces
-        while not self._kill:
+        while not self.is_killed:
             time.sleep(0.001)
             dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
             if dimse_msg:  # dimse message received
@@ -152,6 +168,15 @@ class AssociationRequester(Association):
         self.sop_classes_as_scu = []
         self.association_refused = False
         self._request()
+
+    def abort(self, reason=0):
+        """Aborts association with specified reason
+
+        :rtype : None
+        :param reason: abort reason
+        """
+        self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
+        self.kill()
 
     def _request(self):
         ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
@@ -323,21 +348,19 @@ class AE(threading.Thread):
             raise Exception('Failed to establish association')
         self.associations.append(assoc)
         yield assoc
-        assoc.release(0)
+        assoc.release()
 
     def on_association_request(self, assoc):
-        """Returns result of association request.
+        """Extra processing of the association request.
 
-        Based on return value association accept or association reject PDU is
-        sent in response. Default implementation of the method accepts all
+        Default implementation of the method does nothing and thus accepts all
         incoming association requests.
+        If association should be rejected user should override this method
+        in a sub-class and raise `AssociationRejectedError` when appropriate
 
         :param assoc: association request parameters
-        :return: tuple of the following values: Result, Source, Reason/Diag. as
-        described in PS 3.8 (9.3.4 A-ASSOCIATE-RJ PDU STRUCTURE). If association
-        is accepted the first value of the tuple (result) should be 0.
         """
-        return 0, 0, 0
+        pass
 
     def on_association_response(self, result):
         pass

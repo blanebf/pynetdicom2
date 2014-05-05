@@ -98,15 +98,55 @@ class AssociationError(NetDICOMError):
 
 class AssociationRejectedError(AssociationError):
     """Raised when remote application entity has rejected
-    requested association."""
+    requested association.
+    Exception has 3 instance attributes to indicate why association was
+    rejected:
+        * Result,
+        * Source,
+        * Reason/Diag
+    as  described in PS 3.8 (9.3.4 A-ASSOCIATE-RJ PDU STRUCTURE)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, result, source, diagnostic, *args, **kwargs):
         """Overrides base exception initialization
 
+        For convenience the following documentation has quotes from DICOM
+        standard (2011) explaining possible values of the exception attributes
+        and their meaning
+
+        :param result: 1 - rejected-permanent or  2 - rejected-transient
+        :param source: This Source field shall contain an integer value
+        encoded as an unsigned binary number.
+        One of the following values shall be used:
+            * 1 - DICOM UL service-user
+            * 2 - DICOM UL service-provider (ACSE related function)
+            * 3 - DICOM UL service-provider
+                 (Presentation related function)
+        :param diagnostic: This field shall contain an integer value encoded
+        as an unsigned binary number. If the Source field has the value
+        (1) DICOM UL service-user, it shall take one of the following:
+            * 1 - no-reason-given
+            * 2 - application-context-name-not-supported
+            * 3 - calling-AE-title-not-recognized
+            * 4-6 - reserved
+            * 7 - called-AE-title-not-recognized
+            * 8-10 - reserved
+        If the Source field has the value (2) DICOM UL service provided
+        (ACSE related function), it shall take one of the following:
+            * 1 - no-reason-given
+            * 2 - protocol-version-not-supported
+        If the Source field has the value (3) DICOM UL service provided
+        (Presentation related function), it shall take one of the following:
+            * 0 - reserved
+            * 1 - temporary-congestion
+            * 2 - local-limit-exceeded
+            * 3-7 - reserved
         :param args: positional arguments
         :param kwargs: keyword arguments
         """
         super(AssociationRejectedError, self).__init__(*args, **kwargs)
+        self.result = result
+        self.source = source
+        self.diagnostic = diagnostic
 
 
 class AssociationReleasedError(AssociationError):

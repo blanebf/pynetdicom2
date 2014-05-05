@@ -13,6 +13,7 @@ import logging
 from dicom.UID import UID
 
 import netdicom2.dulparameters as dulparameters
+import netdicom2.pdu as pdu
 import netdicom2.userdataitems as userdataitems
 
 
@@ -142,29 +143,13 @@ class ACSEServiceProvider(object):
         response.diagnostic = diag
         self.dul.send(response)
 
-    def release(self, reason):
-        """Requests the release of the associations and waits for
-        confirmation"""
-        rel = dulparameters.AReleaseServiceParameters()
-        rel.reason = reason
-        self.dul.send(rel)
-        rsp = self.dul.receive(wait=True)
-        return rsp
-
-    def abort(self):
-        """Signifies the abortion of the association."""
-        self.dul.send(dulparameters.AAbortServiceParameters())
-        time.sleep(0.5)
-
     def check_release(self):
         """Checks for release request from the remote AE. Upon reception of
         the request a confirmation is sent"""
         rel = self.dul.peek()
-        if isinstance(rel, dulparameters.AReleaseServiceParameters):
+        if isinstance(rel, pdu.AReleaseRqPDU):
             self.dul.receive(wait=False)
-            release_rsp = dulparameters.AReleaseServiceParameters()
-            release_rsp.result = 0
-            self.dul.send(release_rsp)
+            self.dul.send(pdu.AReleaseRpPDU())
             return True
         else:
             return False
@@ -172,8 +157,7 @@ class ACSEServiceProvider(object):
     def check_abort(self):
         """Checks for abort indication from the remote AE. """
         rel = self.dul.peek()
-        if isinstance(rel, (dulparameters.AAbortServiceParameters,
-                            dulparameters.APAbortServiceParameters)):
+        if isinstance(rel, pdu.AAbortPDU):
             self.dul.receive(wait=False)
             return True
         else:

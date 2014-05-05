@@ -459,51 +459,39 @@ class PDataTfPDU(object):
         return 6 + self.pdu_length
 
 
-class AReleaseRqPDU(object):
-    """This class represents the A-RELEASE-RQ PDU"""
+class AReleasePDUBase(object):
+    """Base class for the A-RELEASE-* PDUs."""
+    pdu_type = None
+    pdu_length = 0x00000004  # unsigned int
+    format = struct.Struct('>B B I I')
 
-    def __init__(self, **kwargs):
-        self.pdu_type = kwargs.get('pdu_type', 0x05)  # unsigned byte
-        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
-        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
-        self.reserved2 = kwargs.get('reserved2', 0x00000000)  # unsigned int
+    def __init__(self, reserved1=0x00, reserved2=0x00):
+        self.reserved1 = reserved1  # unsigned byte
+        self.reserved2 = reserved2  # unsigned int
 
     def __repr__(self):
-        return ''.join(['A-RELEASE-RQ PDU\n',
-                        ' PDU type: 0x%02x\n' % self.pdu_type,
-                        ' PDU length: %d\n' % self.pdu_length, '\n'])
+        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
+            self.reserved1, self.reserved2)
 
-    @staticmethod
-    def to_params():
-        """Converts PDU to service parameters.
-
-        Note that method is static, because A-RELEASE-RQ PDU has no
-        variable parameters.
-        :return: PDU converted to service parameters
-        """
-        tmp = dulparameters.AReleaseServiceParameters()
-        tmp.reason = 'normal'
-        tmp.result = 'affirmative'
-        return tmp
+    def to_params(self):
+        # TODO Remove this method
+        return self
 
     def encode(self):
-        return struct.pack('>B B I I', self.pdu_type, self.reserved1,
-                           self.pdu_length, self.reserved2)
+        return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
+                                self.reserved2)
 
     @classmethod
     def decode(cls, rawstring):
-        """Factory method. Decodes A-RELEASE-RQ PDU instance from raw string.
+        """Factory method. Decodes A-RELEASE-* PDU instance from raw string.
 
-        :rtype : AReleaseRqPDU
         :param rawstring: rawstring containing binary representation of the
-        A-RELEASE-RQ PDU
+        A-RELEASE-* PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        pdu_type, reserved1, pdu_length, \
-            reserved2 = struct.unpack('> B B I I', stream.read(10))
-        return cls(pdu_type=pdu_type, reserved1=reserved1,
-                   pdu_length=pdu_length, reserved2=reserved2)
+        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))
+        return cls(reserved1=reserved1, reserved2=reserved2)
 
     @staticmethod
     def total_length():
@@ -517,107 +505,58 @@ class AReleaseRqPDU(object):
         return 10
 
 
-class AReleaseRpPDU(object):
-    """This class represents the A-RELEASE-RP PDU"""
+class AReleaseRqPDU(AReleasePDUBase):
+    """This class represents the A-RELEASE-RQ PDU.
 
-    def __init__(self, **kwargs):
-        self.pdu_type = kwargs.get('pdu_type', 0x06)   # unsigned byte
-        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
-        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
-        self.reserved2 = kwargs.get('reserved2', 0x00000000)  # unsigned int
+    PS 3.8-2009 9.3.6 A-RELEASE-RQ PDU STRUCTURE
+    """
+    pdu_type = 0x05
 
     def __repr__(self):
-        return ''.join(['A-RELEASE-RP PDU\n',
-                        ' PDU type: 0x%02x\n' % self.pdu_type,
-                        ' PDU length: %d\n' % self.pdu_length + '\n'])
+        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
+            self.reserved1, self.reserved2)
 
-    @staticmethod
-    def to_params():
-        """Converts PDU to service parameters.
 
-        Note that method is static, because A-RELEASE-RP PDU has no
-        variable parameters.
-        :return: PDU converted to service parameters
-        """
-        tmp = dulparameters.AReleaseServiceParameters()
-        tmp.reason = 'normal'
-        tmp.result = 'affirmative'
-        return tmp
+class AReleaseRpPDU(AReleasePDUBase):
+    """This class represents the A-RELEASE-RP PDU.
 
-    def encode(self):
-        return struct.pack('>B B I I', self.pdu_type, self.reserved1,
-                           self.pdu_length, self.reserved2)
+    PS 3.8-2009 9.3.7 A-RELEASE-RP PDU STRUCTURE
+    """
+    pdu_type = 0x06
 
-    @classmethod
-    def decode(cls, rawstring):
-        """Factory method. Decodes A-RELEASE-RP PDU instance from raw string.
-
-        :rtype : AReleaseRpPDU
-        :param rawstring: rawstring containing binary representation of the
-        A-RELEASE-RP PDU
-        :return: decoded PDU
-        """
-        stream = StringIO(rawstring)
-        pdu_type, reserved1, pdu_length, \
-            reserved2 = struct.unpack('> B B I I', stream.read(10))
-        return cls(pdu_type=pdu_type, reserved1=reserved1,
-                   pdu_length=pdu_length, reserved2=reserved2)
-
-    @staticmethod
-    def total_length():
-        """Returns PDU total length.
-
-        This PDU has a fixed length of 10, so method always returns 10
-        regardless of specific instance
-        :rtype : int
-        :return: PDU total length
-        """
-        return 10
+    def __repr__(self):
+        return 'AReleaseRpPDU(reserved1={0}, reserved2={1})'.format(
+            self.reserved1, self.reserved2)
 
 
 class AAbortPDU(object):
     """This class represents the A-ABORT PDU"""
+    pdu_type = 0x07
+    pdu_length = 0x00000004  # unsigned int
+    format = struct.Struct('>B B I B B B B')
 
-    def __init__(self, source, reason, **kwargs):
-        self.pdu_type = kwargs.get('pdu_type', 0x07)  # unsigned byte
-        self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
-        self.pdu_length = kwargs.get('pdu_length', 0x00000004)  # unsigned int
-        self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
-        self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
-        self.abort_source = source  # unsigned byte
-        self.reason_diag = reason  # unsigned byte
+    def __init__(self, source, reason_diag, reserved1=0x00, reserved2=0x00,
+                 reserved3=0x00):
+        self.reserved1 = reserved1  # unsigned byte
+        self.reserved2 = reserved2  # unsigned byte
+        self.reserved3 = reserved3  # unsigned byte
+        self.source = source  # unsigned byte
+        self.reason_diag = reason_diag  # unsigned byte
 
     def __repr__(self):
-        return ''.join(['A-ABORT PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
-                        ' PDU length: %d\n' % self.pdu_length,
-                        ' Abort Source: %d\n' % self.abort_source,
-                        ' Reason/Diagnostic: %d\n' % self.reason_diag, '\n'])
-
-    @classmethod
-    def from_params(cls, params):
-        # params can be an AAbortServiceParameters or
-        # APAbortServiceParameters object.
-        try:  # User initiated abort
-            return cls(params.abort_source, 0)
-        except AttributeError:  # User provider initiated abort
-            return cls(0, params.provider_reason)
+        return 'AAbortPDU(source={self.abort_source}, ' \
+               'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
+               'reserved2={self.reserved2}, ' \
+               'reserved3={self.reserved3 = reserved3})'.format(self=self)
 
     def to_params(self):
-        # Returns either a A-ABORT of an A-P-ABORT
-        if self.abort_source is not None:
-            tmp = dulparameters.AAbortServiceParameters()
-            tmp.abort_source = self.abort_source
-        elif self.reason_diag is not None:
-            tmp = dulparameters.APAbortServiceParameters()
-            tmp.provider_reason = self.reason_diag
-        else:
-            raise RuntimeError('Unknown abort source')
-        return tmp
+        # TODO Remove this method
+        return self
 
     def encode(self):
-        return struct.pack('>B B I B B B B', self.pdu_type, self.reserved1,
-                           self.pdu_length, self.reserved2, self.reserved3,
-                           self.abort_source, self.reason_diag)
+        return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
+                                self.reserved2, self.reserved3, self.source,
+                                self.reason_diag)
 
     @classmethod
     def decode(cls, rawstring):
@@ -629,11 +568,10 @@ class AAbortPDU(object):
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
-        pdu_type, reserved1, pdu_length, reserved2, reserved3, abort_source, \
-            reason_diag = struct.unpack('> B B I B B B B', stream.read(10))
-        return cls(pdu_type=pdu_type, reserved1=reserved1,
-                   pdu_length=pdu_length, reserved2=reserved2,
-                   reserved3=reserved3, abort_source=abort_source,
+        _, reserved1, _, reserved2, reserved3, abort_source, \
+            reason_diag = cls.format.unpack(stream.read(10))
+        return cls(reserved1=reserved1, reserved2=reserved2,
+                   reserved3=reserved3, source=abort_source,
                    reason_diag=reason_diag)
 
     @staticmethod

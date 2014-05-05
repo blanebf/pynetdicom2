@@ -160,7 +160,7 @@ def ar_10(provider):
 def aa_1(provider):
     # Send A-ABORT PDU (service-user source) and start (or restart
     # if already started) ARTIM timer.
-    provider.pdu = pdu.AAbortPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
     provider.timer.restart()
 
@@ -185,7 +185,8 @@ def aa_3(provider):
 
 def aa_4(provider):
     # Issue A-P-ABORT indication primitive.
-    provider.primitive = dulparameters.AAbortServiceParameters()
+    # TODO look into this action
+    provider.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
     provider.to_service_user.put(provider.primitive)
 
 
@@ -201,7 +202,7 @@ def aa_6(provider):
 
 def aa_7(provider):
     # Send A-ABORT PDU.
-    provider.pdu = pdu.AAbortPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -209,7 +210,7 @@ def aa_8(provider):
     # Send A-ABORT PDU (service-provider source), issue and A-P-ABORT
     # indication, and start ARTIM timer.
     # Send A-ABORT PDU
-    provider.pdu = pdu.AAbortPDU(source=2, reason=0)  # No reason given
+    provider.pdu = pdu.AAbortPDU(source=2, reason_diag=0)  # No reason given
     if provider.remote_client_socket:
         provider.remote_client_socket.send(provider.pdu.encode())
         # Issue A-P-ABORT indication
