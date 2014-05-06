@@ -38,9 +38,3 @@ class AAssociateServiceParameters(ServiceParam):
         self.presentation_context_definition_result_list = []   # List of [ID, result, TrName]
         self.presentation_requirements = 'Presentation Kernel'
         self.session_requirements = ''
-
-
-class PDataServiceParameters(object):
-    def __init__(self):
-        # should be of the form [ [ID, pdv], [ID, pdv] ... ]
-        self.presentation_data_value_list = None

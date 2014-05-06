@@ -40,11 +40,10 @@ class TestSubItemEncoding(unittest.TestCase):
                                                  user_data=[])
         self.decode_and_compare_sub_item(item)
 
-    def test_presentation_data_value_item(self):
+    def test_data_value_item(self):
         test_string = 'test data'
-        item = netdicom2.pdu.PresentationDataValueItem(
-            presentation_context_id=3,
-            presentation_data_value=test_string)
+        item = netdicom2.pdu.PresentationDataValueItem(context_id=3,
+                                                       data_value=test_string)
         self.decode_and_compare_sub_item(item)
 
     def test_generic_user_data_sub_item(self):

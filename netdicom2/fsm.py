@@ -86,7 +86,7 @@ def ae_8(provider):
 
 def dt_1(provider):
     # Send P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.primitive = None
     provider.remote_client_socket.send(provider.pdu.encode())
 
@@ -133,7 +133,7 @@ def ar_6(provider):
 
 def ar_7(provider):
     # Issue P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 

@@ -49,7 +49,7 @@ class Association(object):
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(True)
-        if isinstance(dul_msg, dulparameters.PDataServiceParameters):
+        if isinstance(dul_msg, pdu.PDataTfPDU):
             return dul_msg
         elif isinstance(dul_msg, pdu.AReleaseRqPDU):
             pass  # TODO Raise release exception

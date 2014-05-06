@@ -10,6 +10,7 @@ import logging
 
 import netdicom2.dimsemessages as dimsemessages
 import netdicom2.dulparameters as dulparameters
+import netdicom2.pdu as pdu
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class DIMSEServiceProvider(object):
                 nxt = self.dul.peek()
                 if nxt is None:
                     continue
-                if nxt.__class__ is not dulparameters.PDataServiceParameters:
+                if nxt.__class__ is not pdu.PDataTfPDU:
                     return None, None
                 if self.message.decode(self.dul.receive(wait, timeout)):
                     tmp, self.message = self.message, None
@@ -51,7 +52,7 @@ class DIMSEServiceProvider(object):
                     return tmp.to_params(), tmp.id_
         else:
             cls = self.dul.peek().__class__
-            if cls not in (type(None), dulparameters.PDataServiceParameters):
+            if cls not in (type(None), pdu.PDataTfPDU):
                 logger.debug('Waiting for P-DATA but received %s', cls)
                 return None, None
             if self.message.decode(self.dul.receive(wait, timeout)):

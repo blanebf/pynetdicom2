@@ -41,6 +41,7 @@ import netdicom2.dulparameters as dulparameters
 import netdicom2.dsutils as dsutils
 import netdicom2.dimseparameters
 import netdicom2.exceptions as exceptions
+import netdicom2.pdu as pdu
 
 from dicom._dicom_dict import DicomDictionary
 
@@ -109,7 +110,7 @@ class DIMSEMessage(object):
         """Returns the encoded message as a series of P-DATA service
         parameter objects."""
         self.id_ = id_
-        pdatas = []
+        p_datas = []
         encoded_command_set = dsutils.encode(self.command_set,
                                              self.ts.is_implicit_VR,
                                              self.ts.is_little_endian)
@@ -117,71 +118,62 @@ class DIMSEMessage(object):
         # fragment command set
         pdvs = fragment(max_pdu_length, encoded_command_set)
         assert ''.join(pdvs) == encoded_command_set
-        for ii in pdvs[:-1]:
-            # send only one pdv per pdata primitive
-            pdata = dulparameters.PDataServiceParameters()
-            # not last command fragment
-            pdata.presentation_data_value_list = [[self.id_,
-                                                   struct.pack('b', 1) + ii]]
-            pdatas.append(pdata)
+        for pdv in pdvs[:-1]:
+            # send only one pdv per p-data primitive
+            value_item = pdu.PresentationDataValueItem(
+                self.id_, struct.pack('b', 1) + pdv)
+            p_datas.append(pdu.PDataTfPDU([value_item]))
+
         # last command fragment
-        pdata = dulparameters.PDataServiceParameters()
-        pdata.presentation_data_value_list = [
-            [self.id_, struct.pack('b', 3) + pdvs[-1]]]
-        pdatas.append(pdata)
+        value_item = pdu.PresentationDataValueItem(
+            self.id_, struct.pack('b', 3) + pdvs[-1])
+        p_datas.append(pdu.PDataTfPDU([value_item]))
 
         # fragment data set
         if hasattr(self, 'data_set') and self.data_set is not None:
             pdvs = fragment(max_pdu_length, self.data_set)
             assert ''.join(pdvs) == self.data_set
-            for ii in pdvs[:-1]:
-                pdata = dulparameters.PDataServiceParameters()
-                # not last data fragment
-                pdata.presentation_data_value_list = [
-                    [self.id_, struct.pack('b', 0) + ii]]
-                pdatas.append(pdata)
-            pdata = dulparameters.PDataServiceParameters()
+            for pdv in pdvs[:-1]:
+                value_item = pdu.PresentationDataValueItem(
+                    self.id_, struct.pack('b', 0) + pdv)
+                p_datas.append(pdu.PDataTfPDU([value_item]))
             # last data fragment
-            pdata.presentation_data_value_list = [
-                [self.id_, struct.pack('b', 2) + pdvs[-1]]]
-            pdatas.append(pdata)
+            value_item = pdu.PresentationDataValueItem(
+                self.id_, struct.pack('b', 2) + pdvs[-1])
+            p_datas.append(pdu.PDataTfPDU([value_item]))
 
-        return pdatas
+        return p_datas
 
-    def decode(self, pdata):
+    def decode(self, p_data):
         """Constructs itself receiving a series of P-DATA primitives.
         Returns True when complete, False otherwise."""
-        if not isinstance(pdata, dulparameters.PDataServiceParameters):
+        if not isinstance(p_data, pdu.PDataTfPDU):
             return False
 
-        if pdata is None:
-            return False
-
-        for vv in pdata.presentation_data_value_list:
+        for value_item in p_data.data_value_items:
             # must be able to read P-DATA with several PDVs
-            self.id_ = vv[0]
-            if struct.unpack('b', vv[1][0])[0] in (1, 3):
-                logger.debug('  command fragment %s', self.id_)
-                self.encoded_command_set.append(vv[1][1:])
-                if struct.unpack('b', vv[1][0])[0] == 3:
-                    logger.debug('  last command fragment %s', self.id_)
+            self.id_ = value_item.context_id
+            marker = struct.unpack('b', value_item.data_value[0])[0]
+            if marker in (1, 3):
+                self.encoded_command_set.append(value_item.data_value[1:])
+                if marker == 3:
                     self.command_set = dsutils.decode(
                         ''.join(self.encoded_command_set),
-                        self.ts.is_implicit_VR,
-                        self.ts.is_little_endian)
+                        self.ts.is_implicit_VR, self.ts.is_little_endian)
                     self.encoded_data_set = []
                     self.__class__ = MESSAGE_TYPE[
                         self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:
                         return True  # response: no dataset
-            elif struct.unpack('b', vv[1][0])[0] in (0, 2):
-                self.data_set += vv[1][1:]
+            elif marker in (0, 2):
+                self.data_set += value_item.data_value[1:]
                 logger.debug('  data fragment %s', self.id_)
-                if struct.unpack('b', vv[1][0])[0] == 2:
+                if marker == 2:
                     logger.debug('  last data fragment %s', self.id_)
                     return True
             else:
-                raise exceptions.DIMSEProcessingError('Error')
+                raise exceptions.DIMSEProcessingError(
+                    'Incorrect first PDV byte')
 
         return False
 

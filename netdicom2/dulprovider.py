@@ -276,7 +276,7 @@ def primitive_to_event(primitive):
             return 'Evt14'  # A-Release Response
     elif isinstance(primitive, pdu.AAbortPDU):
         return 'Evt15'
-    elif isinstance(primitive, dulparameters.PDataServiceParameters):
+    elif isinstance(primitive, pdu.PDataTfPDU):
         return 'Evt9'
     else:
         raise exceptions.NetDICOMError('Invalid primitive')

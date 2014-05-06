@@ -389,48 +389,33 @@ class AAssociateRjPDU(object):
 
 class PDataTfPDU(object):
     """This class represents the P-DATA-TF PDU"""
+    pdu_type = 0x04
+    header = struct.Struct('>B B I')
 
-    def __init__(self, pdu_length, presentation_data_value_items, **kwargs):
-        self.pdu_type = kwargs.get('pdu_type', 0x04)  # unsigned byte
-        self.reserved = kwargs.get('reserved', 0x00)  # unsigned byte
-        self.pdu_length = pdu_length  # unsigned int
+    def __init__(self, data_value_items, reserved=0x00):
+        self.reserved = reserved  # unsigned byte
 
         # List of one of more PresentationDataValueItem
-        self.presentation_data_value_items = presentation_data_value_items
+        self.data_value_items = data_value_items
 
     def __repr__(self):
-        tmp = ''.join(['P-DATA-TF PDU\n', ' PDU type: 0x%02x\n' % self.pdu_type,
-                       ' PDU length: %d\n' % self.pdu_length])
-        tmp2 = ''.join(repr(item)
-                       for item in self.presentation_data_value_items)
-        return '%s%s\n' % (tmp, tmp2)
+        return 'PDataTfPDU(pdu_length={self.pdu_length}, ' \
+               'data_value_items=' \
+               '{self.data_value_items}, ' \
+               'reserved={self.reserved})'.format(self=self)
 
-    @classmethod
-    def from_params(cls, params):
-        """Factory method. Create PDU from PDataServiceParameters instance
-
-        :rtype : PDataTfPDU
-        :param params: PDataServiceParameters instance
-        :return: PDU instance
-        """
-        value_items = [PresentationDataValueItem.from_params(v)
-                       for v in params.presentation_data_value_list]
-        pdu_length = sum((i.total_length() for i in value_items))
-        return cls(pdu_length, value_items)
+    @property
+    def pdu_length(self):
+        return sum((i.total_length()
+                    for i in self.data_value_items))
 
     def to_params(self):
-        tmp = dulparameters.PDataServiceParameters()
-        tmp.presentation_data_value_list = [[i.presentation_context_id,
-                                             i.presentation_data_value]
-                                            for i in
-                                            self.presentation_data_value_items]
-        return tmp
+        return self
 
     def encode(self):
-        return struct.pack('>B B I', self.pdu_type, self.reserved,
-                           self.pdu_length)\
+        return self.header.pack(self.pdu_type, self.reserved, self.pdu_length)\
             + ''.join([item.encode()
-                       for item in self.presentation_data_value_items])
+                       for item in self.data_value_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -449,11 +434,9 @@ class PDataTfPDU(object):
                 yield item
 
         stream = StringIO(rawstring)
-        pdu_type, reserved, pdu_length = struct.unpack('> B B I',
-                                                       stream.read(6))
-        presentation_data_value_items = list(iter_items())
-        return cls(pdu_type=pdu_type, reserved=reserved, pdu_length=pdu_length,
-                   presentation_data_value_items=presentation_data_value_items)
+        pdu_type, reserved, pdu_length = cls.header.unpack(stream.read(6))
+        data_value_items = list(iter_items())
+        return cls(data_value_items, reserved)
 
     def total_length(self):
         return 6 + self.pdu_length
@@ -636,12 +619,12 @@ class ApplicationContextItem(object):
 
 
 class PresentationContextItemRQ(object):
-    def __init__(self, item_length, presentation_context_id,
+    def __init__(self, item_length, context_id,
                  abstract_transfer_syntax_sub_items, **kwargs):
         self.item_type = kwargs.get('item_type', 0x20)  # unsigned byte
         self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
         self.item_length = item_length  # unsigned short
-        self.presentation_context_id = presentation_context_id  # unsigned byte
+        self.context_id = context_id  # unsigned byte
 
         self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
         self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
@@ -658,7 +641,7 @@ class PresentationContextItemRQ(object):
                        "  Item type: 0x%02x\n" % self.item_type,
                        "  Item length: %d\n" % self.item_length,
                        "  Presentation context ID: %d\n" %
-                       self.presentation_context_id])
+                       self.context_id])
         tmp2 = ''.join([repr(item)
                         for item in self.abstract_transfer_syntax_sub_items])
         return tmp + tmp2
@@ -675,14 +658,14 @@ class PresentationContextItemRQ(object):
     def to_params(self):
         # Returns a list of the form
         # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
-        return [self.presentation_context_id,
+        return [self.context_id,
                 self.abstract_transfer_syntax_sub_items[0].to_params(),
                 [item.to_params()
                  for item in self.abstract_transfer_syntax_sub_items[1:]]]
 
     def encode(self):
         return struct.pack('>B B H B B B B', self.item_type, self.reserved1,
-                           self.item_length, self.presentation_context_id,
+                           self.item_length, self.context_id,
                            self.reserved2, self.reserved3, self.reserved4)\
             + ''.join([item.encode()
                        for item in self.abstract_transfer_syntax_sub_items])
@@ -702,13 +685,13 @@ class PresentationContextItemRQ(object):
                 yield TransferSyntaxSubItem.decode(stream)
                 next_item_type = next_type(stream)
 
-        item_type, reserved1, item_length, presentation_context_id, \
+        item_type, reserved1, item_length, context_id, \
             reserved2, reserved3, \
             reserved4 = struct.unpack('> B B H B B B B', stream.read(8))
         abstract_transfer_syntax_sub_items = list(iter_items())
         return cls(item_type=item_type, reserved1=reserved1,
                    item_length=item_length,
-                   presentation_context_id=presentation_context_id,
+                   context_id=context_id,
                    reserved2=reserved2, reserved3=reserved3,
                    reserved4=reserved4,
                    abstract_transfer_syntax_sub_items=abstract_transfer_syntax_sub_items)
@@ -718,12 +701,12 @@ class PresentationContextItemRQ(object):
 
 
 class PresentationContextItemAC(object):
-    def __init__(self, item_length, presentation_context_id, result_reason,
+    def __init__(self, item_length, context_id, result_reason,
                  transfer_syntax_sub_item, **kwargs):
         self.item_type = kwargs.get('item_type', 0x21)  # unsigned byte
         self.reserved1 = kwargs.get('reserved1', 0x00)  # unsigned byte
         self.item_length = item_length  # unsigned short
-        self.presentation_context_id = presentation_context_id  # unsigned byte
+        self.context_id = context_id  # unsigned byte
         self.reserved2 = kwargs.get('reserved2', 0x00)  # unsigned byte
         self.result_reason = result_reason  # unsigned byte
         self.reserved3 = kwargs.get('reserved3', 0x00)  # unsigned byte
@@ -736,7 +719,7 @@ class PresentationContextItemAC(object):
                         '  Item type: 0x%02x\n' % self.item_type,
                         '  Item length: %d\n' % self.item_length,
                         '  Presentation context ID: %d\n' %
-                        self.presentation_context_id,
+                        self.context_id,
                         '  Result/Reason: %d\n' % self.result_reason,
                         repr(self.transfer_syntax_sub_item)])
 
@@ -749,13 +732,13 @@ class PresentationContextItemAC(object):
 
     def to_params(self):
         # Returns a list of the form [ID, Response, TransferSyntax].
-        return [self.presentation_context_id, self.result_reason,
+        return [self.context_id, self.result_reason,
                 self.transfer_syntax_sub_item.to_params()]
 
     def encode(self):
         return ''.join([struct.pack('>B B H B B B B', self.item_type,
                                     self.reserved1, self.item_length,
-                                    self.presentation_context_id,
+                                    self.context_id,
                                     self.reserved2, self.result_reason,
                                     self.reserved3),
                         self.transfer_syntax_sub_item.encode()])
@@ -768,13 +751,13 @@ class PresentationContextItemAC(object):
         :param stream: raw data stream
         :return: decoded context item
         """
-        item_type, reserved1, item_length, presentation_context_id, \
+        item_type, reserved1, item_length, context_id, \
             reserved2, result_reason, \
             reserved3 = struct.unpack('> B B H B B B B', stream.read(8))
         transfer_syntax_sub_item = TransferSyntaxSubItem.decode(stream)
         return cls(item_type=item_type, reserved1=reserved1,
                    item_length=item_length,
-                   presentation_context_id=presentation_context_id,
+                   context_id=context_id,
                    reserved2=reserved2, result_reason=result_reason,
                    reserved3=reserved3,
                    transfer_syntax_sub_item=transfer_syntax_sub_item)
@@ -946,18 +929,20 @@ class UserInformationItem(object):
 
 
 class PresentationDataValueItem(object):
-    def __init__(self, presentation_context_id, presentation_data_value):
-        self.item_length = len(presentation_data_value) + 1  # unsigned int
-        self.presentation_context_id = presentation_context_id  # unsigned byte
-        self.presentation_data_value = presentation_data_value  # string
+    header = struct.Struct('>I B')
+
+    def __init__(self, context_id, data_value):
+        self.context_id = context_id  # unsigned byte
+        self.data_value = data_value  # string
 
     def __repr__(self):
-        return ''.join([' Presentation value data item\n',
-                        '  Item length: %d\n' % self.item_length,
-                        '  Presentation context ID: %d\n' %
-                        self.presentation_context_id,
-                        '  Presentation data value: %s ...\n' %
-                        self.presentation_data_value[:20]])
+        return 'PresentationDataValueItem(context_id={0}, ' \
+               'data_value)={1}'.format(
+                   self.context_id, self.data_value)
+
+    @property
+    def item_length(self):
+        return len(self.data_value) + 1
 
     @classmethod
     def from_params(cls, params):
@@ -966,13 +951,13 @@ class PresentationDataValueItem(object):
 
     def to_params(self):
         # Returns a PresentationDataValue
-        return PresentationDataValueItem(self.presentation_context_id,
-                                         self.presentation_data_value)
+        return PresentationDataValueItem(self.context_id,
+                                         self.data_value)
 
     def encode(self):
-        return ''.join([struct.pack('>I B', self.item_length,
-                                    self.presentation_context_id),
-                        self.presentation_data_value])
+        return ''.join([self.header.pack(self.item_length,
+                                         self.context_id),
+                        self.data_value])
 
     @classmethod
     def decode(cls, stream):
@@ -984,11 +969,9 @@ class PresentationDataValueItem(object):
         :param stream: raw data stream
         :return: decoded presentation data value item
         """
-        item_length, \
-            presentation_context_id = struct.unpack('> I B', stream.read(5))
-
-        presentation_data_value = stream.read(int(item_length) - 1)
-        return cls(presentation_context_id, presentation_data_value)
+        item_length, context_id = cls.header.unpack(stream.read(5))
+        data_value = stream.read(int(item_length) - 1)
+        return cls(context_id, data_value)
 
     def total_length(self):
         return 4 + self.item_length
