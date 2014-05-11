@@ -18,12 +18,13 @@ class TestPDUEncoding(unittest.TestCase):
     def test_a_associate_rq_pdu(self):
         pdu = netdicom2.pdu.AAssociateRqPDU(called_ae_title='aet1',
                                             calling_ae_title='aet2',
-                                            pdu_length=16000)
+                                            variable_items=[])
         self.decode_and_compare(pdu)
 
     def test_a_associate_ac_pdu(self):
-        pdu = netdicom2.pdu.AAssociateAcPDU(pdu_length=16000, reserved3='aet1',
-                                            reserved4='aet2')
+        pdu = netdicom2.pdu.AAssociateAcPDU(called_ae_title='aet1',
+                                            calling_ae_title='aet2',
+                                            variable_items=[])
         self.decode_and_compare(pdu)
 
 
@@ -36,8 +37,7 @@ class TestSubItemEncoding(unittest.TestCase):
         self.assertEqual(item.__dict__, item2.__dict__)
 
     def test_user_information_item(self):
-        item = netdicom2.pdu.UserInformationItem(item_length=0,
-                                                 user_data=[])
+        item = netdicom2.pdu.UserInformationItem(user_data=[])
         self.decode_and_compare_sub_item(item)
 
     def test_data_value_item(self):

@@ -19,7 +19,6 @@ from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
 import netdicom2.sopclass as sopclass
 import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
-import netdicom2.dulparameters as dulparameters
 import netdicom2.dimseprovider as dimseprovider
 import netdicom2.asceprovider as asceprovider
 import netdicom2.userdataitems as userdataitems
@@ -181,20 +180,14 @@ class AssociationRequester(Association):
     def _request(self):
         ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
                for i in self.ae.acceptable_presentation_contexts]
-
-        ans = self.asce.request(self.ae.local_ae, self.remote_ae,
-                                self.ae.max_pdu_length,
-                                self.ae.presentation_context_definition_list,
-                                users_pdu=ext)
-        self.ae.on_association_response(ans)
-        if not ans:
-            self.association_refused = True
-            self.dul.kill()
-            return
+        response = self.asce.request(
+            self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
+            self.ae.presentation_context_definition_list, users_pdu=ext
+        )
+        self.ae.on_association_response(response)
         self.sop_classes_as_scu = [(context[0], context[1], context[2])
                                    for context in
                                    self.asce.accepted_presentation_contexts]
-
         self.association_established = True
 
     def scu(self, ds, id_):
@@ -341,14 +334,12 @@ class AE(threading.Thread):
     def request_association(self, remote_ae):
         """Requests association to a remote application entity"""
         assoc = AssociationRequester(self, remote_ae=remote_ae)
-        while not assoc.association_established and not assoc.association_refused:
-            time.sleep(0.1)
-        if not assoc.association_established:
-            # TODO Replace this exception
-            raise Exception('Failed to establish association')
         self.associations.append(assoc)
         yield assoc
-        assoc.release()
+        if assoc.association_established:
+            assoc.release()
+        else:
+            assoc.kill()
 
     def on_association_request(self, assoc):
         """Extra processing of the association request.
@@ -362,7 +353,7 @@ class AE(threading.Thread):
         """
         pass
 
-    def on_association_response(self, result):
+    def on_association_response(self, response):
         pass
 
     def on_receive_echo(self, service):

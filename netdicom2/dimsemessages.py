@@ -37,7 +37,6 @@ import struct
 from dicom.dataset import Dataset
 from dicom.UID import ImplicitVRLittleEndian
 
-import netdicom2.dulparameters as dulparameters
 import netdicom2.dsutils as dsutils
 import netdicom2.dimseparameters
 import netdicom2.exceptions as exceptions

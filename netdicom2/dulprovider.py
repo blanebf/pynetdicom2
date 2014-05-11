@@ -26,7 +26,6 @@ import struct
 import netdicom2.timer as timer
 import netdicom2.fsm as fsm
 import netdicom2.pdu as pdu
-import netdicom2.dulparameters as dulparameters
 import netdicom2.exceptions as exceptions
 
 
@@ -262,18 +261,16 @@ class DULServiceProvider(threading.Thread):
 
 
 def primitive_to_event(primitive):
-    if isinstance(primitive, dulparameters.AAssociateServiceParameters):
-        if primitive.result is None:
-            return 'Evt1'  # A-ASSOCIATE Request
-        elif primitive.result == 0:
-            return 'Evt7'  # A-ASSOCIATE Response (accept)
-        else:
-            return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, pdu.AReleasePDUBase):
-        if primitive.pdu_type == pdu.AReleaseRqPDU.pdu_type:
-            return 'Evt11'  # A-Release Request
-        else:
-            return 'Evt14'  # A-Release Response
+    if isinstance(primitive, pdu.AAssociateRqPDU):
+        return 'Evt1'  # A-ASSOCIATE Request
+    elif isinstance(primitive, pdu.AAssociateAcPDU):
+        return 'Evt7'  # A-ASSOCIATE Response (accept)
+    elif isinstance(primitive, pdu.AAssociateRjPDU):
+        return 'Evt8'  # A-ASSOCIATE Response (reject)
+    elif isinstance(primitive, pdu.AReleaseRqPDU):
+        return 'Evt11'  # A-Release Request
+    elif isinstance(primitive, pdu.AReleaseRpPDU):
+        return 'Evt14'  # A-Release Response
     elif isinstance(primitive, pdu.AAbortPDU):
         return 'Evt15'
     elif isinstance(primitive, pdu.PDataTfPDU):

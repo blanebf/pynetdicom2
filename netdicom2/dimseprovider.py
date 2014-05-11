@@ -9,7 +9,6 @@ import time
 import logging
 
 import netdicom2.dimsemessages as dimsemessages
-import netdicom2.dulparameters as dulparameters
 import netdicom2.pdu as pdu
 
 

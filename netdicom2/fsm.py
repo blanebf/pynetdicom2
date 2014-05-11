@@ -12,7 +12,6 @@ DICOM, Part 8, Section 7
 import socket
 
 import netdicom2.pdu as pdu
-import netdicom2.dulparameters as dulparameters
 
 
 # Finite State machine action definitions
@@ -32,7 +31,7 @@ def ae_1(provider):
 
 def ae_2(provider):
     # Send A-ASSOCIATE-RQ PDU
-    provider.pdu = pdu.AAssociateRqPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -67,20 +66,14 @@ def ae_6(provider):
 
 def ae_7(provider):
     # Send A-ASSOCIATE-AC PDU
-    provider.pdu = pdu.AAssociateAcPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def ae_8(provider):
     # Send A-ASSOCIATE-RJ PDU and start ARTIM timer
     # not sure about this ...
-    if provider.primitive.diagnostic is not None:
-        provider.primitive.result_source = 1
-    else:
-        provider.primitive.diagnostic = 1
-        provider.primitive.result_source = 2
-
-    provider.pdu = pdu.AAssociateRjPDU.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
