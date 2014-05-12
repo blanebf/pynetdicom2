@@ -136,8 +136,7 @@ class ACSEServiceProvider(object):
         )
         self.dul.send(res)
 
-    def reject(self, result, source, diag):
-        self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
+
 
     def check_release(self):
         """Checks for release request from the remote AE. Upon reception of

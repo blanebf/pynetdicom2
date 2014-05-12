@@ -187,7 +187,7 @@ class DULServiceProvider(threading.Thread):
                 pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
                 self.pdu = pdu_type.decode(raw_pdu)
                 self.event.append(event)
-                self.primitive = self.pdu.to_params()
+                self.primitive = self.pdu
             except KeyError:
                 logger.error('Unrecognized or invalid PDU')
                 self.event.append('Evt19')

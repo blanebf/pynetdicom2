@@ -120,12 +120,21 @@ class AssociationAcceptor(threading.Thread, Association):
         self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
         self.kill()
 
+    def reject(self, result, source, diag):
+        """Rejects association with specified parameters
+
+        :param result:
+        :param source:
+        :param diag:
+        """
+        self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
+
     def run(self):
         assoc_req = self.dul.receive(wait=True)
         try:
             self.ae.on_association_request(assoc_req)
         except exceptions.AssociationRejectedError as e:
-            self.asce.reject(e.result, e.source, e.diagnostic)
+            self.reject(e.result, e.source, e.diagnostic)
             self.kill()
             return
 

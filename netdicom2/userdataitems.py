@@ -66,7 +66,7 @@ class ImplementationClassUIDSubItem(object):
 
     def __repr__(self):
         return 'ImplementationClassUIDSubItem(' \
-               'implementation_class_uid={self.implementation_class_uid}, ' \
+               'implementation_class_uid="{self.implementation_class_uid}", ' \
                'reserved={self.reserved})'.format(self=self)
 
     @property
@@ -101,7 +101,7 @@ class ImplementationVersionNameSubItem(object):
     def __repr__(self):
         return 'ImplementationVersionNameSubItem(' \
                'implementation_version_name=' \
-               '{self.implementation_version_name}, ' \
+               '"{self.implementation_version_name}", ' \
                'reserved={self.reserved})'.format(self=self)
 
     @property
@@ -174,7 +174,7 @@ class ScpScuRoleSelectionSubItem(object):
 
     def __repr__(self):
         return 'ScpScuRoleSelectionSubItem(' \
-               'sop_class_uid={self.sop_class_uid}, ' \
+               'sop_class_uid="{self.sop_class_uid}", ' \
                'scu_role={self.scu_role}, scp_role={self.scp_role}, ' \
                'reserved={self.reserved})'.format(self=self)
 
@@ -293,8 +293,8 @@ class UserIdentityNegotiationSubItem(object):
 
     def __repr__(self):
         return 'UserIdentityNegotiationSubItem(' \
-               'primary_field={self.primary_field}, ' \
-               'secondary_field={self.secondary_field}, ' \
+               'primary_field="{self.primary_field}", ' \
+               'secondary_field="{self.secondary_field}", ' \
                'user_identity_type={self.user_identity_type}, ' \
                'positive_response_req={self.positive_response_req}, ' \
                'reserved={self.reserved})'.format(self=self)
@@ -368,7 +368,7 @@ class UserIdentityNegotiationSubItemAc(object):
 
     def __repr__(self):
         return 'UserIdentityNegotiationSubItemAc(' \
-               'server_response={self.server_response}, ' \
+               'server_response="{self.server_response}", ' \
                'reserved={self.reserved})'.format(self=self)
 
     @property
@@ -425,7 +425,7 @@ class GenericUserDataSubItem(object):
 
     def __repr__(self):
         return 'GenericUserDataSubItem(item_type={self.item_type}, ' \
-               'user_data={self.user_data}, ' \
+               'user_data="{self.user_data}", ' \
                'reserved={self.reserved})'.format(self=self)
 
     @property

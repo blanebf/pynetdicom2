@@ -107,9 +107,6 @@ class AAssociatePDUBase(object):
     def pdu_length(self):
         return 68 + sum((i.total_length() for i in self.variable_items))
 
-    def to_params(self):
-        return self
-
     def encode(self):
         return self.header.pack(self.pdu_type, self.reserved1, self.pdu_length,
                                 self.protocol_version, self.reserved2,
@@ -165,8 +162,8 @@ class AAssociateRqPDU(AAssociatePDUBase):
     pdu_type = 0x01
 
     def __repr__(self):
-        return 'AAssociateRqPDU(called_ae_title={self.called_ae_title}, ' \
-               'calling_ae_title={self.calling_ae_title}, ' \
+        return 'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", ' \
+               'calling_ae_title="{self.calling_ae_title}", ' \
                'variable_items={self.variable_items}, ' \
                'protocol_version={self.protocol_version}, ' \
                'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
@@ -178,8 +175,8 @@ class AAssociateAcPDU(AAssociatePDUBase):
     pdu_type = 0x02
 
     def __repr__(self):
-        return 'AAssociateAcPDU(called_ae_title={self.called_ae_title}, ' \
-               'calling_ae_title={self.calling_ae_title}, ' \
+        return 'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", ' \
+               'calling_ae_title="{self.calling_ae_title}", ' \
                'variable_items={self.variable_items}, ' \
                'protocol_version={self.protocol_version}, ' \
                'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
@@ -187,28 +184,43 @@ class AAssociateAcPDU(AAssociatePDUBase):
 
 
 class AAssociateRjPDU(object):
-    """This class represents the A-ASSOCIATE-RJ PDU"""
+    """This class represents the A-ASSOCIATE-RJ PDU (PS 3.8 9.3.4)"""
     pdu_type = 0x03
     pdu_length = 4  # PDU has fixed length
     format = struct.Struct('>B B I B B B B')
 
     def __init__(self, result, source, reason_diag, reserved1=0x00,
                  reserved2=0x00):
-        self.reserved1 = reserved1  # unsigned byte
-        self.reserved2 = reserved2  # unsigned byte
-        self.result = result  # unsigned byte
-        self.source = source  # unsigned byte
-        self.reason_diag = reason_diag  # unsigned byte
+        """Initializes new ASSOCIATE-RJ PDU with specified field values
+        as described in PS 3.8 9.3.4.
+
+        You can look up possible values for fields in DICOM standard
+        (referenced above) or in documentation for
+        `netdicom2.exceptions.AssociationRejectedError`
+
+        :param result: Result PDU field. (unsigned byte)
+        :param source: Source PDU field (unsigned byte)
+        :param reason_diag: Reason/Diag. PDU field (unsigned byte)
+        :param reserved1: Reserved field, defaults to 0 (unsigned byte)
+        :param reserved2: Reserved field, defaults to 0 (unsigned byte)
+        """
+        self.reserved1 = reserved1
+        self.reserved2 = reserved2
+        self.result = result
+        self.source = source
+        self.reason_diag = reason_diag
 
     def __repr__(self):
         return 'AAssociateRjPDU(result={self.result}, source={self.source}, ' \
                'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
                'reserved2={self.reserved2})'.format(self=self)
 
-    def to_params(self):
-        return self
-
     def encode(self):
+        """Converts PDU class to its binary representation
+
+        :rtype : str
+        :return: PDU as a string of bytes
+        """
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
                                 self.reserved2, self.result, self.source,
                                 self.reason_diag)
@@ -261,9 +273,6 @@ class PDataTfPDU(object):
         return sum((i.total_length()
                     for i in self.data_value_items))
 
-    def to_params(self):
-        return self
-
     def encode(self):
         return self.header.pack(self.pdu_type, self.reserved, self.pdu_length)\
             + ''.join([item.encode()
@@ -307,10 +316,6 @@ class AReleasePDUBase(object):
     def __repr__(self):
         return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
             self.reserved1, self.reserved2)
-
-    def to_params(self):
-        # TODO Remove this method
-        return self
 
     def encode(self):
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
@@ -384,10 +389,6 @@ class AAbortPDU(object):
                'reserved2={self.reserved2}, ' \
                'reserved3={self.reserved3 = reserved3})'.format(self=self)
 
-    def to_params(self):
-        # TODO Remove this method
-        return self
-
     def encode(self):
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
                                 self.reserved2, self.reserved3, self.source,
@@ -433,8 +434,8 @@ class ApplicationContextItem(object):
         self.context_name = context_name  # string
 
     def __repr__(self):
-        return 'ApplicationContextItem(context_name={0}, reserved={1})'.format(
-            self.context_name, self.reserved)
+        return 'ApplicationContextItem(context_name="{0}", ' \
+               'reserved={1})'.format(self.context_name, self.reserved)
 
     @property
     def item_length(self):
@@ -487,21 +488,6 @@ class PresentationContextItemRQ(object):
     def item_length(self):
         return 4 + (self.abs_sub_item.total_length() +
                     sum(i.total_length() for i in self.ts_sub_items))
-
-    @classmethod
-    def from_params(cls, params):
-        # params is a list of the form
-        # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
-        context_id = params[0]
-        abs_sub_item = AbstractSyntaxSubItem.from_params(params[1])
-        ts_sub_items = [TransferSyntaxSubItem.from_params(i) for i in params[2]]
-        return cls(context_id, abs_sub_item, ts_sub_items)
-
-    def to_params(self):
-        # Returns a list of the form
-        # [ID, AbstractSyntaxName, [TransferSyntaxNames]]
-        return [self.context_id, self.abs_sub_item.to_params(),
-                [item.to_params() for item in self.ts_sub_items[1:]]]
 
     def encode(self):
         return self.header.pack(self.item_type, self.reserved1,
@@ -561,17 +547,6 @@ class PresentationContextItemAC(object):
     def item_length(self):
         return 4 + self.ts_sub_item.total_length()
 
-    @classmethod
-    def from_params(cls, params):
-        # params is a list of the form [ID, Response, TransferSyntax].
-        ts_sub_item = TransferSyntaxSubItem.from_params(params[2])
-        return cls(params[0], params[1], ts_sub_item)
-
-    def to_params(self):
-        # Returns a list of the form [ID, Response, TransferSyntax].
-        return [self.context_id, self.result_reason,
-                self.ts_sub_item.to_params()]
-
     def encode(self):
         return ''.join([self.header.pack(self.item_type, self.reserved1,
                                          self.item_length, self.context_id,
@@ -607,21 +582,12 @@ class AbstractSyntaxSubItem(object):
         self.name = name  # string
 
     def __repr__(self):
-        return 'AbstractSyntaxSubItem(name={0}, reserved={1})'.format(
+        return 'AbstractSyntaxSubItem(name="{0}", reserved={1})'.format(
             self.name, self.reserved)
 
     @property
     def item_length(self):
         return len(self.name)
-
-    @classmethod
-    def from_params(cls, params):
-        # params is a string
-        return cls(params)
-
-    def to_params(self):
-        # Returns the abstract syntax name
-        return self.name
 
     def encode(self):
         return ''.join([self.header.pack(self.item_type, self.reserved,
@@ -653,21 +619,12 @@ class TransferSyntaxSubItem(object):
         self.name = name  # string
 
     def __repr__(self):
-        return 'TransferSyntaxSubItem(name={0}, reserved={1})'.format(
+        return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(
             self.name, self.reserved)
 
     @property
     def item_length(self):
         return len(self.name)
-
-    @classmethod
-    def from_params(cls, params):
-        # params is a string.
-        return cls(params)
-
-    def to_params(self):
-        # Returns the transfer syntax name
-        return self.name
 
     def encode(self):
         return ''.join([self.header.pack(self.item_type, self.reserved,
@@ -709,14 +666,6 @@ class UserInformationItem(object):
     @property
     def item_length(self):
         return sum(i.total_length for i in self.user_data)
-
-    @classmethod
-    def from_params(cls, params):
-        # params is a user_data
-        return cls(list(params))
-
-    def to_params(self):
-        return list(self.user_data)
 
     def encode(self):
         return self.header.pack(self.item_type, self.reserved,
@@ -760,7 +709,7 @@ class PresentationDataValueItem(object):
 
     def __repr__(self):
         return 'PresentationDataValueItem(context_id={0}, ' \
-               'data_value)={1}'.format(
+               'data_value)="{1}"'.format(
                    self.context_id, self.data_value)
 
     @property
