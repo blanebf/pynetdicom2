@@ -136,8 +136,6 @@ class ACSEServiceProvider(object):
         )
         self.dul.send(res)
 
-
-
     def check_release(self):
         """Checks for release request from the remote AE. Upon reception of
         the request a confirmation is sent"""
@@ -157,9 +155,3 @@ class ACSEServiceProvider(object):
             return True
         else:
             return False
-
-    def status(self):
-        return self.dul.state_machine.current_state()
-
-    def kill(self):
-        self.dul.kill()

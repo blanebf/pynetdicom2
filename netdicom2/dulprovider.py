@@ -54,6 +54,16 @@ PDU_TYPES = {
     0x07: (pdu.AAbortPDU, 'Evt16')
 }
 
+PDU_TO_EVENT = {
+    pdu.AAssociateRqPDU.pdu_type: 'Evt1',  # A-ASSOCIATE Request
+    pdu.AAssociateAcPDU.pdu_type: 'Evt7',  # A-ASSOCIATE Response (accept)
+    pdu.AAssociateRjPDU.pdu_type: 'Evt8',  # A-ASSOCIATE Response (reject)
+    pdu.AReleaseRqPDU.pdu_type: 'Evt11',   # A-Release Request
+    pdu.AReleaseRpPDU.pdu_type: 'Evt14',   # A-Release Response
+    pdu.AAbortPDU.pdu_type: 'Evt15',
+    pdu.PDataTfPDU.pdu_type: 'Evt9'
+}
+
 
 class DULServiceProvider(threading.Thread):
     def __init__(self, socket_=None, port=None, name=''):
@@ -204,8 +214,12 @@ class DULServiceProvider(threading.Thread):
         # look at self.ReceivePrimitive for incoming primitives
         try:
             self.primitive = self.from_service_user.get(False, None)
-            self.event.append(primitive_to_event(self.primitive))
+            self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
             return True
+        except KeyError:
+            raise exceptions.PDUProcessingError(
+                'Unknown PDU {0} with type {1}'.format(self.primitive,
+                                                       self.primitive.pdu_type))
         except Queue.Empty:
             return False
 
@@ -258,22 +272,3 @@ class DULServiceProvider(threading.Thread):
                 continue
             self.state_machine.action(evt, self)
         logger.debug('%s: DUL loop ended', self.name)
-
-
-def primitive_to_event(primitive):
-    if isinstance(primitive, pdu.AAssociateRqPDU):
-        return 'Evt1'  # A-ASSOCIATE Request
-    elif isinstance(primitive, pdu.AAssociateAcPDU):
-        return 'Evt7'  # A-ASSOCIATE Response (accept)
-    elif isinstance(primitive, pdu.AAssociateRjPDU):
-        return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, pdu.AReleaseRqPDU):
-        return 'Evt11'  # A-Release Request
-    elif isinstance(primitive, pdu.AReleaseRpPDU):
-        return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, pdu.AAbortPDU):
-        return 'Evt15'
-    elif isinstance(primitive, pdu.PDataTfPDU):
-        return 'Evt9'
-    else:
-        raise exceptions.NetDICOMError('Invalid primitive')

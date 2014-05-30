@@ -1,9 +1,12 @@
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
+# This file is part of pynetdicom2, released under a modified MIT license.
+#    See the file license.txt included with this distribution.
+
 __author__ = 'Blane'
 
 import unittest
 import cStringIO
 import netdicom2.pdu
-import netdicom2.dimseparameters
 import netdicom2.userdataitems
 
 

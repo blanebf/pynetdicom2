@@ -42,38 +42,54 @@ import netdicom2.dimseparameters
 import netdicom2.exceptions as exceptions
 import netdicom2.pdu as pdu
 
-from dicom._dicom_dict import DicomDictionary
+import dicom._dicom_dict as dicomdict
+import dicom.datadict
+
 
 logger = logging.getLogger(__name__)
 
-#  pydicom's dictionnary misses command tags. Add them.
-DicomDictionary.update({
-    0x00000000: ('UL', '1', 'CommandGroupLength', ''),
-    0x00000002: ('UI', '1', 'Affected SOP class', ''),
-    0x00000003: ('UI', '1', 'RequestedSOPClassUID', ''),
-    0x00000100: ('US', '1', 'CommandField', ''),
-    0x00000110: ('US', '1', 'MessageID', ''),
-    0x00000120: ('US', '1', 'MessageIDBeingRespondedTo', ''),
-    0x00000600: ('AE', '1', 'MoveDestination', ''),
-    0x00000700: ('US', '1', 'Priority', ''),
-    0x00000800: ('US', '1', 'DataSetType', ''),
-    0x00000900: ('US', '1', 'Status', ''),
-    0x00000901: ('AT', '1', 'OffendingElement', ''),
-    0x00000902: ('LO', '1', 'ErrorComment', ''),
-    0x00000903: ('US', '1', 'ErrorID', ''),
-    0x00001000: ('UI', '1', 'AffectedSOPInstanceUID', ''),
-    0x00001001: ('UI', '1', 'RequestedSOPInstanceUID', ''),
-    0x00001002: ('US', '1', 'EventTypeID', ''),
-    0x00001005: ('AT', '1', 'AttributeIdentifierList', ''),
-    0x00001008: ('US', '1', 'ActionTypeID', ''),
-    0x00001020: ('US', '1', 'NumberOfRemainingSuboperations', ''),
-    0x00001021: ('US', '1', 'NumberOfCompletedSuboperations', ''),
-    0x00001022: ('US', '1', 'NumberOfFailedSuboperations', ''),
-    0x00001023: ('US', '1', 'NumberOfWarningSuboperations', ''),
-    0x00001030: ('AE', '1', 'MoveOriginatorApplicationEntityTitle', ''),
-    0x00001031: ('US', '1', 'MoveOriginatorMessageID', ''),
-
+#  pydicom's dictionary misses command tags. Add them.
+dicomdict.DicomDictionary.update({
+    0x00000000: ('UL', '1', 'Command Group Length', '', 'CommandGroupLength'),
+    0x00000002: ('UI', '1', 'Affected SOP Class UID', '',
+                 'AffectedSOPClassUID'),
+    0x00000003: ('UI', '1', 'Requested SOP Class UID', '',
+                 'RequestedSOPClassUID'),
+    0x00000100: ('US', '1', 'Command Field', '', 'CommandField'),
+    0x00000110: ('US', '1', 'Message ID', '', 'MessageID'),
+    0x00000120: ('US', '1', 'Message ID Being Responded To', '',
+                 'MessageIDBeingRespondedTo'),
+    0x00000600: ('AE', '1', 'Move Destination', '', 'Move Destination'),
+    0x00000700: ('US', '1', 'Priority', '', 'Priority'),
+    0x00000800: ('US', '1', 'DataSet Type', '', 'DataSetType'),
+    0x00000900: ('US', '1', 'Status', '', 'Status'),
+    0x00000901: ('AT', '1', 'Offending Element', '', 'OffendingElement'),
+    0x00000902: ('LO', '1', 'Error Comment', '', 'ErrorComment'),
+    0x00000903: ('US', '1', 'Error ID', '', 'ErrorID'),
+    0x00001000: ('UI', '1', 'Affected SOP Instance UID', '',
+                 'AffectedSOPInstanceUID'),
+    0x00001001: ('UI', '1', 'Requested SOP Instance UID', '',
+                 'RequestedSOPInstanceUID'),
+    0x00001002: ('US', '1', 'Event Type ID', '', 'EventTypeID'),
+    0x00001005: ('AT', '1', 'Attribute Identifier List', '',
+                 'AttributeIdentifierList'),
+    0x00001008: ('US', '1', 'Action Type ID', '', 'ActionTypeID'),
+    0x00001020: ('US', '1', 'Number Of Remaining Sub-operations', '',
+                 'NumberOfRemainingSubOperations'),
+    0x00001021: ('US', '1', 'Number Of Completed Sub-operations', '',
+                 'NumberOfCompletedSubOperations'),
+    0x00001022: ('US', '1', 'Number Of Failed Sub-operations', '',
+                 'NumberOfFailedSubOperations'),
+    0x00001023: ('US', '1', 'Number Of Warning Sub-operations', '',
+                 'NumberOfWarningSubOperations'),
+    0x00001030: ('AE', '1', 'Move Originator Application Entity Title', '',
+                 'MoveOriginatorApplicationEntityTitle'),
+    0x00001031: ('US', '1', 'Move Originator Message ID', '',
+                 'MoveOriginatorMessageID'),
 })
+dicom.datadict.keyword_dict = dict(
+    [(dicom.datadict.dictionary_keyword(tag), tag)
+     for tag in dicomdict.DicomDictionary])
 
 
 def fragment(max_pdu_length, str_):
@@ -103,7 +119,7 @@ class DIMSEMessage(object):
         if self.command_fields:
             self.command_set = Dataset()
             for field in self.command_fields:
-                self.command_set.add_new(field[1], field[2], '')
+                setattr(self.command_set, field, '')
 
     def encode(self, id_, max_pdu_length):
         """Returns the encoded message as a series of P-DATA service
@@ -185,13 +201,38 @@ class DIMSEMessage(object):
     def __repr__(self):
         return str(self.command_set) + '\n'
 
+    @property
+    def affected_sop_class_uid(self):
+        return self.command_set.get((0x0000, 0x0002))
+
+    @affected_sop_class_uid.setter
+    def affected_sop_class_uid(self, value):
+        self.command_set[(0x0000, 0x0002)].value = value
+
+
+class DIMSERequestMessage(DIMSEMessage):
+    @property
+    def message_id(self):
+        return self.command_set.get((0x0000, 0x0110))
+
+    @message_id.setter
+    def message_id(self, value):
+        self.command_set[(0x0000, 0x0110)].value = value
+
+
+class DIMSEResponseMessage(DIMSEMessage):
+    @property
+    def message_id_being_responded_to(self):
+        return self.command_set.get((0x0000, 0x0120))
+
+    @message_id_being_responded_to.setter
+    def message_id_being_responded_to(self, value):
+        self.command_set[(0x0000, 0x0120)].value = value
+
 
 class CEchoRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID', (0x0000, 0x0110), 'US', 1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageID', 'DataSetType']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -209,13 +250,9 @@ class CEchoRQMessage(DIMSEMessage):
 
 
 class CEchoRSPMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Status', (0x0000, 0x0900), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageIDBeingRespondedTo',
+                      'DataSetType', 'Status']
 
     def from_params(self, params):
         if params.affected_sop_class_uid:
@@ -238,16 +275,11 @@ class CEchoRSPMessage(DIMSEMessage):
 
 
 class CStoreRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID', (0x0000, 0x0110), 'US', 1),
-                      ('Priority', (0x0000, 0x0700), 'US', 1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1),
-                      ('Move Originator Application Entity Title',
-                       (0x0000, 0x1030), 'AE', 1),
-                      ('Move Originator Message ID', (0x0000, 0x1031), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageID', 'Priority', 'DataSetType',
+                      'AffectedSOPInstanceUID',
+                      'MoveOriginatorApplicationEntityTitle',
+                      'MoveOriginatorMessageID']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -281,14 +313,9 @@ class CStoreRQMessage(DIMSEMessage):
 
 
 class CStoreRSPMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Status', (0x0000, 0x0900), 'US', 1),
-                      ('Affected SOP Instance UID', (0x0000, 0x1000), 'UI', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageIDBeingRespondedTo',
+                      'DataSetType', 'Status', 'AffectedSOPInstanceUID']
 
     def from_params(self, params):
         self.command_set[
@@ -315,12 +342,8 @@ class CStoreRSPMessage(DIMSEMessage):
 
 
 class CFindRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID', (0x0000, 0x0110), 'US', 1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Priority', (0x0000, 0x0700), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageID', 'DataSetType', 'Priority']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -341,13 +364,9 @@ class CFindRQMessage(DIMSEMessage):
 
 
 class CFindRSPMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Status', (0x0000, 0x0900), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageIDBeingRespondedTo',
+                      'DataSetType', 'Status']
 
     def from_params(self, params):
         self.command_set[
@@ -374,12 +393,8 @@ class CFindRSPMessage(DIMSEMessage):
 
 
 class CGetRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID', (0x0000, 0x0110), 'US', 1),
-                      ('Priority', (0x0000, 0x0700), 'US', 1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageID', 'Priority', 'DataSetType']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -401,21 +416,12 @@ class CGetRQMessage(DIMSEMessage):
 
 
 class CGetRSPMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Status', (0x0000, 0x0900), 'US', 1),
-                      ('Number of Remaining Sub-operations', (0x0000, 0x1020),
-                       'US', 1),
-                      ('Number of Complete Sub-operations', (0x0000, 0x1021),
-                       'US', 1),
-                      ('Number of Failed Sub-operations', (0x0000, 0x1022),
-                       'US', 1),
-                      ('Number of Warning Sub-operations', (0x0000, 0x1023),
-                       'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageIDBeingRespondedTo',
+                      'DataSetType', 'Status', 'NumberOfRemainingSubOperations',
+                      'NumberOfCompleteSubOperations',
+                      'NumberOfFailedSubOperations',
+                      'NumberOfWarningSubOperations']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -453,13 +459,9 @@ class CGetRSPMessage(DIMSEMessage):
 
 
 class CMoveRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID', (0x0000, 0x0110), 'US', 1),
-                      ('Priority', (0x0000, 0x0700), 'US', 1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Move Destination', (0x0000, 0x0600), 'AE', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageID', 'Priority',
+                      'DataSetType', 'MoveDestination']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -483,21 +485,13 @@ class CMoveRQMessage(DIMSEMessage):
 
 
 class CMoveRSPMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Affected SOP Class UID', (0x0000, 0x0002), 'UI', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1),
-                      ('Status', (0x0000, 0x0900), 'US', 1),
-                      ('Number of Remaining Sub-operations', (0x0000, 0x1020),
-                       'US', 1),
-                      ('Number of Complete Sub-operations', (0x0000, 0x1021),
-                       'US', 1),
-                      ('Number of Failed Sub-operations', (0x0000, 0x1022),
-                       'US', 1),
-                      ('Number of Warning Sub-operations', (0x0000, 0x1023),
-                       'US', 1)]
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'CommandField', 'MessageIDBeingRespondedTo',
+                      'DataSetType', 'Status',
+                      'NumberOfRemainingSubOperations',
+                      'NumberOfCompleteSubOperations',
+                      'NumberOfFailedSubOperations',
+                      'NumberOfWarningSubOperations']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
@@ -535,11 +529,8 @@ class CMoveRSPMessage(DIMSEMessage):
 
 
 class CCancelRQMessage(DIMSEMessage):
-    command_fields = [('Group Length', (0x0000, 0x0000), 'UL', 1),
-                      ('Command Field', (0x0000, 0x0100), 'US', 1),
-                      ('Message ID Being Responded To', (0x0000, 0x0120), 'US',
-                       1),
-                      ('Data Set Type', (0x0000, 0x0800), 'US', 1)]
+    command_fields = ['CommandGroupLength',  'CommandField',
+                      'MessageIDBeingRespondedTo', 'DataSetType']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0100)].value = 0x0FFF
