@@ -71,7 +71,7 @@ class CStoreServiceParameters(DIMSEParamsBase):
         super(CStoreServiceParameters, self).__init__(*args, **kwargs)
         self.affected_sop_class_uid = None
         self.affected_sop_instance_uid = None
-        self.move_originator_application_entity_title = None
+        self.move_originator_aet = None
         self.move_originator_message_id = None
         self.dataset = None
 
@@ -96,10 +96,10 @@ class CGetServiceParameters(DIMSEParamsBase):
         self.affected_sop_class_uid = None
         self.priority = None
         self.identifier = None
-        self.number_of_remaining_sub_operations = None
-        self.number_of_complete_sub_operations = None
-        self.number_of_failed_sub_operations = None
-        self.number_of_warning_sub_operations = None
+        self.num_of_remaining_sub_ops = None
+        self.num_of_completed_sub_ops = None
+        self.num_of_failed_sub_ops = None
+        self.num_of_warning_sub_ops = None
 
 
 class CMoveServiceParameters(DIMSEParamsBase):
@@ -112,10 +112,10 @@ class CMoveServiceParameters(DIMSEParamsBase):
         self.priority = None
         self.move_destination = None
         self.identifier = None
-        self.number_of_remaining_sub_operations = None
-        self.number_of_complete_sub_operations = None
-        self.number_of_failed_sub_operations = None
-        self.number_of_warning_sub_operations = None
+        self.num_of_remaining_sub_ops = None
+        self.num_of_completed_sub_ops = None
+        self.num_of_failed_sub_ops = None
+        self.num_of_warning_sub_ops = None
 
 
 class CEchoServiceParameters(DIMSEParamsBase):

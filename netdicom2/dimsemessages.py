@@ -30,8 +30,6 @@
   |______________________| <-------  |__________| <------- |_______________|
                            to_params                decode
 """
-
-import logging
 import struct
 
 from dicom.dataset import Dataset
@@ -46,8 +44,6 @@ import dicom._dicom_dict as dicomdict
 import dicom.datadict
 
 
-logger = logging.getLogger(__name__)
-
 #  pydicom's dictionary misses command tags. Add them.
 dicomdict.DicomDictionary.update({
     0x00000000: ('UL', '1', 'Command Group Length', '', 'CommandGroupLength'),
@@ -59,7 +55,7 @@ dicomdict.DicomDictionary.update({
     0x00000110: ('US', '1', 'Message ID', '', 'MessageID'),
     0x00000120: ('US', '1', 'Message ID Being Responded To', '',
                  'MessageIDBeingRespondedTo'),
-    0x00000600: ('AE', '1', 'Move Destination', '', 'Move Destination'),
+    0x00000600: ('AE', '1', 'Move Destination', '', 'MoveDestination'),
     0x00000700: ('US', '1', 'Priority', '', 'Priority'),
     0x00000800: ('US', '1', 'DataSet Type', '', 'DataSetType'),
     0x00000900: ('US', '1', 'Status', '', 'Status'),
@@ -92,6 +88,17 @@ dicom.datadict.keyword_dict = dict(
      for tag in dicomdict.DicomDictionary])
 
 
+NO_DATASET = 0x0101
+
+PRIORITY_LOW = 0x0002
+PRIORITY_MEDIUM = 0x0000
+PRIORITY_HIGH = 0x0001
+
+
+def value_or_none(elem):
+    return elem.value if elem else None
+
+
 def fragment(max_pdu_length, str_):
     s = str_
     fragments = []
@@ -105,21 +112,74 @@ def fragment(max_pdu_length, str_):
             return fragments
 
 
+def dimse_property(tag):
+    """Creates property for DIMSE message using specified attribute tag
+
+    :param tag: tuple with group and element numbers
+    :return: property that gets/sets value in command dataset
+    """
+
+    def setter(self, value):
+        self.command_set[tag].value = value
+    return property(lambda self: value_or_none(self.command_set.get(tag)),
+                    setter)
+
+
+def status_mixin(dimse_class):
+    """Helper decorator that defines common `status` property in provided
+    DIMSE message class.
+
+    This property is usually found in response messages.
+
+    :param dimse_class: DIMSE message class
+    :return: DIMSE message class with defined `status` property
+    """
+    dimse_class.status = dimse_property((0x0000, 0x0900))
+    return dimse_class
+
+
+def priority_mixin(dimse_class):
+    """Helper decorator that defines common `priority` property in provided
+    DIMSE message class.
+
+    This property is usually found in request messages
+
+    :param dimse_class: DIMSE message class
+    :return: DIMSE message class with defined `priority` property
+    """
+    dimse_class.priority = dimse_property((0x0000, 0x0700))
+    return dimse_class
+
+
 class DIMSEMessage(object):
+    command_field = None
     command_fields = []
 
     def __init__(self):
-        self.command_set = None
-        self.encoded_data_set = None
-        self.data_set = ''
+        self.encoded_data_set = []
         self.encoded_command_set = []
+        self._data_set = ''
         self.id_ = None
 
         self.ts = ImplicitVRLittleEndian  # imposed by standard.
-        if self.command_fields:
-            self.command_set = Dataset()
-            for field in self.command_fields:
-                setattr(self.command_set, field, '')
+
+        self.command_set = Dataset()
+        self.command_set.CommandField = self.command_field
+        self.command_set.DataSetType = NO_DATASET
+        for field in self.command_fields:
+            setattr(self.command_set, field, '')
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+
+    @property
+    def data_set(self):
+        return self._data_set
+
+    @data_set.setter
+    def data_set(self, value):
+        if value:
+            self.command_set.DataSetType = 0x0001
+        self._data_set = value
 
     def encode(self, id_, max_pdu_length):
         """Returns the encoded message as a series of P-DATA service
@@ -132,7 +192,6 @@ class DIMSEMessage(object):
 
         # fragment command set
         pdvs = fragment(max_pdu_length, encoded_command_set)
-        assert ''.join(pdvs) == encoded_command_set
         for pdv in pdvs[:-1]:
             # send only one pdv per p-data primitive
             value_item = pdu.PresentationDataValueItem(
@@ -145,9 +204,8 @@ class DIMSEMessage(object):
         p_datas.append(pdu.PDataTfPDU([value_item]))
 
         # fragment data set
-        if hasattr(self, 'data_set') and self.data_set is not None:
+        if self.data_set:
             pdvs = fragment(max_pdu_length, self.data_set)
-            assert ''.join(pdvs) == self.data_set
             for pdv in pdvs[:-1]:
                 value_item = pdu.PresentationDataValueItem(
                     self.id_, struct.pack('b', 0) + pdv)
@@ -175,16 +233,16 @@ class DIMSEMessage(object):
                     self.command_set = dsutils.decode(
                         ''.join(self.encoded_command_set),
                         self.ts.is_implicit_VR, self.ts.is_little_endian)
-                    self.encoded_data_set = []
+                    self.encoded_command_set = []
                     self.__class__ = MESSAGE_TYPE[
                         self.command_set[(0x0000, 0x0100)].value]
                     if self.command_set[(0x0000, 0x0800)].value == 0x0101:
                         return True  # response: no dataset
             elif marker in (0, 2):
-                self.data_set += value_item.data_value[1:]
-                logger.debug('  data fragment %s', self.id_)
+                self.encoded_data_set.append(value_item.data_value[1:])
                 if marker == 2:
-                    logger.debug('  last data fragment %s', self.id_)
+                    self.data_set = ''.join(self.encoded_data_set)
+                    self.encoded_data_set = []
                     return True
             else:
                 raise exceptions.DIMSEProcessingError(
@@ -201,45 +259,22 @@ class DIMSEMessage(object):
     def __repr__(self):
         return str(self.command_set) + '\n'
 
-    @property
-    def affected_sop_class_uid(self):
-        return self.command_set.get((0x0000, 0x0002))
-
-    @affected_sop_class_uid.setter
-    def affected_sop_class_uid(self, value):
-        self.command_set[(0x0000, 0x0002)].value = value
-
 
 class DIMSERequestMessage(DIMSEMessage):
-    @property
-    def message_id(self):
-        return self.command_set.get((0x0000, 0x0110))
-
-    @message_id.setter
-    def message_id(self, value):
-        self.command_set[(0x0000, 0x0110)].value = value
+    message_id = dimse_property((0x0000, 0x0110))
 
 
 class DIMSEResponseMessage(DIMSEMessage):
-    @property
-    def message_id_being_responded_to(self):
-        return self.command_set.get((0x0000, 0x0120))
-
-    @message_id_being_responded_to.setter
-    def message_id_being_responded_to(self, value):
-        self.command_set[(0x0000, 0x0120)].value = value
+    message_id_being_responded_to = dimse_property((0x0000, 0x0120))
 
 
-class CEchoRQMessage(DIMSEMessage):
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageID', 'DataSetType']
+class CEchoRQMessage(DIMSERequestMessage):
+    command_field = 0x0030
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x0030
         self.command_set[(0x0000, 0x0110)].value = params.message_id
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
-        self.data_set = None
         self.set_length()
 
     def to_params(self):
@@ -249,19 +284,18 @@ class CEchoRQMessage(DIMSEMessage):
         return tmp
 
 
-class CEchoRSPMessage(DIMSEMessage):
+@status_mixin
+class CEchoRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8030
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageIDBeingRespondedTo',
-                      'DataSetType', 'Status']
+                      'MessageIDBeingRespondedTo', 'Status']
 
     def from_params(self, params):
         if params.affected_sop_class_uid:
             self.command_set[
                 (0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x8030
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.set_length()
 
@@ -274,24 +308,26 @@ class CEchoRSPMessage(DIMSEMessage):
         return tmp
 
 
-class CStoreRQMessage(DIMSEMessage):
+@priority_mixin
+class CStoreRQMessage(DIMSERequestMessage):
+    command_field = 0x0001
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageID', 'Priority', 'DataSetType',
-                      'AffectedSOPInstanceUID',
+                      'MessageID', 'Priority', 'AffectedSOPInstanceUID',
                       'MoveOriginatorApplicationEntityTitle',
                       'MoveOriginatorMessageID']
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+    move_originator_aet = dimse_property((0x0000, 0x1030))
+    move_originator_message_id = dimse_property((0x0000, 0x1031))
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x0001
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0700)].value = params.priority
-        self.command_set[(0x0000, 0x0800)].value = 0x0001
         self.command_set[
             (0x0000, 0x1000)].value = params.affected_sop_instance_uid
-        if params.move_originator_application_entity_title:
+        if params.move_originator_aet:
             self.command_set[(0x0000,
-                              0x1030)].value = params.move_originator_application_entity_title
+                              0x1030)].value = params.move_originator_aet
         else:
             self.command_set[(0x0000, 0x1030)].value = ''
         if params.move_originator_message_id:
@@ -312,22 +348,22 @@ class CStoreRQMessage(DIMSEMessage):
         return tmp
 
 
-class CStoreRSPMessage(DIMSEMessage):
+@status_mixin
+class CStoreRSPMessage(DIMSEResponseMessage):
+    command_field = 0x0101
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageIDBeingRespondedTo',
-                      'DataSetType', 'Status', 'AffectedSOPInstanceUID']
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'AffectedSOPInstanceUID']
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
     def from_params(self, params):
         self.command_set[
             (0x0000, 0x0002)].value = params.affected_sop_class_uid.value
-        self.command_set[(0x0000, 0x0100)].value = 0x8001
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to.value
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.command_set[
             (0x0000, 0x1000)].value = params.affected_sop_instance_uid.value
-        self.data_set = None
         self.set_length()
 
     def to_params(self):
@@ -341,16 +377,16 @@ class CStoreRSPMessage(DIMSEMessage):
         return tmp
 
 
-class CFindRQMessage(DIMSEMessage):
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageID', 'DataSetType', 'Priority']
+@priority_mixin
+class CFindRQMessage(DIMSERequestMessage):
+    command_field = 0x0020
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
+                      'Priority']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x0020
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0700)].value = params.priority
-        self.command_set[(0x0000, 0x0800)].value = 0x0001
         self.data_set = params.identifier
         self.set_length()
 
@@ -363,21 +399,17 @@ class CFindRQMessage(DIMSEMessage):
         return tmp
 
 
-class CFindRSPMessage(DIMSEMessage):
+@status_mixin
+class CFindRSPMessage(DIMSEResponseMessage):
+    command_field = 0x0101
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageIDBeingRespondedTo',
-                      'DataSetType', 'Status']
+                      'MessageIDBeingRespondedTo', 'Status']
 
     def from_params(self, params):
         self.command_set[
             (0x0000, 0x0002)].value = params.affected_sop_class_uid.value
-        self.command_set[(0x0000, 0x0100)].value = 0x8020
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to.value
-        if not params.identifier:
-            self.command_set[(0x0000, 0x0800)].value = 0x0101
-        else:
-            self.command_set[(0x0000, 0x0800)].value = 0x000
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.data_set = params.identifier
         self.set_length()
@@ -392,16 +424,16 @@ class CFindRSPMessage(DIMSEMessage):
         return tmp
 
 
-class CGetRQMessage(DIMSEMessage):
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageID', 'Priority', 'DataSetType']
+@priority_mixin
+class CGetRQMessage(DIMSERequestMessage):
+    command_field = 0x0010
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
+                      'Priority']
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x0010
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0700)].value = params.priority
-        self.command_set[(0x0000, 0x0800)].value = 0x0001
         self.data_set = params.identifier
         self.set_length()
 
@@ -415,29 +447,31 @@ class CGetRQMessage(DIMSEMessage):
         return tmp
 
 
-class CGetRSPMessage(DIMSEMessage):
+@status_mixin
+class CGetRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8010
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageIDBeingRespondedTo',
-                      'DataSetType', 'Status', 'NumberOfRemainingSubOperations',
-                      'NumberOfCompleteSubOperations',
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'NumberOfRemainingSubOperations',
+                      'NumberOfCompletedSubOperations',
                       'NumberOfFailedSubOperations',
                       'NumberOfWarningSubOperations']
+    num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
+    num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
+    num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
+    num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x8010
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.command_set[
-            (0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+            (0x0000, 0x1020)].value = params.num_of_remaining_sub_ops
         self.command_set[
-            (0x0000, 0x1021)].value = params.number_of_completed_sub_operations
-        self.command_set[
-            (0x0000, 0x1022)].value = params.number_of_failed_sub_operations
-        self.command_set[
-            (0x0000, 0x1023)].value = params.number_of_warning_sub_operations
+            (0x0000, 0x1021)].value = params.num_of_completed_sub_ops
+        self.command_set[(0x0000, 0x1022)].value = params.num_of_failed_sub_ops
+        self.command_set[(0x0000, 0x1023)].value = params.num_of_warning_sub_ops
         self.set_length()
 
     def to_params(self):
@@ -446,29 +480,25 @@ class CGetRSPMessage(DIMSEMessage):
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
-        tmp.number_of_remaining_sub_operations = self.command_set.get(
-            (0x0000, 0x1020))
-        tmp.number_of_complete_sub_operations = self.command_set.get(
-            (0x0000, 0x1021))
-        tmp.number_of_failed_sub_operations = self.command_set.get(
-            (0x0000, 0x1022))
-        tmp.number_of_warning_sub_operations = self.command_set.get(
-            (0x0000, 0x1023))
+        tmp.num_of_remaining_sub_ops = self.command_set.get((0x0000, 0x1020))
+        tmp.num_of_completed_sub_ops = self.command_set.get((0x0000, 0x1021))
+        tmp.num_of_failed_sub_ops = self.command_set.get((0x0000, 0x1022))
+        tmp.num_of_warning_sub_ops = self.command_set.get((0x0000, 0x1023))
         tmp.identifier = self.data_set
         return tmp
 
 
-class CMoveRQMessage(DIMSEMessage):
+@priority_mixin
+class CMoveRQMessage(DIMSERequestMessage):
+    command_field = 0x0021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageID', 'Priority',
-                      'DataSetType', 'MoveDestination']
+                      'MessageID', 'Priority', 'MoveDestination']
+    move_destination = dimse_property((0x0000, 0x0700))
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x0021
         self.command_set[(0x0000, 0x0110)].value = params.message_id
         self.command_set[(0x0000, 0x0700)].value = params.priority
-        self.command_set[(0x0000, 0x0800)].value = 0x0001
         self.command_set[(0x0000, 0x0600)].value = params.move_destination
 
         self.data_set = params.identifier
@@ -484,30 +514,31 @@ class CMoveRQMessage(DIMSEMessage):
         return tmp
 
 
-class CMoveRSPMessage(DIMSEMessage):
+@status_mixin
+class CMoveRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'CommandField', 'MessageIDBeingRespondedTo',
-                      'DataSetType', 'Status',
+                      'MessageIDBeingRespondedTo', 'Status',
                       'NumberOfRemainingSubOperations',
-                      'NumberOfCompleteSubOperations',
+                      'NumberOfCompletedSubOperations',
                       'NumberOfFailedSubOperations',
                       'NumberOfWarningSubOperations']
+    num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
+    num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
+    num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
+    num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
 
     def from_params(self, params):
         self.command_set[(0x0000, 0x0002)].value = params.affected_sop_class_uid
-        self.command_set[(0x0000, 0x0100)].value = 0x8021
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.command_set[(0x0000, 0x0900)].value = params.status
         self.command_set[
-            (0x0000, 0x1020)].value = params.number_of_remaining_sub_operations
+            (0x0000, 0x1020)].value = params.num_of_remaining_sub_ops
         self.command_set[
-            (0x0000, 0x1021)].value = params.number_of_complete_sub_operations
-        self.command_set[
-            (0x0000, 0x1022)].value = params.number_of_failed_sub_operations
-        self.command_set[
-            (0x0000, 0x1023)].value = params.number_of_warning_sub_operations
+            (0x0000, 0x1021)].value = params.num_of_completed_sub_ops
+        self.command_set[(0x0000, 0x1022)].value = params.num_of_failed_sub_ops
+        self.command_set[(0x0000, 0x1023)].value = params.num_of_warning_sub_ops
         self.set_length()
 
     def to_params(self):
@@ -516,27 +547,21 @@ class CMoveRSPMessage(DIMSEMessage):
         tmp.message_id_being_responded_to = self.command_set.get(
             (0x0000, 0x0120))
         tmp.status = self.command_set.get((0x0000, 0x0900))
-        tmp.number_of_remaining_sub_operations = self.command_set.get(
-            (0x0000, 0x1020))
-        tmp.number_of_complete_sub_operations = self.command_set.get(
-            (0x0000, 0x1021))
-        tmp.number_of_failed_sub_operations = self.command_set.get(
-            (0x0000, 0x1022))
-        tmp.number_of_warning_sub_operations = self.command_set.get(
-            (0x0000, 0x1023))
+        tmp.num_of_remaining_sub_ops = self.command_set.get((0x0000, 0x1020))
+        tmp.num_of_completed_sub_ops = self.command_set.get((0x0000, 0x1021))
+        tmp.num_of_failed_sub_ops = self.command_set.get((0x0000, 0x1022))
+        tmp.num_of_warning_sub_ops = self.command_set.get((0x0000, 0x1023))
         tmp.identifier = self.data_set
         return tmp
 
 
-class CCancelRQMessage(DIMSEMessage):
-    command_fields = ['CommandGroupLength',  'CommandField',
-                      'MessageIDBeingRespondedTo', 'DataSetType']
+class CCancelRQMessage(DIMSEResponseMessage):
+    command_field = 0x0FFF
+    command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo']
 
     def from_params(self, params):
-        self.command_set[(0x0000, 0x0100)].value = 0x0FFF
         self.command_set[
             (0x0000, 0x0120)].value = params.message_id_being_responded_to
-        self.command_set[(0x0000, 0x0800)].value = 0x0101
         self.set_length()
 
 

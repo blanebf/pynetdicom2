@@ -23,14 +23,10 @@ Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
 (as SCU and SCP).
 """
 import time
-import logging
 
 import netdicom2.dsutils as dsutils
 import netdicom2.exceptions as exceptions
 import netdicom2.dimseparameters as dimseparameters
-
-
-logger = logging.getLogger(__name__)
 
 
 class Status(object):
@@ -281,7 +277,6 @@ class VerificationServiceClass(ServiceClass):
             status = self.ae.on_receive_echo(self)
         except exceptions.EventHandlingError:
             status = UNABLE_TO_PROCESS
-            logger.error('There was an exception on on_receive_echo callback')
 
         rsp = dimseparameters.CEchoServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
@@ -515,10 +510,10 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
             if status.type_ == 'Warning':
                 warning += 1
             rsp.status = int(PENDING)
-            rsp.number_of_remaining_sub_operations = nop - completed
-            rsp.number_of_complete_sub_operations = completed
-            rsp.number_of_failed_sub_operations = failed
-            rsp.number_of_warning_sub_operations = warning
+            rsp.num_of_remaining_sub_ops = nop - completed
+            rsp.num_of_completed_sub_ops = completed
+            rsp.num_of_failed_sub_ops = failed
+            rsp.num_of_warning_sub_ops = warning
             completed += 1
 
             # send response
@@ -527,10 +522,10 @@ class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
         rsp = dimseparameters.CMoveServiceParameters()
         rsp.message_id_being_responded_to = msg.message_id.value
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid.value
-        rsp.number_of_remaining_sub_operations = nop - completed
-        rsp.number_of_complete_sub_operations = completed
-        rsp.number_of_failed_sub_operations = failed
-        rsp.number_of_warning_sub_operations = warning
+        rsp.num_of_remaining_sub_ops = nop - completed
+        rsp.num_of_completed_sub_ops = completed
+        rsp.num_of_failed_sub_ops = failed
+        rsp.num_of_warning_sub_ops = warning
         rsp.status = int(SUCCESS)
         self.dimse.send(rsp, self.pcid, self.max_pdu_length)
         assoc.release(0)
