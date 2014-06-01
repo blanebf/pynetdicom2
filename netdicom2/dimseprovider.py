@@ -17,10 +17,10 @@ class DIMSEServiceProvider(object):
         self.dul = dul
         self.message = None
 
-    def send(self, primitive, id_, max_pdu_length):
+    def send(self, dimse_msg, id_, max_pdu_length):
         # take a DIMSE primitive, convert it to one or more DUL primitive
         # and send it
-        dimse_msg = primitive.to_message()
+        dimse_msg.set_length()
         p_data_list = dimse_msg.encode(id_, max_pdu_length)
         for p_data in p_data_list:
             self.dul.send(p_data)
@@ -39,13 +39,13 @@ class DIMSEServiceProvider(object):
                     return None, None
                 if self.message.decode(self.dul.receive(wait, timeout)):
                     tmp, self.message = self.message, None
-                    return tmp.to_params(), tmp.id_
+                    return tmp, tmp.id_
         else:
             cls = self.dul.peek().__class__
             if cls not in (type(None), pdu.PDataTfPDU):
                 return None, None
             if self.message.decode(self.dul.receive(wait, timeout)):
                 tmp, self.message = self.message, None
-                return tmp.to_params(), tmp.id_
+                return tmp, tmp.id_
             else:
                 return None, None

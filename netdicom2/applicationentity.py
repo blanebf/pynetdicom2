@@ -157,7 +157,7 @@ class AssociationAcceptor(threading.Thread, Association):
                 except IndexError:
                     raise exceptions.ClassNotSupportedError(
                         'SOP Class {0} not supported as SCP'.format(uid))
-                obj = sopclass.SOP_CLASSES[uid.value](
+                obj = sopclass.SOP_CLASSES[uid](
                     ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
                     transfer_syntax=transfer_syntax,
                     max_pdu_length=self.asce.max_pdu_length)
