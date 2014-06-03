@@ -48,14 +48,15 @@ class Association(object):
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(True)
-        if isinstance(dul_msg, pdu.PDataTfPDU):
+        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
             return dul_msg
-        elif isinstance(dul_msg, pdu.AReleaseRqPDU):
-            pass  # TODO Raise release exception
-        elif isinstance(dul_msg, pdu.AAbortPDU):
-            pass  # TODO Raise abort exception
+        elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
+            raise exceptions.AssociationReleasedError()
+        elif dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
+            raise exceptions.AssociationAbortedError(dul_msg.source,
+                                                     dul_msg.reason_diag)
         else:
-            pass  # TODO Raise generic exception
+            raise exceptions.NetDICOMError()
 
     def kill(self):
         """Stops internal DUL service provider.

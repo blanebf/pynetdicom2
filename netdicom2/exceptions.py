@@ -165,13 +165,17 @@ class AssociationReleasedError(AssociationError):
 class AssociationAbortedError(AssociationError):
     """Raised when remote application entity has aborted association."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, source, reason_diag, *args, **kwargs):
         """Overrides base exception initialization
 
+        :param source:
+        :param reason_diag
         :param args: positional arguments
         :param kwargs: keyword arguments
         """
         super(AssociationAbortedError, self).__init__(*args, **kwargs)
+        self.source = source
+        self.reason_diag = reason_diag
 
 
 class EventHandlingError(NetDICOMError):
