@@ -17,216 +17,7 @@ from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
 
 import netdicom2.sopclass as sopclass
-import netdicom2.exceptions as exceptions
-import netdicom2.dulprovider as dulprovider
-import netdicom2.dimseprovider as dimseprovider
 import netdicom2.asceprovider as asceprovider
-import netdicom2.userdataitems as userdataitems
-import netdicom2.pdu as pdu
-
-
-class Association(object):
-    """Base association class.
-
-    Class is not intended for direct usage and meant to be sub-classed.
-    Class provides basic association interface: creation, release and abort.
-    """
-
-    def __init__(self, local_ae, dul_socket):
-        """Initializes Association instance with local AE title and DUL service
-        provider
-
-        :param local_ae: local AE title parameters
-        :param dul_socket: socket for DUL provider or None if it's not needed
-        """
-        super(Association, self).__init__()
-        self.dul = dulprovider.DULServiceProvider(dul_socket)
-        self.ae = local_ae
-        self.association_established = False
-        self.asce = asceprovider.ACSEServiceProvider(self.dul)
-        self.dimse = dimseprovider.DIMSEServiceProvider(self.dul)
-
-    def get_dul_message(self):
-        dul_msg = self.dul.receive(True)
-        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
-            return dul_msg
-        elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
-            raise exceptions.AssociationReleasedError()
-        elif dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
-            raise exceptions.AssociationAbortedError(dul_msg.source,
-                                                     dul_msg.reason_diag)
-        else:
-            raise exceptions.NetDICOMError()
-
-    def kill(self):
-        """Stops internal DUL service provider.
-
-        In most cases you won't need to use this method directly. Refer to
-        release and abort instead.
-        :rtype : None
-        """
-        for _ in xrange(1000):
-            if self.dul.stop():
-                continue
-            time.sleep(0.001)
-        self.dul.kill()
-
-    def release(self):
-        """Releases association.
-
-        Requests the release of the associations and waits for
-        confirmation
-
-        :rtype : None
-        """
-        self.dul.send(pdu.AReleaseRqPDU())
-        rsp = self.dul.receive(wait=True)
-        self.kill()
-        return rsp
-
-
-class AssociationAcceptor(threading.Thread, Association):
-    """'Server-side' association implementation.
-
-    Class is intended for handling incoming association requests.
-    """
-
-    def __init__(self, local_ae, client_socket):
-        """Initializes AssociationAcceptor instance with specified client socket
-
-        :param local_ae: local AE title
-        :param client_socket: client socket
-        """
-        Association.__init__(self, local_ae, client_socket)
-        threading.Thread.__init__(self)
-        self.client_socket = client_socket
-        self.is_killed = False
-        self.sop_classes_as_scp = []
-        self.start()
-
-    def kill(self):
-        """Overrides base class kill method to set stop-flag for running thread
-
-        :rtype : None
-        """
-        self.is_killed = True
-        super(AssociationAcceptor, self).kill()
-
-    def abort(self, reason):
-        """Aborts association with specified reason
-
-        :rtype : None
-        :param reason: abort reason
-        """
-        self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
-        self.kill()
-
-    def reject(self, result, source, diag):
-        """Rejects association with specified parameters
-
-        :param result:
-        :param source:
-        :param diag:
-        """
-        self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
-
-    def run(self):
-        assoc_req = self.dul.receive(wait=True)
-        try:
-            self.ae.on_association_request(assoc_req)
-        except exceptions.AssociationRejectedError as e:
-            self.reject(e.result, e.source, e.diagnostic)
-            self.kill()
-            return
-
-        self.asce.accept(assoc_req, self.ae.acceptable_presentation_contexts)
-
-        # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
-                                   self.asce.accepted_presentation_contexts]
-        self.association_established = True
-
-        # association established. Listening on local and remote interfaces
-        while not self.is_killed:
-            time.sleep(0.001)
-            dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
-            if dimse_msg:  # dimse message received
-                uid = dimse_msg.affected_sop_class_uid
-                try:
-                    pcid, sop_class, transfer_syntax = \
-                        [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
-                except IndexError:
-                    raise exceptions.ClassNotSupportedError(
-                        'SOP Class {0} not supported as SCP'.format(uid))
-                obj = sopclass.SOP_CLASSES[uid](
-                    ae=self.ae, uid=sop_class, dimse=self.dimse, pcid=pcid,
-                    transfer_syntax=transfer_syntax,
-                    max_pdu_length=self.asce.max_pdu_length)
-                obj.scp(dimse_msg)  # run SCP
-            if self.asce.check_release():
-                self.kill()
-            if self.asce.check_abort():
-                self.kill()
-
-
-class AssociationRequester(Association):
-    def __init__(self, local_ae, remote_ae=None):
-        super(AssociationRequester, self).__init__(local_ae, None)
-        self.ae = local_ae
-        self.remote_ae = remote_ae
-        self.sop_classes_as_scu = []
-        self.association_refused = False
-        self._request()
-
-    def abort(self, reason=0):
-        """Aborts association with specified reason
-
-        :rtype : None
-        :param reason: abort reason
-        """
-        self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
-        self.kill()
-
-    def _request(self):
-        ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
-               for i in self.ae.acceptable_presentation_contexts]
-        response = self.asce.request(
-            self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
-            self.ae.presentation_context_definition_list, users_pdu=ext
-        )
-        self.ae.on_association_response(response)
-        self.sop_classes_as_scu = [(context[0], context[1], context[2])
-                                   for context in
-                                   self.asce.accepted_presentation_contexts]
-        self.association_established = True
-
-    def scu(self, ds, id_):
-        uid = ds.SOPClassUID
-        try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == uid][0]
-        except IndexError:
-            raise exceptions.ClassNotSupportedError(
-                'SOP Class %s not supported as SCU')
-
-        obj = sopclass.SOP_CLASSES[uid](ae=self.ae, uid=uid, dimse=self.dimse,
-                                        pcid=pcid,
-                                        transfer_syntax=transfer_syntax,
-                                        max_pdu_length=self.asce.max_pdu_length)
-        return obj.scu(ds, id_)
-
-    def get_scu(self, sop_class):
-        try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
-        except IndexError:
-            raise exceptions.ClassNotSupportedError(
-                'SOP Class %s not supported as SCU' % sop_class)
-        obj = sopclass.SOP_CLASSES[sop_class](ae=self.ae, uid=sop_class,
-                                              dimse=self.dimse, pcid=pcid,
-                                              transfer_syntax=transfer_syntax,
-                                              max_pdu_length=self.asce.max_pdu_length)
-        return obj
 
 
 class AE(threading.Thread):
@@ -305,8 +96,9 @@ class AE(threading.Thread):
                 # got an incoming connection
                 client_socket, remote_address = self.local_server_socket.accept()
                 # create a new association
-                self.associations.append(AssociationAcceptor(self,
-                                                             client_socket))
+                self.associations.append(
+                    asceprovider.AssociationAcceptor(self, client_socket)
+                )
 
             # delete dead associations
             # TODO Fix removing dead  associations
@@ -343,7 +135,7 @@ class AE(threading.Thread):
     @contextlib.contextmanager
     def request_association(self, remote_ae):
         """Requests association to a remote application entity"""
-        assoc = AssociationRequester(self, remote_ae=remote_ae)
+        assoc = asceprovider.AssociationRequester(self, remote_ae=remote_ae)
         self.associations.append(assoc)
         yield assoc
         if assoc.association_established:
