@@ -158,14 +158,6 @@ class DULServiceProvider(threading.Thread):
         except Queue.Empty:
             return None
 
-    def peek(self):
-        """Look at next item to be returned by get"""
-        # TODO: Fix this method
-        try:
-            return self.to_service_user.queue[0]
-        except:
-            return None
-
     def check_incoming_pdu(self):
         # There is something to read
         try:

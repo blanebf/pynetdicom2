@@ -344,11 +344,7 @@ class StorageServiceClass(ServiceClass):
         self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
 
-class QueryRetrieveServiceClass(ServiceClass):
-    pass
-
-
-class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
+class QueryRetrieveFindSOPClass(ServiceClass):
     sop_classes = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS,
                    PATIENT_STUDY_ONLY_FIND_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES, IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS,
@@ -407,7 +403,7 @@ class QueryRetrieveFindSOPClass(QueryRetrieveServiceClass):
         self.dimse.send(rsp, self.pcid, self.max_pdu_length)
 
 
-class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
+class QueryRetrieveGetSOPClass(ServiceClass):
     sop_classes = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
                    PATIENT_STUDY_ONLY_GET_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES_NUMBER_OF_MATCHES,
@@ -446,9 +442,8 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                     d = dsutils.decode(msg.dataset,
                                        self.transfer_syntax.is_implicit_VR,
                                        self.transfer_syntax.is_little_endian)
-                    sop_class = SOP_CLASSES[d.SOPClassUID]
-                    status = self.ae.on_receive_store(sop_class, d)
-                    yield sop_class, d
+                    status = self.ae.on_receive_store(self, d)
+                    yield self, d
                 except exceptions.EventHandlingError:
                     status = CANNOT_UNDERSTAND
 
@@ -456,7 +451,7 @@ class QueryRetrieveGetSOPClass(QueryRetrieveServiceClass):
                 self.dimse.send(rsp, id_, self.max_pdu_length)
 
 
-class QueryRetrieveMoveSOPClass(QueryRetrieveServiceClass):
+class QueryRetrieveMoveSOPClass(ServiceClass):
     sop_classes = [PATIENT_ROOT_MOVE_SOP_CLASS, STUDY_ROOT_MOVE_SOP_CLASS,
                    PATIENT_STUDY_ONLY_MOVE_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES_NUMBER_OF_MATCHES,

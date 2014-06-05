@@ -35,31 +35,6 @@ def build_pres_context_def_list(context_def_list):
                                             ts_sub_items)
 
 
-class ACSEServiceProvider(object):
-    def __init__(self, dul):
-        self.dul = dul
-
-    def check_release(self):
-        """Checks for release request from the remote AE. Upon reception of
-        the request a confirmation is sent"""
-        rel = self.dul.peek()
-        if isinstance(rel, pdu.AReleaseRqPDU):
-            self.dul.receive(wait=False)
-            self.dul.send(pdu.AReleaseRpPDU())
-            return True
-        else:
-            return False
-
-    def check_abort(self):
-        """Checks for abort indication from the remote AE. """
-        rel = self.dul.peek()
-        if isinstance(rel, pdu.AAbortPDU):
-            self.dul.receive(wait=False)
-            return True
-        else:
-            return False
-
-
 class Association(object):
     """Base association class.
 
@@ -81,12 +56,10 @@ class Association(object):
 
         self.max_pdu_length = 16000
         self.accepted_presentation_contexts = []
+        self.dimse = dimseprovider.DIMSEServiceProvider(self)
 
-        self.asce = ACSEServiceProvider(self.dul)
-        self.dimse = dimseprovider.DIMSEServiceProvider(self.dul)
-
-    def get_dul_message(self):
-        dul_msg = self.dul.receive(True)
+    def get_dul_message(self, timeout=None):
+        dul_msg = self.dul.receive(True, timeout)
         if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
             return dul_msg
         elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
@@ -96,6 +69,9 @@ class Association(object):
                                                      dul_msg.reason_diag)
         else:
             raise exceptions.NetDICOMError()
+
+    def send(self, primitive):
+        self.dul.send(primitive)
 
     def kill(self):
         """Stops internal DUL service provider.
@@ -210,23 +186,7 @@ class AssociationAcceptor(threading.Thread, Association):
         )
         self.dul.send(res)
 
-    def run(self):
-        assoc_req = self.dul.receive(wait=True)
-        try:
-            self.ae.on_association_request(assoc_req)
-        except exceptions.AssociationRejectedError as e:
-            self.reject(e.result, e.source, e.diagnostic)
-            self.kill()
-            return
-
-        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
-
-        # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
-                                   self.accepted_presentation_contexts]
-        self.association_established = True
-
-        # association established. Listening on local and remote interfaces
+    def loop(self):
         while not self.is_killed:
             time.sleep(0.001)
             dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
@@ -244,10 +204,32 @@ class AssociationAcceptor(threading.Thread, Association):
                     transfer_syntax=transfer_syntax,
                     max_pdu_length=self.max_pdu_length)
                 obj.scp(dimse_msg)  # run SCP
-            if self.asce.check_release():
-                self.kill()
-            if self.asce.check_abort():
-                self.kill()
+
+    def run(self):
+        assoc_req = self.dul.receive(wait=True)
+        try:
+            self.ae.on_association_request(assoc_req)
+        except exceptions.AssociationRejectedError as e:
+            self.reject(e.result, e.source, e.diagnostic)
+            self.kill()
+            return
+
+        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
+
+        # build list of SOPClasses supported
+        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
+                                   self.accepted_presentation_contexts]
+        self.association_established = True
+
+        # association established. Listening on local and remote interfaces
+        try:
+            self.loop()
+        except exceptions.AssociationReleasedError:
+            self.dul.send(pdu.AReleaseRpPDU())
+        except exceptions.AssociationAbortedError:
+            pass  # TODO: Log abort
+        finally:
+            self.kill()
 
 
 class AssociationRequester(Association):

@@ -8,13 +8,11 @@
 import time
 
 import netdicom2.dimsemessages as dimsemessages
-import netdicom2.pdu as pdu
 
 
 class DIMSEServiceProvider(object):
-
-    def __init__(self, dul):
-        self.dul = dul
+    def __init__(self, asce):
+        self.asce = asce
         self.message = None
 
     def send(self, dimse_msg, id_, max_pdu_length):
@@ -23,7 +21,7 @@ class DIMSEServiceProvider(object):
         dimse_msg.set_length()
         p_data_list = dimse_msg.encode(id_, max_pdu_length)
         for p_data in p_data_list:
-            self.dul.send(p_data)
+            self.asce.send(p_data)
 
     def receive(self, wait=False, timeout=None):
         if self.message is None:
@@ -32,19 +30,11 @@ class DIMSEServiceProvider(object):
             # loop until complete DIMSE message is received
             while 1:
                 time.sleep(0.001)
-                nxt = self.dul.peek()
-                if nxt is None:
-                    continue
-                if nxt.__class__ is not pdu.PDataTfPDU:
-                    return None, None
-                if self.message.decode(self.dul.receive(wait, timeout)):
+                if self.message.decode(self.asce.get_dul_message(timeout)):
                     tmp, self.message = self.message, None
                     return tmp, tmp.id_
         else:
-            cls = self.dul.peek().__class__
-            if cls not in (type(None), pdu.PDataTfPDU):
-                return None, None
-            if self.message.decode(self.dul.receive(wait, timeout)):
+            if self.message.decode(self.asce.get_dul_message(timeout)):
                 tmp, self.message = self.message, None
                 return tmp, tmp.id_
             else:
