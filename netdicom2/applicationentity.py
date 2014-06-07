@@ -91,8 +91,7 @@ class AE(threading.Thread):
         while not self._quit:
             # main loop
             time.sleep(0.1)
-            a, _, _ = select.select([self.local_server_socket], [], [], 0)
-            if a:
+            if select.select([self.local_server_socket], [], [], 0)[0]:
                 # got an incoming connection
                 client_socket, remote_address = self.local_server_socket.accept()
                 # create a new association
