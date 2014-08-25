@@ -293,7 +293,7 @@ class CStoreRQMessage(DIMSERequestMessage):
 
 @status_mixin
 class CStoreRSPMessage(DIMSEResponseMessage):
-    command_field = 0x0101
+    command_field = 0x8001
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
                       'AffectedSOPInstanceUID']
@@ -309,7 +309,7 @@ class CFindRQMessage(DIMSERequestMessage):
 
 @status_mixin
 class CFindRSPMessage(DIMSEResponseMessage):
-    command_field = 0x0101
+    command_field = 0x8020
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status']
 

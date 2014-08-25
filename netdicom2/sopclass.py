@@ -369,7 +369,7 @@ class QueryRetrieveFindSOPClass(ServiceClass):
             response, id_ = self.dimse.receive(wait=False)
             if not response:
                 continue
-            d = dsutils.decode(response.identifier,
+            d = dsutils.decode(response.data_set,
                                self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
             status = self.code_to_status(response.status).status_type
@@ -439,7 +439,7 @@ class QueryRetrieveGetSOPClass(ServiceClass):
                 rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
                 rsp.affected_sop_class_uid = msg.affected_sop_class_uid
                 try:
-                    d = dsutils.decode(msg.dataset,
+                    d = dsutils.decode(msg.data_set,
                                        self.transfer_syntax.is_implicit_VR,
                                        self.transfer_syntax.is_little_endian)
                     status = self.ae.on_receive_store(self, d)

@@ -274,8 +274,8 @@ class AssociationRequester(Association):
         variable_items.extend(build_pres_context_def_list(pcdl))
         variable_items.append(pdu.UserInformationItem(user_information))
         assoc_rq = pdu.AAssociateRqPDU(
-            called_ae_title=local_ae['aet'],
-            calling_ae_title=remote_ae['aet'],
+            called_ae_title=remote_ae['aet'],
+            calling_ae_title=local_ae['aet'],
             variable_items=variable_items
         )
         # FIXME pass parameter properly
