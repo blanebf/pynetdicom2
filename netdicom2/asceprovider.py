@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -7,176 +7,344 @@
 
 
 # This module provides association services
+import threading
 import time
-import logging
 
 from dicom.UID import UID
 
-import dulparameters
-from netdicom2 import dulprovider
-from pdu import MaximumLengthParameters
+import netdicom2.exceptions as exceptions
+import netdicom2.dulprovider as dulprovider
+import netdicom2.dimseprovider as dimseprovider
+
+import netdicom2.pdu as pdu
+
+import netdicom2.sopclass as sopclass
+import netdicom2.userdataitems as userdataitems
 
 
-logger = logging.getLogger(__name__)
+APPLICATION_CONTEXT_NAME = '1.2.840.10008.3.1.1.1'
 
 
-class AssociationRefused(Exception):
-
-    def __init__(self, data=None):
-        self.data = data
-
-
-class NoAcceptablePresentationContext(Exception):
-
-    def __init__(self, data=None):
-        self.data = data
+def build_pres_context_def_list(context_def_list):
+    for context_def in context_def_list:
+        context_id = context_def[0]
+        abs_sub_item = pdu.AbstractSyntaxSubItem(context_def[1])
+        ts_sub_items = [pdu.TransferSyntaxSubItem(i)
+                        for i in context_def[2]]
+        yield pdu.PresentationContextItemRQ(context_id, abs_sub_item,
+                                            ts_sub_items)
 
 
-class ACSEServiceProvider(object):
+class Association(object):
+    """Base association class.
 
-    def __init__(self, dul):
-        self.dul = dul
-        self.application_context_name = '1.2.840.10008.3.1.1.1'
-        self.local_ae = None
-        self.remote_ae = None
+    Class is not intended for direct usage and meant to be sub-classed.
+    Class provides basic association interface: creation, release and abort.
+    """
+
+    def __init__(self, local_ae, dul_socket):
+        """Initializes Association instance with local AE title and DUL service
+        provider
+
+        :param local_ae: local AE title parameters
+        :param dul_socket: socket for DUL provider or None if it's not needed
+        """
+        super(Association, self).__init__()
+        self.dul = dulprovider.DULServiceProvider(dul_socket)
+        self.ae = local_ae
+        self.association_established = False
+
         self.max_pdu_length = 16000
         self.accepted_presentation_contexts = []
+        self.dimse = dimseprovider.DIMSEServiceProvider(self)
 
-    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None, timeout=30):
+    def get_dul_message(self, timeout=None):
+        dul_msg = self.dul.receive(True, timeout)
+        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
+            return dul_msg
+        elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
+            raise exceptions.AssociationReleasedError()
+        elif dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
+            raise exceptions.AssociationAbortedError(dul_msg.source,
+                                                     dul_msg.reason_diag)
+        else:
+            raise exceptions.NetDICOMError()
+
+    def send(self, primitive):
+        self.dul.send(primitive)
+
+    def kill(self):
+        """Stops internal DUL service provider.
+
+        In most cases you won't need to use this method directly. Refer to
+        release and abort instead.
+        :rtype : None
+        """
+        for _ in xrange(1000):
+            if self.dul.stop():
+                continue
+            time.sleep(0.001)
+        self.dul.kill()
+
+    def release(self):
+        """Releases association.
+
+        Requests the release of the associations and waits for
+        confirmation
+
+        :rtype : None
+        """
+        self.dul.send(pdu.AReleaseRqPDU())
+        rsp = self.dul.receive(wait=True)
+        self.kill()
+        return rsp
+
+
+class AssociationAcceptor(threading.Thread, Association):
+    """'Server-side' association implementation.
+
+    Class is intended for handling incoming association requests.
+    """
+
+    def __init__(self, local_ae, client_socket):
+        """Initializes AssociationAcceptor instance with specified client socket
+
+        :param local_ae: local AE title
+        :param client_socket: client socket
+        """
+        Association.__init__(self, local_ae, client_socket)
+        threading.Thread.__init__(self)
+        self.client_socket = client_socket
+        self.is_killed = False
+        self.sop_classes_as_scp = []
+        self.start()
+
+    def kill(self):
+        """Overrides base class kill method to set stop-flag for running thread
+
+        :rtype : None
+        """
+        self.is_killed = True
+        super(AssociationAcceptor, self).kill()
+
+    def abort(self, reason):
+        """Aborts association with specified reason
+
+        :rtype : None
+        :param reason: abort reason
+        """
+        self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
+        self.kill()
+
+    def reject(self, result, source, diag):
+        """Rejects association with specified parameters
+
+        :param result:
+        :param source:
+        :param diag:
+        """
+        self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
+
+    def accept(self, assoc_req, acceptable_pres_contexts=None):
+        """Waits for an association request from a remote AE. Upon reception
+        of the request sends association response based on
+        acceptable_presentation_contexts"""
+        user_items = assoc_req.variable_items[-1]
+        self.max_pdu_length = user_items.user_data[0].maximum_length_received
+
+        # analyse proposed presentation contexts
+        rsp = [assoc_req.variable_items[0]]
+        self.accepted_presentation_contexts = []
+        acceptable_sop = [x[0] for x in acceptable_pres_contexts]
+        for item in assoc_req.variable_items[1:-1]:
+            context_id = item.context_id
+            proposed_sop = item.abs_sub_item.name
+            proposed_ts = item.ts_sub_items
+            if proposed_sop not in acceptable_sop:
+                # Refuse sop class because of SOP class not supported
+                rsp.append(pdu.PresentationContextItemAC(
+                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+                continue
+
+            acceptable_ts = [x[1] for x in acceptable_pres_contexts
+                             if x[0] == proposed_sop][0]
+            for ts in proposed_ts:
+                if ts.name in acceptable_ts:
+                    # accept sop class and ts
+                    rsp.append(pdu.PresentationContextItemAC(context_id, 0, ts))
+                    self.accepted_presentation_contexts.append(
+                        (item.context_id, proposed_sop, UID(ts.name)))
+                    break
+            else:  # Refuse sop class because of TS not supported
+                rsp.append(pdu.PresentationContextItemAC(
+                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+        rsp.append(user_items)
+        res = pdu.AAssociateAcPDU(
+            called_ae_title=assoc_req.called_ae_title,
+            calling_ae_title=assoc_req.calling_ae_title,
+            variable_items=rsp
+        )
+        self.dul.send(res)
+
+    def loop(self):
+        while not self.is_killed:
+            time.sleep(0.001)
+            dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
+            if dimse_msg:  # dimse message received
+                uid = dimse_msg.affected_sop_class_uid
+                try:
+                    pcid, sop_class, transfer_syntax = \
+                        [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
+                except IndexError:
+                    raise exceptions.ClassNotSupportedError(
+                        'SOP Class {0} not supported as SCP'.format(uid))
+                obj = sopclass.SOP_CLASSES[uid](
+                    ae=self.ae, uid=sop_class,
+                    dimse=self.dimse, pcid=pcid,
+                    transfer_syntax=transfer_syntax,
+                    max_pdu_length=self.max_pdu_length)
+                obj.scp(dimse_msg)  # run SCP
+
+    def run(self):
+        assoc_req = self.dul.receive(wait=True)
+        try:
+            self.ae.on_association_request(assoc_req)
+        except exceptions.AssociationRejectedError as e:
+            self.reject(e.result, e.source, e.diagnostic)
+            self.kill()
+            return
+
+        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
+
+        # build list of SOPClasses supported
+        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
+                                   self.accepted_presentation_contexts]
+        self.association_established = True
+
+        # association established. Listening on local and remote interfaces
+        try:
+            self.loop()
+        except exceptions.AssociationReleasedError:
+            self.dul.send(pdu.AReleaseRpPDU())
+        except exceptions.AssociationAbortedError:
+            pass  # TODO: Log abort
+        finally:
+            self.kill()
+
+
+class AssociationRequester(Association):
+    def __init__(self, local_ae, remote_ae=None):
+        super(AssociationRequester, self).__init__(local_ae, None)
+        self.ae = local_ae
+        self.remote_ae = remote_ae
+        self.sop_classes_as_scu = []
+        self.association_refused = False
+        self._request()
+
+    def abort(self, reason=0):
+        """Aborts association with specified reason
+
+        :rtype : None
+        :param reason: abort reason
+        """
+        self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
+        self.kill()
+
+    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None,
+                timeout=30):
         """Requests an association with a remote AE and waits for association
         response."""
-        self.local_ae = local_ae
-        self.remote_ae = remote_ae
         self.max_pdu_length = mp
 
-        # build association service parameters object
-        assoc_rq = dulparameters.AAssociateServiceParameters()
-        assoc_rq.application_context_name = self.application_context_name
-        assoc_rq.calling_ae_title = self.local_ae['AET']
-        assoc_rq.called_ae_title = self.remote_ae['AET']
-        max_pdu_length_par = MaximumLengthParameters()
-        max_pdu_length_par.maximum_length_received = mp
-        if users_pdu:
-            assoc_rq.user_information = [max_pdu_length_par] + users_pdu
-        else:
-            assoc_rq.user_information = [max_pdu_length_par]
-        assoc_rq.calling_presentation_address = (self.local_ae['Address'], self.local_ae['Port'])
-        assoc_rq.called_presentation_address = (self.remote_ae['Address'], self.remote_ae['Port'])
-        assoc_rq.presentation_context_definition_list = pcdl
-        logger.debug(pcdl)
-        # send A-Associate request
-        logger.debug("Sending Association Request")
+        max_pdu_length_par = userdataitems.MaximumLengthSubItem(mp)
+        user_information = [max_pdu_length_par] + users_pdu \
+            if users_pdu else [max_pdu_length_par]
+        username = remote_ae.get('username')
+        password = remote_ae.get('password')
+        if username and password:
+            user_information.append(
+                userdataitems.UserIdentityNegotiationSubItem(username,
+                                                             password))
+        elif username:
+            user_information.append(
+                userdataitems.UserIdentityNegotiationSubItem(
+                    username, user_identity_type=1))
+
+        variable_items = [pdu.ApplicationContextItem(APPLICATION_CONTEXT_NAME)]
+        variable_items.extend(build_pres_context_def_list(pcdl))
+        variable_items.append(pdu.UserInformationItem(user_information))
+        assoc_rq = pdu.AAssociateRqPDU(
+            called_ae_title=remote_ae['aet'],
+            calling_ae_title=local_ae['aet'],
+            variable_items=variable_items
+        )
+        # FIXME pass parameter properly
+        assoc_rq.called_presentation_address = (remote_ae['address'],
+                                                remote_ae['port'])
         self.dul.send(assoc_rq)
-
-        # get answer
-        logger.debug("Waiting for Association Response")
-
-        assoc_rsp = self.dul.receive(True, timeout)
-        if not assoc_rsp:
+        response = self.dul.receive(True, timeout)
+        if not response:
             return False
-        logger.debug(assoc_rsp)
-
-        try:
-            if assoc_rsp.result != 'Accepted':
-                return False
-        except AttributeError:
-            return False
-
+        if response.pdu_type == pdu.AAssociateRjPDU.pdu_type:
+            raise exceptions.AssociationRejectedError(
+                response.result, response.source, response.reason_diag)
         # Get maximum pdu length from answer
+        user_data = response.variable_items[-1].user_data
         try:
-            self.max_pdu_length = assoc_rsp.user_information[0].maximum_length_received
+            self.max_pdu_length = user_data[0].maximum_length_received
         except IndexError:
             self.max_pdu_length = 16000
 
         # Get accepted presentation contexts
         self.accepted_presentation_contexts = []
-        for cc in assoc_rsp.presentation_context_definition_result_list:
-            if cc[1] == 0:
-                uid = [x[1] for x in pcdl if x[0] == cc[0]][0]
-                self.accepted_presentation_contexts.append((cc[0], uid, UID(cc[2])))
-        return True
+        for context in response.variable_items[1:-1]:
+            if context.result_reason == 0:
+                uid = [x[1] for x in pcdl if x[0] == context.context_id][0]
+                self.accepted_presentation_contexts.append(
+                    (context.context_id, uid, UID(context.ts_sub_item.name)))
+        return response
 
-    def accept(self, client_socket=None, acceptable_presentation_contexts=None, wait=True):
-        """Waits for an association request from a remote AE. Upon reception
-        of the request sends association response based on
-        acceptable_presentation_contexts"""
-        if self.dul is None:
-            self.dul = dulprovider.DULServiceProvider(socket_=client_socket)
-        assoc = self.dul.receive(wait=True)
-        if not assoc:
-            return None
+    def _request(self):
+        ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
+               for i in self.ae.acceptable_presentation_contexts]
+        response = self.request(
+            self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
+            self.ae.presentation_context_definition_list, users_pdu=ext
+        )
+        self.ae.on_association_response(response)
+        self.sop_classes_as_scu = [(context[0], context[1], context[2])
+                                   for context in
+                                   self.accepted_presentation_contexts]
+        self.association_established = True
 
-        self.max_pdu_length = assoc.user_information[0].maximum_length_received
+    def scu(self, ds, id_):
+        uid = ds.SOPClassUID
+        try:
+            pcid, _, transfer_syntax = \
+                [x for x in self.sop_classes_as_scu if x[1] == uid][0]
+        except IndexError:
+            raise exceptions.ClassNotSupportedError(
+                'SOP Class %s not supported as SCU')
 
-        # analyse proposed presentation contexts
-        rsp = []
-        self.accepted_presentation_contexts = []
-        acceptable_sop = [x[0] for x in acceptable_presentation_contexts]
-        for ii in assoc.presentation_context_definition_list:
-            proposed_sop = ii[1]
-            proposed_ts = ii[2]
-            if proposed_sop in acceptable_sop:
-                acceptable_ts = [x[1] for x in acceptable_presentation_contexts if x[0] == proposed_sop][0]
-                for ts in proposed_ts:
-                    if ts in acceptable_ts:
-                        # accept sop class and ts
-                        rsp.append((ii[0], 0, ts))
-                        self.accepted_presentation_contexts.append((ii[0], proposed_sop, UID(ts)))
-                        break
-                else:  # Refuse sop class because of TS not supported
-                    rsp.append((ii[0], 1, ''))
-            else:  # Refuse sop class because of SOP class not supported
-                rsp.append((ii[0], 1, ''))
+        obj = sopclass.SOP_CLASSES[uid](
+            ae=self.ae, uid=uid,
+            dimse=self.dimse, pcid=pcid,
+            transfer_syntax=transfer_syntax,
+            max_pdu_length=self.max_pdu_length
+        )
+        return obj.scu(ds, id_)
 
-        # Send response
-        res = assoc
-        res.presentation_context_definition_list = []
-        res.presentation_context_definition_result_list = rsp
-        res.result = 0
-        res.user_information = assoc.user_information
-        self.dul.send(res)
-        return True
-
-    def release(self, reason):
-        """Requests the release of the associations and waits for
-        confirmation"""
-        rel = dulparameters.AReleaseServiceParameters()
-        rel.reason = reason
-        self.dul.send(rel)
-        rsp = self.dul.receive(wait=True)
-        return rsp
-        # self.dul.kill()
-
-    def abort(self):
-        """Signifies the abortion of the association."""
-        self.dul.send(dulparameters.AAbortServiceParameters())
-        time.sleep(0.5)
-        # self.dul.kill()
-
-    def check_release(self):
-        """Checks for release request from the remote AE. Upon reception of
-        the request a confirmation is sent"""
-        rel = self.dul.peek()
-        if isinstance(rel, dulparameters.AReleaseServiceParameters):
-            self.dul.receive(wait=False)
-            release_rsp = dulparameters.AReleaseServiceParameters()
-            release_rsp.result = 0
-            self.dul.send(release_rsp)
-            return True
-        else:
-            return False
-
-    def check_abort(self):
-        """Checks for abort indication from the remote AE. """
-        rel = self.dul.peek()
-        if isinstance(rel, (dulparameters.AAbortServiceParameters, dulparameters.APAbortServiceParameters)):
-            self.dul.receive(wait=False)
-            return True
-        else:
-            return False
-
-    def status(self):
-        return self.dul.state_machine.current_state()
-
-    def kill(self):
-        self.dul.kill()
+    def get_scu(self, sop_class):
+        try:
+            pcid, _, transfer_syntax = \
+                [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
+        except IndexError:
+            raise exceptions.ClassNotSupportedError(
+                'SOP Class %s not supported as SCU' % sop_class)
+        obj = sopclass.SOP_CLASSES[sop_class](
+            ae=self.ae, uid=sop_class,
+            dimse=self.dimse, pcid=pcid,
+            transfer_syntax=transfer_syntax,
+            max_pdu_length=self.max_pdu_length
+        )
+        return obj

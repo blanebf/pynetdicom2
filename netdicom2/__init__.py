@@ -1,6 +1,7 @@
 # adapted from pydicom source code
 
 import __version__
+
 __version_info__ = __version__.__version__.split('.')
 
 # some imports
@@ -8,12 +9,15 @@ import applicationentity
 import sopclass
 
 
-def _setup_request(search_level, search_params, addr, port, aet, transfer_syntax=None):
+def _setup_request(search_level, search_params, addr, port, aet,
+                   transfer_syntax=None):
     import dicom.UID
     import dicom.dataset
     import dicom.datadict
+
     if not transfer_syntax:
-        transfer_syntax = [dicom.UID.ExplicitVRLittleEndian, dicom.UID.ImplicitVRLittleEndian,
+        transfer_syntax = [dicom.UID.ExplicitVRLittleEndian,
+                           dicom.UID.ImplicitVRLittleEndian,
                            dicom.UID.ExplicitVRBigEndian]
 
     remote_ae = {'Address': addr, 'Port': port, 'AET': aet}
@@ -25,31 +29,44 @@ def _setup_request(search_level, search_params, addr, port, aet, transfer_syntax
     return remote_ae, ds, transfer_syntax
 
 
-def c_find(search_level, search_params, addr, port, aet, loc_aet, loc_port, transfer_syntax=None):
-    remote_ae, ds, transfer_syntax = _setup_request(search_level, search_params, addr, port, aet, transfer_syntax)
-    ae = applicationentity.AE(loc_aet, loc_port, sopclass.QueryRetrieveFindSOPClass.sop_classes, [],
+def c_find(search_level, search_params, addr, port, aet, loc_aet, loc_port,
+           transfer_syntax=None):
+    remote_ae, ds, transfer_syntax = _setup_request(search_level, search_params,
+                                                    addr, port, aet,
+                                                    transfer_syntax)
+    ae = applicationentity.AE(loc_aet, loc_port,
+                              sopclass.QueryRetrieveFindSOPClass.sop_classes,
+                              [],
                               transfer_syntax)
     try:
         ae.start()
         assoc = ae.request_association(remote_ae)
+
         if not assoc:
-            raise Exception('Association request failed')  # TODO: Replace this exception
-        for result in assoc.get_scu(sopclass.PatientRootFindSOPClass).scu(ds, 1):
+            # TODO: Replace this exception
+            raise Exception('Association request failed')
+        for result in assoc.get_scu(sopclass.PATIENT_ROOT_FIND_SOP_CLASS).scu(ds,
+                                                                          1):
             yield result[1]
     finally:
         ae.quit()
 
 
-def c_get(search_level, search_params, addr, port, aet, loc_aet, loc_port, transfer_syntax=None):
-    remote_ae, ds, transfer_syntax = _setup_request(search_level, search_params, addr, port, aet, transfer_syntax)
-    ae = applicationentity.AE(loc_aet, loc_port, sopclass.QueryRetrieveGetSOPClass.sop_classes, [],
+def c_get(search_level, search_params, addr, port, aet, loc_aet, loc_port,
+          transfer_syntax=None):
+    remote_ae, ds, transfer_syntax = _setup_request(search_level, search_params,
+                                                    addr, port, aet,
+                                                    transfer_syntax)
+    ae = applicationentity.AE(loc_aet, loc_port,
+                              sopclass.QueryRetrieveGetSOPClass.sop_classes, [],
                               transfer_syntax)
     try:
         ae.start()
         assoc = ae.request_association(remote_ae)
         if not assoc:
-            raise Exception('Association request failed')  # TODO: Replace this exception
-        for result in assoc.get_scu(sopclass.PatientRootGetSOPClass).scu(ds, 1):
+            # TODO: Replace this exception
+            raise Exception('Association request failed')
+        for result in assoc.get_scu(sopclass.PATIENT_ROOT_GET_SOP_CLASS).scu(ds, 1):
             yield result[1]
     finally:
         ae.quit()

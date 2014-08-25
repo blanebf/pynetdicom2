@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -6,14 +6,15 @@
 #
 
 """
-This module implements the DUL service provider, allowing a DUL service user to send and receive DUL messages.
-The User and Provider talk to each other using a TCP socket. The DULServer runs in a thread,
-so that and implements an event loop whose events will drive the state machine.
+This module implements the DUL service provider, allowing a DUL service user to
+send and receive DUL messages.  The User and Provider talk to each other using
+a TCP socket. The DULServer runs in a thread, so that and implements an event
+loop whose events will drive the state machine.
 """
 
 import collections
 
-from threading import Thread
+import threading
 import socket
 import time
 import os
@@ -22,18 +23,13 @@ import Queue
 import logging
 import struct
 
-from netdicom2 import pdu
-
-import timer
-import fsm
-import dulparameters
+import netdicom2.timer as timer
+import netdicom2.fsm as fsm
+import netdicom2.pdu as pdu
+import netdicom2.exceptions as exceptions
 
 
 logger = logging.getLogger(__name__)
-
-
-class InvalidPrimitive(Exception):
-    pass
 
 
 def recv_n(sock, n):
@@ -44,12 +40,32 @@ def recv_n(sock, n):
         ret.append(tmp)
         read_length += len(tmp)
     if read_length != n:
-        raise RuntimeError('Low level Network ERROR: ')
+        raise exceptions.NetDICOMError('Low level network error')
     return ''.join(ret)
 
 
-class DULServiceProvider(Thread):
+PDU_TYPES = {
+    0x01: (pdu.AAssociateRqPDU, 'Evt6'),
+    0x02: (pdu.AAssociateAcPDU, 'Evt3'),
+    0x03: (pdu.AAssociateRjPDU, 'Evt4'),
+    0x04: (pdu.PDataTfPDU, 'Evt10'),
+    0x05: (pdu.AReleaseRqPDU, 'Evt12'),
+    0x06: (pdu.AReleaseRpPDU, 'Evt13'),
+    0x07: (pdu.AAbortPDU, 'Evt16')
+}
 
+PDU_TO_EVENT = {
+    pdu.AAssociateRqPDU.pdu_type: 'Evt1',  # A-ASSOCIATE Request
+    pdu.AAssociateAcPDU.pdu_type: 'Evt7',  # A-ASSOCIATE Response (accept)
+    pdu.AAssociateRjPDU.pdu_type: 'Evt8',  # A-ASSOCIATE Response (reject)
+    pdu.AReleaseRqPDU.pdu_type: 'Evt11',   # A-Release Request
+    pdu.AReleaseRpPDU.pdu_type: 'Evt14',   # A-Release Response
+    pdu.AAbortPDU.pdu_type: 'Evt15',
+    pdu.PDataTfPDU.pdu_type: 'Evt9'
+}
+
+
+class DULServiceProvider(threading.Thread):
     def __init__(self, socket_=None, port=None, name=''):
         """
         Three ways to call DULServiceProvider. If a port number is given,
@@ -92,13 +108,17 @@ class DULServiceProvider(Thread):
             # This is the socket that will accept connections
             # from the remote DUL provider
             # start this instance of DULServiceProvider in a thread.
-            self.local_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.local_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.local_server_socket = socket.socket(socket.AF_INET,
+                                                     socket.SOCK_STREAM)
+            self.local_server_socket.setsockopt(socket.SOL_SOCKET,
+                                                socket.SO_REUSEADDR, 1)
 
             self.local_server_port = port
             if self.local_server_port:
                 try:
-                    self.local_server_socket.bind((os.popen('hostname').read()[:-1], self.local_server_port))
+                    self.local_server_socket.bind((
+                        os.popen('hostname').read()[:-1],
+                        self.local_server_port))
                 except IOError:
                     logger.exception("Failed to bind socket")
                 self.local_server_socket.listen(1)
@@ -138,14 +158,6 @@ class DULServiceProvider(Thread):
         except Queue.Empty:
             return None
 
-    def peek(self):
-        """Look at next item to be returned by get"""
-        # TODO: Fix this method
-        try:
-            return self.to_service_user.queue[0]
-        except:
-            return None
-
     def check_incoming_pdu(self):
         # There is something to read
         try:
@@ -171,32 +183,39 @@ class DULServiceProvider(Thread):
             tmp = recv_n(self.remote_client_socket, length[0])
             raw_pdu += tmp
 
-            # Determine the type of PDU coming on remote port and set the event accordingly
-            self.pdu = socket_to_pdu(raw_pdu)
-            self.event.append(pdu_to_event(self.pdu))
-            self.primitive = self.pdu.to_params()
+            # Determine the type of PDU coming on remote port and set the event
+            # accordingly
+            try:
+                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
+                self.pdu = pdu_type.decode(raw_pdu)
+                self.event.append(event)
+                self.primitive = self.pdu
+            except KeyError:
+                logger.error('Unrecognized or invalid PDU')
+                self.event.append('Evt19')
 
     def check_timer(self):
-        #logger.debug('%s: checking timer' % (self.name))
         if self.timer.check() is False:
-            logger.debug('%s: timer expired' % self.name)
+            logger.debug('%s: timer expired', self.name)
             self.event.append('Evt18')  # Timer expired
             return True
         else:
             return False
 
     def check_incoming_primitive(self):
-        #logger.debug('%s: checking incoming primitive' % (self.name))
         # look at self.ReceivePrimitive for incoming primitives
         try:
             self.primitive = self.from_service_user.get(False, None)
-            self.event.append(primitive_to_event(self.primitive))
+            self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
             return True
+        except KeyError:
+            raise exceptions.PDUProcessingError(
+                'Unknown PDU {0} with type {1}'.format(self.primitive,
+                                                       self.primitive.pdu_type))
         except Queue.Empty:
             return False
 
     def check_network(self):
-        #logger.debug('%s: checking network' % (self.name))
         if self.state_machine.current_state == 'Sta13':
             # wainting for connection to close
             if self.remote_client_socket is None:
@@ -216,7 +235,8 @@ class DULServiceProvider(Thread):
             a, _, _ = select.select([self.local_server_socket], [], [], 0)
             if a:
                 # got an incoming connection
-                self.remote_client_socket, address = self.local_server_socket.accept()
+                self.remote_client_socket, \
+                    address = self.local_server_socket.accept()
                 self.event.append('Evt5')
                 return True
         elif self.remote_client_socket:
@@ -232,85 +252,19 @@ class DULServiceProvider(Thread):
             return False
 
     def run(self):
-        logger.debug('%s: DUL loop started' % self.name)
-        while not self.is_killed:
-            time.sleep(0.001)
-            # catch an event
-            self.check_network() or self.check_incoming_primitive() or self.check_timer()
-            try:
-                evt = self.event.popleft()
-            except IndexError:
-                continue
-            self.state_machine.action(evt, self)
-        logger.debug('%s: DUL loop ended' % self.name)
-
-
-def primitive_to_event(primitive):
-    if isinstance(primitive, dulparameters.AAssociateServiceParameters):
-        if primitive.result is None:
-            return 'Evt1'  # A-ASSOCIATE Request
-        elif primitive.result == 0:
-            return 'Evt7'  # A-ASSOCIATE Response (accept)
-        else:
-            return 'Evt8'  # A-ASSOCIATE Response (reject)
-    elif isinstance(primitive, dulparameters.AReleaseServiceParameters):
-        if primitive.result is None:
-            return 'Evt11'  # A-Release Request
-        else:
-            return 'Evt14'  # A-Release Response
-    elif isinstance(primitive, dulparameters.AAbortServiceParameters):
-        return 'Evt15'
-    elif isinstance(primitive, dulparameters.PDataServiceParameters):
-        return 'Evt9'
-    else:
-        raise InvalidPrimitive
-
-
-def socket_to_pdu(data):
-    # Returns the PDU object associated with an incoming data stream
-    pdu_type = struct.unpack('B', data[0])[0]
-    if pdu_type == 0x01:
-        pdu_ = pdu.AAssociateRqPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x02:
-        pdu_ = pdu.AAssociateAcPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x03:
-        pdu_ = pdu.AAssociateRjPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x04:
-        pdu_ = pdu.PDataTfPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x05:
-        pdu_ = pdu.AReleaseRqPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x06:
-        pdu_ = pdu.AReleaseRpPDU()
-        pdu_.decode(data)
-    elif pdu_type == 0x07:
-        pdu_ = pdu.AAbortPDU()
-        pdu_.decode(data)
-    else:
-        logger.error('Unrecognized or invalid PDU')
-        pdu_ = None
-    return pdu_
-
-
-def pdu_to_event(pdu_):
-    if isinstance(pdu_, pdu.AAssociateRqPDU):
-        return 'Evt6'
-    elif isinstance(pdu_, pdu.AAssociateAcPDU):
-        return 'Evt3'
-    elif isinstance(pdu_, pdu.AAssociateRjPDU):
-        return 'Evt4'
-    elif isinstance(pdu_, pdu.PDataTfPDU):
-        return 'Evt10'
-    elif isinstance(pdu_, pdu.AReleaseRqPDU):
-        return 'Evt12'
-    elif isinstance(pdu_, pdu.AReleaseRpPDU):
-        return 'Evt13'
-    elif isinstance(pdu_, pdu.AAbortPDU):
-        return 'Evt16'
-    else:
-        logger.log('Unrecognized or invalid PDU')
-        return 'Evt19'
+        logger.debug('%s: DUL loop started', self.name)
+        try:
+            while not self.is_killed:
+                time.sleep(0.001)
+                # catch an event
+                self.check_network() or self.check_incoming_primitive() or\
+                    self.check_timer()
+                try:
+                    evt = self.event.popleft()
+                except IndexError:
+                    continue
+                self.state_machine.action(evt, self)
+        except Exception:
+            self.event.append(pdu.AAbortPDU(source=0, reason_diag=0))
+            raise
+        logger.debug('%s: DUL loop ended', self.name)

@@ -1,11 +1,10 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
-#
 
-# Timer class
+
 import time
 import logging
 
@@ -31,16 +30,9 @@ class Timer(object):
         self.start()
 
     def check(self):
-        if self._start_time and (time.time() - self._start_time > self._max_seconds):
+        if self._start_time and \
+                (time.time() - self._start_time > self._max_seconds):
             logger.warning("Timer expired")
             return False
         else:
             return True
-
-
-if __name__ == '__main__':
-    t = Timer(3)
-    t.start()
-    for ii in range(32):
-        time.sleep(0.2)
-        print t.check()

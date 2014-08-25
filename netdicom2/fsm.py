@@ -1,4 +1,4 @@
-#
+# Copyright (c) 2014 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
@@ -11,28 +11,27 @@ DICOM, Part 8, Section 7
 
 import socket
 
-from netdicom2 import pdu
-import dulparameters
-
-
+import netdicom2.pdu as pdu
 
 
 # Finite State machine action definitions
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 def ae_1(provider):
     # Issue TRANSPORT CONNECT request primitive to local transport service
-    provider.remote_client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    provider.remote_client_socket.connect(provider.primitive.called_presentation_address)
+    provider.remote_client_socket = socket.socket(socket.AF_INET,
+                                                  socket.SOCK_STREAM)
+    provider.remote_client_socket.connect(
+        provider.primitive.called_presentation_address)
 
 
 def ae_2(provider):
     # Send A-ASSOCIATE-RQ PDU
-    provider.pdu = pdu.AAssociateRqPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -42,7 +41,8 @@ def ae_3(provider):
 
 
 def ae_4(provider):
-    # Issue A-ASSOCIATE confirmation (reject) primitive and close transport connection
+    # Issue A-ASSOCIATE confirmation (reject) primitive and close
+    #  transport connection
     provider.to_service_user.put(provider.primitive)
     provider.remote_client_socket.close()
     provider.remote_client_socket = None
@@ -66,29 +66,20 @@ def ae_6(provider):
 
 def ae_7(provider):
     # Send A-ASSOCIATE-AC PDU
-    provider.pdu = pdu.AAssociateAcPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def ae_8(provider):
     # Send A-ASSOCIATE-RJ PDU and start ARTIM timer
-    provider.pdu = pdu.AAssociateRjPDU()
     # not sure about this ...
-    if provider.primitive.diagnostic is not None:
-        provider.primitive.result_source = 1
-    else:
-        provider.primitive.diagnostic = 1
-        provider.primitive.result_source = 2
-
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def dt_1(provider):
     # Send P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.primitive = None
     provider.remote_client_socket.send(provider.pdu.encode())
 
@@ -101,7 +92,6 @@ def dt_2(provider):
 def ar_1(provider):
     # Send A-RELEASE-RQ PDU
     provider.pdu = pdu.AReleaseRqPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -120,7 +110,6 @@ def ar_3(provider):
 def ar_4(provider):
     # Issue A-RELEASE-RP PDU and start ARTIM timer
     provider.pdu = pdu.AReleaseRpPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
     provider.timer.start()
 
@@ -137,8 +126,7 @@ def ar_6(provider):
 
 def ar_7(provider):
     # Issue P-DATA-TF PDU
-    provider.pdu = pdu.PDataTfPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -154,7 +142,6 @@ def ar_8(provider):
 def ar_9(provider):
     # Send A-RELEASE-RP PDU
     provider.pdu = pdu.AReleaseRpPDU()
-    provider.pdu.from_params(provider.primitive)
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -166,11 +153,7 @@ def ar_10(provider):
 def aa_1(provider):
     # Send A-ABORT PDU (service-user source) and start (or restart
     # if already started) ARTIM timer.
-    provider.pdu = pdu.AAbortPDU()
-    # CHECK THIS ...
-    provider.pdu.abort_source = 1
-    provider.pdu.reason_diag = 0
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
     provider.timer.restart()
 
@@ -195,7 +178,8 @@ def aa_3(provider):
 
 def aa_4(provider):
     # Issue A-P-ABORT indication primitive.
-    provider.primitive = dulparameters.AAbortServiceParameters()
+    # TODO look into this action
+    provider.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
     provider.to_service_user.put(provider.primitive)
 
 
@@ -211,8 +195,7 @@ def aa_6(provider):
 
 def aa_7(provider):
     # Send A-ABORT PDU.
-    provider.pdu = pdu.AAbortPDU()
-    provider.pdu.from_params(provider.primitive)
+    provider.pdu = provider.primitive
     provider.remote_client_socket.send(provider.pdu.encode())
 
 
@@ -220,9 +203,7 @@ def aa_8(provider):
     # Send A-ABORT PDU (service-provider source), issue and A-P-ABORT
     # indication, and start ARTIM timer.
     # Send A-ABORT PDU
-    provider.pdu = pdu.AAbortPDU()
-    provider.pdu.source = 2
-    provider.pdu.reason_diag = 0  # No reason given
+    provider.pdu = pdu.AAbortPDU(source=2, reason_diag=0)  # No reason given
     if provider.remote_client_socket:
         provider.remote_client_socket.send(provider.pdu.encode())
         # Issue A-P-ABORT indication
@@ -325,7 +306,6 @@ events = {
     'Evt17': "Transport connection closed",
     'Evt18': "ARTIM timer expired (rej/rel)",
     'Evt19': "Unrecognized/invalid PDU"}
-
 
 TransitionTable = {
 
@@ -472,8 +452,7 @@ TransitionTable = {
     ('Evt19', 'Sta13'): 'AA-7'}
 
 
-class StateMachine:
-
+class StateMachine(object):
     def __init__(self, provider):
         self.current_state = 'Sta1'
         self.provider = provider
@@ -483,28 +462,34 @@ class StateMachine:
         try:
             action_name = TransitionTable[(event, self.current_state)]
         except KeyError:
-            logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
-            logger.debug('%s: event: %s %s' % (self.provider.name, event, events[event]))
+            logger.debug('%s: current state is: %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
+            logger.debug('%s: event: %s %s', self.provider.name, event,
+                         events[event])
             raise
 
         action = actions[action_name]
         try:
-            logger.debug('')
-            logger.debug('%s: current state is: %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
-            logger.debug('%s: event: %s %s' % (self.provider.name, event, events[event]))
-            logger.debug('%s: entering action: (%s, %s) %s %s' %
-                         (self.provider.name, event, self.current_state, action_name, actions[action_name][0]))
+            logger.debug('%s: current state is: %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
+            logger.debug('%s: event: %s %s',
+                         self.provider.name, event, events[event])
+            logger.debug('%s: entering action: (%s, %s) %s %s',
+                         self.provider.name, event, self.current_state,
+                         action_name, actions[action_name][0])
             action[1](c)
-            #if type(action[2]) != type(()):
             if not isinstance(action[2], tuple):
                 # only one next state possible
                 self.current_state = action[2]
-            logger.debug('%s: action complete. State is now %s %s' %
-                         (self.provider.name, self.current_state, states[self.current_state]))
-        except Exception as e:
-            self.provider.kill()
+            logger.debug('%s: action complete. State is now %s %s',
+                         self.provider.name, self.current_state,
+                         states[self.current_state])
+        #except Exception as e:
+        #    self.provider.kill()
+        finally:
+            pass
 
     def next_state(self, state):
         self.current_state = state
