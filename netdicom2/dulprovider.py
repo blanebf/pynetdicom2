@@ -253,14 +253,18 @@ class DULServiceProvider(threading.Thread):
 
     def run(self):
         logger.debug('%s: DUL loop started', self.name)
-        while not self.is_killed:
-            time.sleep(0.001)
-            # catch an event
-            self.check_network() or self.check_incoming_primitive() or\
-                self.check_timer()
-            try:
-                evt = self.event.popleft()
-            except IndexError:
-                continue
-            self.state_machine.action(evt, self)
+        try:
+            while not self.is_killed:
+                time.sleep(0.001)
+                # catch an event
+                self.check_network() or self.check_incoming_primitive() or\
+                    self.check_timer()
+                try:
+                    evt = self.event.popleft()
+                except IndexError:
+                    continue
+                self.state_machine.action(evt, self)
+        except Exception:
+            self.event.append(pdu.AAbortPDU(source=0, reason_diag=0))
+            raise
         logger.debug('%s: DUL loop ended', self.name)
