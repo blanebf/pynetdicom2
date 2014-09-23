@@ -285,6 +285,10 @@ class VerificationServiceClass(ServiceClass):
 
 
 class StorageServiceClass(ServiceClass):
+    """Simple implementation of the Storage service for various SOP classes.
+
+    Service provides implementation for both SCU and SCP roles.
+    """
     statuses = [OUT_OF_RESOURCES, DATASET_DOES_NOT_MATCH_SOP_CLASS_FAILURE,
                 CANNOT_UNDERSTAND, COERCION_OF_DATA_ELEMENTS,
                 DATASET_DOES_NOT_MATCH_SOP_CLASS_WARNING, ELEMENT_DISCARDED,
@@ -311,7 +315,12 @@ class StorageServiceClass(ServiceClass):
                    ENHANCED_SR_STORAGE, COMPREHENSIVE_SR_STORAGE]
 
     def scu(self, dataset, msg_id):
-        # build C-STORE primitive
+        """SCU role implementation.
+
+        :param dataset: dataset that should be sent via Storage service
+        :param msg_id: message identifier
+        :return: status code when dataset is stored.
+        """
         c_store = dimsemessages.CStoreRQMessage()
         c_store.message_id = msg_id
         c_store.affected_sop_class_uid = dataset.SOPClassUID
@@ -328,6 +337,13 @@ class StorageServiceClass(ServiceClass):
         return self.code_to_status(response.status)
 
     def scp(self, msg):
+        """SCP role implementation.
+
+        Service extracts dataset from received message and passes it to
+        `on_receive_store` method of the application entity.
+
+        :param msg: received message
+        """
         try:
             ds = dsutils.decode(msg.data_set,
                                 self.transfer_syntax.is_implicit_VR,
@@ -345,6 +361,10 @@ class StorageServiceClass(ServiceClass):
 
 
 class QueryRetrieveFindSOPClass(ServiceClass):
+    """Implementation for Query/Retrieve find service SOP classes.
+
+    Class provides implementation for both SCU and SCP roles.
+    """
     sop_classes = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS,
                    PATIENT_STUDY_ONLY_FIND_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES, IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS,
@@ -352,7 +372,15 @@ class QueryRetrieveFindSOPClass(ServiceClass):
                 SUCCESS, PENDING, PENDING_WARNING]
 
     def scu(self, ds, msg_id):
-        # build C-FIND primitive
+        """SCU role is implement as iterator that returns responses from remote
+        AE.
+
+        Method yields dataset and status for each one received from server.
+        If status changes from 'Pending' iteration stops.
+
+        :param ds: dataset that is passed to remote AE with C-FIND command
+        :param msg_id: message identifier
+        """
         c_find = dimsemessages.CFindRQMessage()
         c_find.message_id = msg_id
         c_find.affected_sop_class_uid = self.uid
@@ -363,22 +391,26 @@ class QueryRetrieveFindSOPClass(ServiceClass):
 
         # send c-find request
         self.dimse.send(c_find, self.pcid, self.max_pdu_length)
-        while 1:
-            time.sleep(0.001)
-            # wait for c-find responses
-            response, id_ = self.dimse.receive(wait=False)
-            if not response:
-                continue
-            d = dsutils.decode(response.data_set,
-                               self.transfer_syntax.is_implicit_VR,
-                               self.transfer_syntax.is_little_endian)
-            status = self.code_to_status(response.status).status_type
-            yield status, d
+        while True:
+            response, _ = self.dimse.receive(wait=True)
+            data_set = dsutils.decode(response.data_set,
+                                      self.transfer_syntax.is_implicit_VR,
+                                      self.transfer_syntax.is_little_endian)
+            status = self.code_to_status(response.status)
+            yield data_set, status
             if status != 'Pending':
                 break
 
     def scp(self, msg):
-        ds = dsutils.decode(msg.identifier, self.transfer_syntax.is_implicit_VR,
+        """SCP role implementation.
+
+        Method calls `on_receive_find` from AE with received C-FIND parameters
+        and expect generator that would yield dataset responses for
+        C-FIND command.
+
+        :param msg: received C-FIND message
+        """
+        ds = dsutils.decode(msg.data_set, self.transfer_syntax.is_implicit_VR,
                             self.transfer_syntax.is_little_endian)
 
         # make response
@@ -387,14 +419,12 @@ class QueryRetrieveFindSOPClass(ServiceClass):
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
         gen = self.ae.on_receive_find(self, ds)
-        for identifier_ds, status in gen:
+        for data_set, status in gen:
             rsp.status = int(status)
-            rsp.data_set = dsutils.encode(identifier_ds,
+            rsp.data_set = dsutils.encode(data_set,
                                           self.transfer_syntax.is_implicit_VR,
                                           self.transfer_syntax.is_little_endian)
-            # send response
             self.dimse.send(rsp, self.pcid, self.max_pdu_length)
-            time.sleep(0.001)
 
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
@@ -493,28 +523,34 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         remote_ae, nop, gen = self.ae.on_receive_move(self, ds,
                                                       msg.move_destination)
-        assoc = self.ae.request_association(remote_ae)
-        failed = 0
-        warning = 0
-        completed = 0
-        for data_set in gen:
-            # request an association with destination send C-STORE
-            obj = assoc.get_scu(data_set.SOPClassUID)
-            status = obj.scu(data_set, completed)
-            if status.type_ == 'Failed':
-                failed += 1
-            if status.type_ == 'Warning':
-                warning += 1
-            rsp.status = int(PENDING)
-            rsp.num_of_remaining_sub_ops = nop - completed
-            rsp.num_of_completed_sub_ops = completed
-            rsp.num_of_failed_sub_ops = failed
-            rsp.num_of_warning_sub_ops = warning
-            completed += 1
+        if not nop:
+            # nothing to move
+            self._send_response(msg, 0, 0, 0, 0)
 
-            # send response
-            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        with self.ae.request_association(remote_ae) as assoc:
+            failed = 0
+            warning = 0
+            completed = 0
+            for data_set in gen:
+                # request an association with destination send C-STORE
+                obj = assoc.get_scu(data_set.SOPClassUID)
+                status = obj.scu(data_set, completed)
+                if status.type_ == 'Failed':
+                    failed += 1
+                if status.type_ == 'Warning':
+                    warning += 1
+                rsp.status = int(PENDING)
+                rsp.num_of_remaining_sub_ops = nop - completed
+                rsp.num_of_completed_sub_ops = completed
+                rsp.num_of_failed_sub_ops = failed
+                rsp.num_of_warning_sub_ops = warning
+                completed += 1
 
+                # send response
+                self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+            self._send_response(msg, nop, failed, warning, completed)
+
+    def _send_response(self, msg, nop, failed, warning, completed):
         rsp = dimsemessages.CMoveRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
@@ -524,7 +560,6 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         rsp.num_of_warning_sub_ops = warning
         rsp.status = int(SUCCESS)
         self.dimse.send(rsp, self.pcid, self.max_pdu_length)
-        assoc.release(0)
 
 
 class BasicWorkListServiceClass(ServiceClass):

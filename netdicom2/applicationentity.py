@@ -6,12 +6,12 @@
 
 import threading
 import socket
-import sys
 import select
 import platform
-import gc
 import time
 import contextlib
+import Queue
+import SocketServer
 
 from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
     ExplicitVRBigEndian, UID
@@ -32,6 +32,7 @@ class AE(threading.Thread):
 
     def __init__(self, ae_title, port, sop_scu, sop_scp,
                  supported_transfer_syntax=None, max_pdu_length=16000):
+        self.signal_queue = Queue.Queue()
         if supported_transfer_syntax is None:
             supported_transfer_syntax = [ExplicitVRLittleEndian,
                                          ImplicitVRLittleEndian,
@@ -84,10 +85,9 @@ class AE(threading.Thread):
 
     def run(self):
         if not self.supported_sop_classes_as_scp:
-            # no need to loop. This is just a client AE.
-            # All events will be triggered by the user
+            # No need to start event loop
             return
-        count = 0
+
         while not self._quit:
             # main loop
             time.sleep(0.1)
@@ -100,36 +100,21 @@ class AE(threading.Thread):
                 )
 
             # delete dead associations
-            # TODO Fix removing dead  associations
+            # TODO Fix removing dead associations
             for association in self.associations:
                 if hasattr(association, 'isAlive') and \
                         not association.isAlive():
                     self.associations.remove(association)
-            if not count % 50:
-                gc.collect()
-            count += 1
-            if count > 1e6:
-                count = 0
 
     def quit(self):
-        for aa in self.associations:
-            aa.kill()
-        self._quit = True
+        """Stops AE.
 
-    def quit_on_keyboard_interrupt(self):
-        # must be called from the main thread in order to catch the
-        # KeyboardInterrupt exception
-        while 1:
-            try:
-                time.sleep(1)
-            except KeyboardInterrupt:
-                self.quit()
-                sys.exit(0)
-            except IOError:
-                # Catch this exception otherwise when we run an app,
-                # using this module as a service this exception is raised
-                # when we logoff.
-                continue
+        This will close any open associations and will break from event loop
+        for AEs that supports service SOP Classes as SCP.
+        """
+        for association in self.associations:
+            association.kill()
+        self._quit = True
 
     @contextlib.contextmanager
     def request_association(self, remote_ae):
@@ -155,6 +140,12 @@ class AE(threading.Thread):
         pass
 
     def on_association_response(self, response):
+        """Extra processing for association response.
+
+        Default implementation does nothing.
+
+        :param response: response received from remote AE
+        """
         pass
 
     def on_receive_echo(self, service):
@@ -169,10 +160,34 @@ class AE(threading.Thread):
         return sopclass.SUCCESS
 
     def on_receive_store(self, service, ds):
-        pass
+        """Default handling of C-STORE command. Always returns
+        ELEMENT_DISCARDED code.
+
+        User should override this method in sub-class to provide custom handling
+        of the command
+
+        :param service: service that received command
+        :param ds: dataset that should be stored
+        :return: status code
+        """
+        return sopclass.ELEMENT_DISCARDED
 
     def on_receive_find(self, service, ds):
-        pass
+        """Default handling of C-FIND command. Returns empty iterator.
+
+        :param service: service that received command
+        :param ds: dataset with C-FIND parameters
+        :return: iterator that returns tuples: (<result dataset>, <status code>)
+        """
+        return iter([])
 
     def on_receive_move(self, service, ds, destination):
-        pass
+        """Default handling of C-MOVE command. Returns empty empty values
+
+        :param service: service that received command
+        :param ds: dataset with C-MOVE parameters
+        :param destination: C-MOVE command destination
+        :return: tuple: remote AE parameters, number of operations and iterator
+        that will return datasets for moving
+        """
+        return None, 0, iter([])
