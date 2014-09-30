@@ -7,8 +7,8 @@
 
 
 # This module provides association services
-import threading
 import time
+import SocketServer
 
 from dicom.UID import UID
 
@@ -49,7 +49,6 @@ class Association(object):
         :param local_ae: local AE title parameters
         :param dul_socket: socket for DUL provider or None if it's not needed
         """
-        super(Association, self).__init__()
         self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
         self.association_established = False
@@ -60,7 +59,8 @@ class Association(object):
 
     def get_dul_message(self, timeout=None):
         dul_msg = self.dul.receive(True, timeout)
-        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
+        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type\
+                or dul_msg.pdu_type == pdu.AAssociateAcPDU.pdu_type:
             return dul_msg
         elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
             raise exceptions.AssociationReleasedError()
@@ -100,24 +100,26 @@ class Association(object):
         return rsp
 
 
-class AssociationAcceptor(threading.Thread, Association):
+class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
     """'Server-side' association implementation.
 
     Class is intended for handling incoming association requests.
     """
 
-    def __init__(self, local_ae, client_socket):
+    def __init__(self, request, client_address, local_ae):
         """Initializes AssociationAcceptor instance with specified client socket
 
         :param local_ae: local AE title
-        :param client_socket: client socket
+        :param request: client socket
         """
-        Association.__init__(self, local_ae, client_socket)
-        threading.Thread.__init__(self)
-        self.client_socket = client_socket
+        Association.__init__(self, local_ae, request)
         self.is_killed = False
         self.sop_classes_as_scp = []
-        self.start()
+
+        SocketServer.StreamRequestHandler.__init__(self,
+                                                   request,
+                                                   client_address,
+                                                   local_ae)
 
     def kill(self):
         """Overrides base class kill method to set stop-flag for running thread
@@ -205,7 +207,7 @@ class AssociationAcceptor(threading.Thread, Association):
                     max_pdu_length=self.max_pdu_length)
                 obj.scp(dimse_msg)  # run SCP
 
-    def run(self):
+    def handle(self):
         assoc_req = self.dul.receive(wait=True)
         try:
             self.ae.on_association_request(assoc_req)
@@ -282,9 +284,7 @@ class AssociationRequester(Association):
         assoc_rq.called_presentation_address = (remote_ae['address'],
                                                 remote_ae['port'])
         self.dul.send(assoc_rq)
-        response = self.dul.receive(True, timeout)
-        if not response:
-            return False
+        response = self.get_dul_message(timeout)
         if response.pdu_type == pdu.AAssociateRjPDU.pdu_type:
             raise exceptions.AssociationRejectedError(
                 response.result, response.source, response.reason_diag)
@@ -309,7 +309,7 @@ class AssociationRequester(Association):
                for i in self.ae.acceptable_presentation_contexts]
         response = self.request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
-            self.ae.presentation_context_definition_list, users_pdu=ext
+            self.ae.context_def_list, users_pdu=ext
         )
         self.ae.on_association_response(response)
         self.sop_classes_as_scu = [(context[0], context[1], context[2])

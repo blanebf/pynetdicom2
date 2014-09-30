@@ -13,125 +13,116 @@ import socket
 
 import netdicom2.pdu as pdu
 
-
 # Finite State machine action definitions
-
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def ae_1(provider):
-    # Issue TRANSPORT CONNECT request primitive to local transport service
-    provider.remote_client_socket = socket.socket(socket.AF_INET,
-                                                  socket.SOCK_STREAM)
-    provider.remote_client_socket.connect(
-        provider.primitive.called_presentation_address)
+    """Issue TransportConnect request primitive to local transport service."""
+    provider.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    provider.dul_socket.connect(provider.primitive.called_presentation_address)
 
 
 def ae_2(provider):
-    # Send A-ASSOCIATE-RQ PDU
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A_ASSOCIATE-RQ PDU."""
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def ae_3(provider):
-    # Issue A-ASSOCIATE confirmation (accept) primitive
+    """Issue A-ASSOCIATE confirmation (accept) primitive."""
     provider.to_service_user.put(provider.primitive)
 
 
 def ae_4(provider):
-    # Issue A-ASSOCIATE confirmation (reject) primitive and close
-    #  transport connection
+    """Issue A-ASSOCIATE confirmation (reject) primitive and close transport
+    connection.
+    """
     provider.to_service_user.put(provider.primitive)
-    provider.remote_client_socket.close()
-    provider.remote_client_socket = None
+    provider.dul_socket.close()
+    provider.dul_socket = None
 
 
 def ae_5(provider):
-    # Issue connection response primitive start ARTIM timer
+    """Issue transport connection response primitive; start ARTIM timer."""
     # Don't need to send this primitive.
     provider.timer.start()
 
 
 def ae_6(provider):
-    # Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider
-    # - Issue A-ASSOCIATE indication primitive
+    """Check A-ASSOCIATE-RQ.
+
+    Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider
+    - Issue A-ASSOCIATE indication primitive
+    """
     provider.timer.stop()
     # Accept
-    provider.state_machine.next_state('Sta3')
     provider.to_service_user.put(provider.primitive)
-    # otherwise????
+    provider.state_machine.next_state('Sta3')
 
 
 def ae_7(provider):
-    # Send A-ASSOCIATE-AC PDU
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-ASSOCIATE-AC PDU."""
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def ae_8(provider):
-    # Send A-ASSOCIATE-RJ PDU and start ARTIM timer
+    """Send A-ASSOCIATE-RJ PDU."""
     # not sure about this ...
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def dt_1(provider):
-    # Send P-DATA-TF PDU
-    provider.pdu = provider.primitive
+    """Send P-DATA-TF PDU."""
+    provider.dul_socket.send(provider.primitive.encode())
     provider.primitive = None
-    provider.remote_client_socket.send(provider.pdu.encode())
 
 
 def dt_2(provider):
-    # Send P-DATA indication primitive
+    """Send P-DATA indication primitive."""
     provider.to_service_user.put(provider.primitive)
 
 
 def ar_1(provider):
-    # Send A-RELEASE-RQ PDU
-    provider.pdu = pdu.AReleaseRqPDU()
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-RELEASE-RQ PDU."""
+    provider.primitive = pdu.AReleaseRqPDU()
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def ar_2(provider):
-    # Send A-RELEASE indication primitive
+    """Send A-RELEASE indication primitive."""
     provider.to_service_user.put(provider.primitive)
 
 
 def ar_3(provider):
-    # Issue A-RELEASE confirmation primitive and close transport connection
+    """Issue A-RELEASE confirmation primitive and close transport connection."""
     provider.to_service_user.put(provider.primitive)
-    provider.remote_client_socket.close()
-    provider.remote_client_socket = None
+    provider.dul_socket.close()
+    provider.dul_socket = None
 
 
 def ar_4(provider):
-    # Issue A-RELEASE-RP PDU and start ARTIM timer
-    provider.pdu = pdu.AReleaseRpPDU()
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Issue A-RELEASE-RP PDU and start ARTIM timer."""
+    provider.primitive = pdu.AReleaseRpPDU()
+    provider.dul_socket.send(provider.primitive.encode())
     provider.timer.start()
 
 
 def ar_5(provider):
-    # Stop ARTIM timer
+    """Stop ARTIM timer."""
     provider.timer.stop()
 
 
 def ar_6(provider):
-    # Issue P-DATA indication
+    """Issue P-DATA indication."""
     provider.to_service_user.put(provider.primitive)
 
 
 def ar_7(provider):
-    # Issue P-DATA-TF PDU
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Issue P-DATA-TF PDU."""
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def ar_8(provider):
-    # Issue A-RELEASE indication (release collision)
+    """Issue A-RELEASE indication (release collision)."""
     provider.to_service_user.put(provider.primitive)
     if provider.requestor == 1:
         provider.state_machine.next_state('Sta9')
@@ -140,72 +131,72 @@ def ar_8(provider):
 
 
 def ar_9(provider):
-    # Send A-RELEASE-RP PDU
-    provider.pdu = pdu.AReleaseRpPDU()
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-RELEASE-RP PDU."""
+    provider.primitive = pdu.AReleaseRpPDU()
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def ar_10(provider):
-    # Issue A-RELEASE confirmation primitive
+    """Issue A-RELEASE confirmation primitive."""
     provider.to_service_user.put(provider.primitive)
 
 
 def aa_1(provider):
-    # Send A-ABORT PDU (service-user source) and start (or restart
-    # if already started) ARTIM timer.
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-ABORT PDU (service-user source) and start (or restart)
+    ARTIM timer.
+    """
+    provider.dul_socket.send(provider.primitive.encode())
     provider.timer.restart()
 
 
 def aa_2(provider):
-    # Stop ARTIM timer if running. Close transport connection.
+    """Stop ARTIM timer if running. Close transport connection."""
     provider.timer.stop()
-    provider.remote_client_socket.close()
-    provider.remote_client_socket = None
+    provider.dul_socket.close()
+    provider.dul_socket = None
 
 
 def aa_3(provider):
-    # If (service-user initiated abort):
-    #   - Issue A-ABORT indication and close transport connection.
-    # Otherwise (service-provider initiated abort):
-    #   - Issue A-P-ABORT indication and close transport connection.
-    # This action is triggered by the reception of an A-ABORT PDU
+    """Issue A-ABORT or A-P-ABORT indication and close transport connection.
+
+    If (service-user initiated abort):
+       - Issue A-ABORT indication and close transport connection.
+    Otherwise (service-provider initiated abort):
+       - Issue A-P-ABORT indication and close transport connection.
+    This action is triggered by the reception of an A-ABORT PDU."""
     provider.to_service_user.put(provider.primitive)
-    provider.remote_client_socket.close()
-    provider.remote_client_socket = None
+    provider.dul_socket.close()
+    provider.dul_socket = None
 
 
 def aa_4(provider):
-    # Issue A-P-ABORT indication primitive.
+    """Issue A-P-ABORT indication primitive."""
     # TODO look into this action
     provider.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
     provider.to_service_user.put(provider.primitive)
 
 
 def aa_5(provider):
-    # Stop ARTIM timer.
+    """Stop ARTIM timer."""
     provider.timer.stop()
 
 
 def aa_6(provider):
-    # Ignore PDU.
+    """Ignore PDU."""
     provider.primitive = None
 
 
 def aa_7(provider):
-    # Send A-ABORT PDU.
-    provider.pdu = provider.primitive
-    provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-ABORT PDU."""
+    provider.dul_socket.send(provider.primitive.encode())
 
 
 def aa_8(provider):
-    # Send A-ABORT PDU (service-provider source), issue and A-P-ABORT
-    # indication, and start ARTIM timer.
-    # Send A-ABORT PDU
-    provider.pdu = pdu.AAbortPDU(source=2, reason_diag=0)  # No reason given
-    if provider.remote_client_socket:
-        provider.remote_client_socket.send(provider.pdu.encode())
+    """Send A-ABORT PDU, issue an A-P-ABORT indication and start ARTIM timer."""
+    provider.primitive = pdu.AAbortPDU(source=2, reason_diag=0)
+    if provider.dul_socket:
+        provider.dul_socket.send(provider.primitive.encode())
+
         # Issue A-P-ABORT indication
         provider.to_service_user.put(provider.primitive)
         provider.timer.start()
@@ -242,47 +233,40 @@ states = {
 # actions
 actions = {
     # Association establishment actions
-    'AE-1': ('Issue TransportConnect request primitive to local transport '
-             'service', ae_1, 'Sta4'),
-    'AE-2': ('Send A_ASSOCIATE-RQ PDU', ae_2, 'Sta5'),
-    'AE-3': ('Issue A-ASSOCIATE confirmation (accept) primitive', ae_3,
-             'Sta6'),
-    'AE-4': ('Issue A-ASSOCIATE confirmation (reject) primitive and close '
-             'transport connection', ae_4, 'Sta1'),
-    'AE-5': ('Issue transport connection response primitive; start ARTIM '
-             'timer', ae_5, 'Sta2'),
-    'AE-6': ('Check A-ASSOCIATE-RQ', ae_6, ('Sta3', 'Sta13')),
-    'AE-7': ('Send A-ASSOCIATE-AC PDU', ae_7, 'Sta6'),
-    'AE-8': ('Send A-ASSOCIATE-RJ PDU', ae_8, 'Sta13'),
+    'AE-1': (ae_1, 'Sta4'),
+    'AE-2': (ae_2, 'Sta5'),
+    'AE-3': (ae_3, 'Sta6'),
+    'AE-4': (ae_4, 'Sta1'),
+    'AE-5': (ae_5, 'Sta2'),
+    'AE-6': (ae_6, ('Sta3', 'Sta13')),
+    'AE-7': (ae_7, 'Sta6'),
+    'AE-8': (ae_8, 'Sta13'),
+
     # Data transfer related actions
-    'DT-1': ('Send P-DATA-TF PDU', dt_1, 'Sta6'),
-    'DT-2': ('Send P-DATA indication primitive', dt_2, 'Sta6'),
+    'DT-1': (dt_1, 'Sta6'),
+    'DT-2': (dt_2, 'Sta6'),
+
     # Assocation Release related actions
-    'AR-1': ('Send A-RELEASE-RQ PDU', ar_1, 'Sta7'),
-    'AR-2': ('Send A-RELEASE indication primitive', ar_2, 'Sta8'),
-    'AR-3': ('Issue A-RELEASE confirmation primitive and close transport '
-             'connection', ar_3, 'Sta1'),
-    'AR-4': ('Issue A-RELEASE-RP PDU and start ARTIM timer', ar_4, 'Sta13'),
-    'AR-5': ('Stop ARTIM timer', ar_5, 'Sta1'),
-    'AR-6': ('Issue P-DATA indication', ar_6, 'Sta7'),
-    'AR-7': ('Issue P-DATA-TF PDU', ar_7, 'Sta8'),
-    'AR-8': ('Issue A-RELEASE indication (release collision)', ar_8,
-             ('Sta9', 'Sta10')),
-    'AR-9': ('Send A-RELEASE-RP PDU', ar_9, 'Sta11'),
-    'AR-10': ('Issue A-RELEASE confimation primitive', ar_10, 'Sta12'),
+    'AR-1': (ar_1, 'Sta7'),
+    'AR-2': (ar_2, 'Sta8'),
+    'AR-3': (ar_3, 'Sta1'),
+    'AR-4': (ar_4, 'Sta13'),
+    'AR-5': (ar_5, 'Sta1'),
+    'AR-6': (ar_6, 'Sta7'),
+    'AR-7': (ar_7, 'Sta8'),
+    'AR-8': (ar_8, ('Sta9', 'Sta10')),
+    'AR-9': (ar_9, 'Sta11'),
+    'AR-10': (ar_10, 'Sta12'),
+
     # Association abort related actions
-    'AA-1': ('Send A-ABORT PDU (service-user source) and start (or restart) '
-             'ARTIM timer', aa_1, 'Sta13'),
-    'AA-2': ('Stop ARTIM timer if running. Close transport connection', aa_2,
-             'Sta1'),
-    'AA-3': ('Issue A-ABORT or A-P-ABORT indication and close transport '
-             'connection', aa_3, 'Sta1'),
-    'AA-4': ('Issue A-P-ABORT indication primitive', aa_4, 'Sta1'),
-    'AA-5': ('Stop ARTIM timer', aa_5, 'Sta1'),
-    'AA-6': ('Ignore PDU', aa_6, 'Sta13'),
-    'AA-7': ('Send A-ABORT PDU', aa_6, 'Sta13'),
-    'AA-8': ('Send A-ABORT PDU, issue an A-P-ABORT indication and start '
-             'ARTIM timer', aa_8, 'Sta13')}
+    'AA-1': (aa_1, 'Sta13'),
+    'AA-2': (aa_2, 'Sta1'),
+    'AA-3': (aa_3, 'Sta1'),
+    'AA-4': (aa_4, 'Sta1'),
+    'AA-5': (aa_5, 'Sta1'),
+    'AA-6': (aa_6, 'Sta13'),
+    'AA-7': (aa_6, 'Sta13'),
+    'AA-8': (aa_8, 'Sta13')}
 
 
 # events
@@ -457,39 +441,15 @@ class StateMachine(object):
         self.current_state = 'Sta1'
         self.provider = provider
 
-    def action(self, event, c):
+    def action(self, event, provider):
         """ Execute the action triggered by event """
-        try:
-            action_name = TransitionTable[(event, self.current_state)]
-        except KeyError:
-            logger.debug('%s: current state is: %s %s',
-                         self.provider.name, self.current_state,
-                         states[self.current_state])
-            logger.debug('%s: event: %s %s', self.provider.name, event,
-                         events[event])
-            raise
+        action_name = TransitionTable[(event, self.current_state)]
+        action, state = actions[action_name]
+        action(provider)
 
-        action = actions[action_name]
-        try:
-            logger.debug('%s: current state is: %s %s',
-                         self.provider.name, self.current_state,
-                         states[self.current_state])
-            logger.debug('%s: event: %s %s',
-                         self.provider.name, event, events[event])
-            logger.debug('%s: entering action: (%s, %s) %s %s',
-                         self.provider.name, event, self.current_state,
-                         action_name, actions[action_name][0])
-            action[1](c)
-            if not isinstance(action[2], tuple):
-                # only one next state possible
-                self.current_state = action[2]
-            logger.debug('%s: action complete. State is now %s %s',
-                         self.provider.name, self.current_state,
-                         states[self.current_state])
-        #except Exception as e:
-        #    self.provider.kill()
-        finally:
-            pass
+        if not isinstance(state, tuple):
+            # only one next state possible
+            self.current_state = state
 
     def next_state(self, state):
         self.current_state = state
