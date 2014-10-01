@@ -106,13 +106,11 @@ class DULServiceProvider(threading.Thread):
     def send(self, primitive):
         self.from_service_user.put(primitive)
 
-    def receive(self, wait=False, timeout=None):
-        # if not self.dul_socket: return None
+    def receive(self, timeout):
         try:
-            tmp = self.to_service_user.get(wait, timeout)
-            return tmp
+            return self.to_service_user.get(timeout=timeout)
         except Queue.Empty:
-            return None
+            raise exceptions.TimeoutError()
 
     def check_incoming_pdu(self):
         # There is something to read

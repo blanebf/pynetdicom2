@@ -114,6 +114,7 @@ class ClientAE(AEBase):
         if supported_ts is None:
             supported_ts = AE.default_ts
 
+        self.timeout = 15
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
         self.max_pdu_length = max_pdu_length
         self.context_def_list = _build_context_def_list(sop_scu, supported_ts)
@@ -144,9 +145,9 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         if supported_ts is None:
             supported_ts = AE.default_ts
 
+        self.timeout = 15
         self.local_ae = {'address': platform.node(), 'port': port,
                          'aet': ae_title}
-
         self.max_pdu_length = max_pdu_length
         self.context_def_list = _build_context_def_list(
             sop_scu + sop_scp,

@@ -57,8 +57,8 @@ class Association(object):
         self.accepted_presentation_contexts = []
         self.dimse = dimseprovider.DIMSEServiceProvider(self)
 
-    def get_dul_message(self, timeout=None):
-        dul_msg = self.dul.receive(True, timeout)
+    def get_dul_message(self):
+        dul_msg = self.dul.receive(self.ae.timeout)
         if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type\
                 or dul_msg.pdu_type == pdu.AAssociateAcPDU.pdu_type:
             return dul_msg
@@ -95,7 +95,7 @@ class Association(object):
         :rtype : None
         """
         self.dul.send(pdu.AReleaseRqPDU())
-        rsp = self.dul.receive(wait=True)
+        rsp = self.dul.receive(self.ae.timeout)
         self.kill()
         return rsp
 
@@ -188,10 +188,38 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         )
         self.dul.send(res)
 
-    def loop(self):
+    def handle(self):
+        try:
+            self._establish()
+            self._loop()
+        except exceptions.AssociationReleasedError:
+            self.dul.send(pdu.AReleaseRpPDU())
+        except exceptions.AssociationAbortedError:
+            pass  # TODO: Log abort
+        except exceptions.TimeoutError:
+            pass  # TODO: Handle timeout error
+        finally:
+            self.kill()
+
+    def _establish(self):
+        try:
+            assoc_req = self.dul.receive(self.ae.timeout)
+            self.ae.on_association_request(assoc_req)
+        except exceptions.AssociationRejectedError as e:
+            self.reject(e.result, e.source, e.diagnostic)
+            raise
+
+        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
+
+        # build list of SOPClasses supported
+        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
+                                   self.accepted_presentation_contexts]
+        self.association_established = True
+
+    def _loop(self):
         while not self.is_killed:
             time.sleep(0.001)
-            dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
+            dimse_msg, pcid = self.dimse.receive()
             if dimse_msg:  # dimse message received
                 uid = dimse_msg.affected_sop_class_uid
                 try:
@@ -206,32 +234,6 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
                     transfer_syntax=transfer_syntax,
                     max_pdu_length=self.max_pdu_length)
                 obj.scp(dimse_msg)  # run SCP
-
-    def handle(self):
-        assoc_req = self.dul.receive(wait=True)
-        try:
-            self.ae.on_association_request(assoc_req)
-        except exceptions.AssociationRejectedError as e:
-            self.reject(e.result, e.source, e.diagnostic)
-            self.kill()
-            return
-
-        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
-
-        # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
-                                   self.accepted_presentation_contexts]
-        self.association_established = True
-
-        # association established. Listening on local and remote interfaces
-        try:
-            self.loop()
-        except exceptions.AssociationReleasedError:
-            self.dul.send(pdu.AReleaseRpPDU())
-        except exceptions.AssociationAbortedError:
-            pass  # TODO: Log abort
-        finally:
-            self.kill()
 
 
 class AssociationRequester(Association):
@@ -284,7 +286,7 @@ class AssociationRequester(Association):
         assoc_rq.called_presentation_address = (remote_ae['address'],
                                                 remote_ae['port'])
         self.dul.send(assoc_rq)
-        response = self.get_dul_message(timeout)
+        response = self.get_dul_message()
         if response.pdu_type == pdu.AAssociateRjPDU.pdu_type:
             raise exceptions.AssociationRejectedError(
                 response.result, response.source, response.reason_diag)

@@ -262,7 +262,7 @@ class VerificationServiceClass(ServiceClass):
 
         self.dimse.send(c_echo, self.pcid, self.max_pdu_length)
 
-        response, msg_id = self.dimse.receive(wait=True)
+        response, msg_id = self.dimse.receive()
         return self.code_to_status(response.status)
 
     def scp(self, msg):
@@ -333,7 +333,7 @@ class StorageServiceClass(ServiceClass):
         self.dimse.send(c_store, self.pcid, self.max_pdu_length)
 
         # wait for c-store response
-        response, id_ = self.dimse.receive(wait=True)
+        response, id_ = self.dimse.receive()
         return self.code_to_status(response.status)
 
     def scp(self, msg):
@@ -392,7 +392,7 @@ class QueryRetrieveFindSOPClass(ServiceClass):
         # send c-find request
         self.dimse.send(c_find, self.pcid, self.max_pdu_length)
         while True:
-            response, _ = self.dimse.receive(wait=True)
+            response, _ = self.dimse.receive()
             data_set = dsutils.decode(response.data_set,
                                       self.transfer_syntax.is_implicit_VR,
                                       self.transfer_syntax.is_little_endian)
@@ -455,7 +455,7 @@ class QueryRetrieveGetSOPClass(ServiceClass):
         self.dimse.send(c_get, self.pcid, self.max_pdu_length)
         while 1:
             # receive c-store
-            msg, id_ = self.dimse.receive(wait=True)
+            msg, id_ = self.dimse.receive()
             if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
                 if self.code_to_status(msg.status).status_type == 'Pending':
                     pass  # pending. intermediate C-GET response
@@ -505,9 +505,7 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         while 1:
             # wait for c-move responses
             time.sleep(0.001)
-            response, id_ = self.dimse.receive(wait=False)
-            if not response:
-                continue
+            response, id_ = self.dimse.receive()
             status = self.code_to_status(response.status).status_type
             if status != 'Pending':
                 break
@@ -586,9 +584,7 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         while 1:
             time.sleep(0.001)
             # wait for c-find responses
-            response, id_ = self.dimse.receive(wait=False)
-            if not response:
-                continue
+            response, id_ = self.dimse.receive()
             d = dsutils.decode(response.data_set,
                                self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)

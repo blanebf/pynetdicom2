@@ -219,9 +219,6 @@ class DIMSEMessage(object):
     def decode(self, p_data):
         """Constructs itself receiving a series of P-DATA primitives.
         Returns True when complete, False otherwise."""
-        if not isinstance(p_data, pdu.PDataTfPDU):
-            return False
-
         for value_item in p_data.data_value_items:
             # must be able to read P-DATA with several PDVs
             self.id_ = value_item.context_id
