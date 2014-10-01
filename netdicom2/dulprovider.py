@@ -16,7 +16,6 @@ import collections
 
 import threading
 import socket
-import time
 import select
 import Queue
 import struct
@@ -167,7 +166,7 @@ class DULServiceProvider(threading.Thread):
 
     def check_network(self):
         if self.state_machine.current_state == 'Sta13':
-            # wainting for connection to close
+            # waiting for connection to close
             if self.dul_socket is None:
                 return False
 
@@ -183,23 +182,23 @@ class DULServiceProvider(threading.Thread):
             self.event.append('Evt17')
             return True
 
-        if self.dul_socket:
-            if self.state_machine.current_state == 'Sta4':
-                self.event.append('Evt2')
-                return True
+        if not self.dul_socket:
+            return False
 
-            # check if something comes in the client socket
-            if select.select([self.dul_socket], [], [], 0)[0]:
-                self.check_incoming_pdu()
-                return True
+        if self.state_machine.current_state == 'Sta4':
+            self.event.append('Evt2')
+            return True
+
+        # check if something comes in the client socket
+        if select.select([self.dul_socket], [], [], 0.05)[0]:
+            self.check_incoming_pdu()
+            return True
         else:
             return False
 
     def run(self):
         try:
             while not self.is_killed:
-                time.sleep(0.001)
-                # catch an event
                 self.check_network() or self.check_incoming_primitive() or\
                     self.check_timer()
                 try:
@@ -208,7 +207,7 @@ class DULServiceProvider(threading.Thread):
                     continue
                 self.state_machine.action(evt, self)
         except Exception:
-            self.event.append(pdu.AAbortPDU(source=0, reason_diag=0))
+            self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
             raise
         finally:
             self._is_killed.set()
