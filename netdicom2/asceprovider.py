@@ -14,7 +14,7 @@ from dicom.UID import UID
 
 import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
-import netdicom2.dimseprovider as dimseprovider
+import netdicom2.dimsemessages as dimsemessages
 
 import netdicom2.pdu as pdu
 
@@ -55,7 +55,6 @@ class Association(object):
 
         self.max_pdu_length = 16000
         self.accepted_presentation_contexts = []
-        self.dimse = dimseprovider.DIMSEServiceProvider(self)
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(self.ae.timeout)
@@ -70,8 +69,18 @@ class Association(object):
         else:
             raise exceptions.NetDICOMError()
 
-    def send(self, primitive):
-        self.dul.send(primitive)
+    def send(self, dimse_msg, pc_id):
+        dimse_msg.set_length()
+        p_data_list = dimse_msg.encode(pc_id, self.ae.max_pdu_length)
+        for p_data in p_data_list:
+            self.dul.send(p_data)
+
+    def receive(self):
+        message = dimsemessages.DIMSEMessage()
+        # loop until complete DIMSE message is received
+        while not message.decode(self.get_dul_message()):
+            pass
+        return message, message.pc_id
 
     def kill(self):
         """Stops internal DUL service provider.
@@ -219,7 +228,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
     def _loop(self):
         while not self.is_killed:
             time.sleep(0.001)
-            dimse_msg, pcid = self.dimse.receive()
+            dimse_msg, pcid = self.receive()
             if dimse_msg:  # dimse message received
                 uid = dimse_msg.affected_sop_class_uid
                 try:
@@ -228,11 +237,8 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
                 except IndexError:
                     raise exceptions.ClassNotSupportedError(
                         'SOP Class {0} not supported as SCP'.format(uid))
-                obj = sopclass.SOP_CLASSES[uid](
-                    ae=self.ae, uid=sop_class,
-                    dimse=self.dimse, pcid=pcid,
-                    transfer_syntax=transfer_syntax,
-                    max_pdu_length=self.max_pdu_length)
+                obj = sopclass.SOP_CLASSES[uid](self, sop_class, pcid,
+                                                transfer_syntax)
                 obj.scp(dimse_msg)  # run SCP
 
 
@@ -254,8 +260,7 @@ class AssociationRequester(Association):
         self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
         self.kill()
 
-    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None,
-                timeout=30):
+    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None):
         """Requests an association with a remote AE and waits for association
         response."""
         self.max_pdu_length = mp
@@ -319,7 +324,7 @@ class AssociationRequester(Association):
                                    self.accepted_presentation_contexts]
         self.association_established = True
 
-    def scu(self, ds, id_):
+    def scu(self, ds, msg_id):
         uid = ds.SOPClassUID
         try:
             pcid, _, transfer_syntax = \
@@ -328,13 +333,8 @@ class AssociationRequester(Association):
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU')
 
-        obj = sopclass.SOP_CLASSES[uid](
-            ae=self.ae, uid=uid,
-            dimse=self.dimse, pcid=pcid,
-            transfer_syntax=transfer_syntax,
-            max_pdu_length=self.max_pdu_length
-        )
-        return obj.scu(ds, id_)
+        obj = sopclass.SOP_CLASSES[uid](self, uid, pcid, transfer_syntax)
+        return obj.scu(ds, msg_id)
 
     def get_scu(self, sop_class):
         try:
@@ -343,10 +343,6 @@ class AssociationRequester(Association):
         except IndexError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)
-        obj = sopclass.SOP_CLASSES[sop_class](
-            ae=self.ae, uid=sop_class,
-            dimse=self.dimse, pcid=pcid,
-            transfer_syntax=transfer_syntax,
-            max_pdu_length=self.max_pdu_length
-        )
+        obj = sopclass.SOP_CLASSES[sop_class](self, sop_class, pcid,
+                                              transfer_syntax)
         return obj

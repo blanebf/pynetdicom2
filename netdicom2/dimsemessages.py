@@ -158,7 +158,7 @@ class DIMSEMessage(object):
         self.encoded_data_set = []
         self.encoded_command_set = []
         self._data_set = ''
-        self.id_ = None
+        self.pc_id = None  # TODO Remove this member
 
         self.ts = ImplicitVRLittleEndian  # imposed by standard.
 
@@ -180,11 +180,11 @@ class DIMSEMessage(object):
             self.command_set.DataSetType = 0x0001
         self._data_set = value
 
-    def encode(self, id_, max_pdu_length):
+    def encode(self, pc_id, max_pdu_length):
         """Returns the encoded message as a series of P-DATA service
         parameter objects."""
-        self.id_ = id_
         p_datas = []
+        self.pc_id = pc_id
         encoded_command_set = dsutils.encode(self.command_set,
                                              self.ts.is_implicit_VR,
                                              self.ts.is_little_endian)
@@ -194,12 +194,12 @@ class DIMSEMessage(object):
         for pdv in pdvs[:-1]:
             # send only one pdv per p-data primitive
             value_item = pdu.PresentationDataValueItem(
-                self.id_, struct.pack('b', 1) + pdv)
+                pc_id, struct.pack('b', 1) + pdv)
             p_datas.append(pdu.PDataTfPDU([value_item]))
 
         # last command fragment
         value_item = pdu.PresentationDataValueItem(
-            self.id_, struct.pack('b', 3) + pdvs[-1])
+            pc_id, struct.pack('b', 3) + pdvs[-1])
         p_datas.append(pdu.PDataTfPDU([value_item]))
 
         # fragment data set
@@ -207,11 +207,11 @@ class DIMSEMessage(object):
             pdvs = fragment(max_pdu_length, self.data_set)
             for pdv in pdvs[:-1]:
                 value_item = pdu.PresentationDataValueItem(
-                    self.id_, struct.pack('b', 0) + pdv)
+                    pc_id, struct.pack('b', 0) + pdv)
                 p_datas.append(pdu.PDataTfPDU([value_item]))
             # last data fragment
             value_item = pdu.PresentationDataValueItem(
-                self.id_, struct.pack('b', 2) + pdvs[-1])
+                pc_id, struct.pack('b', 2) + pdvs[-1])
             p_datas.append(pdu.PDataTfPDU([value_item]))
 
         return p_datas
@@ -221,7 +221,7 @@ class DIMSEMessage(object):
         Returns True when complete, False otherwise."""
         for value_item in p_data.data_value_items:
             # must be able to read P-DATA with several PDVs
-            self.id_ = value_item.context_id
+            self.pc_id = value_item.context_id
             marker = struct.unpack('b', value_item.data_value[0])[0]
             if marker in (1, 3):
                 self.encoded_command_set.append(value_item.data_value[1:])

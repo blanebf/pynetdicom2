@@ -22,7 +22,6 @@ Currently supported service classes are: Verification (as SCU and SCP),
 Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
 (as SCU and SCP).
 """
-import time
 
 import netdicom2.dsutils as dsutils
 import netdicom2.exceptions as exceptions
@@ -207,23 +206,18 @@ class ServiceClass(object):
     statuses = []
     sop_classes = []
 
-    def __init__(self, ae, uid, dimse, pcid, transfer_syntax,
-                 max_pdu_length=16000):
+    def __init__(self, asce, uid, pcid, transfer_syntax):
         """
 
-        :param ae: AE instance that this service class belongs to
+        :param asce: AE instance that this service class belongs to
         :param uid: service SOP Class UID
-        :param dimse: provider for DIMSE messages
         :param pcid: presentation context ID
         :param transfer_syntax: service transfer syntax
-        :param max_pdu_length: maximum PDU length. Defaults to 16000
         """
-        self.ae = ae
+        self.asce = asce
         self.uid = uid
-        self.dimse = dimse
         self.pcid = pcid
         self.transfer_syntax = transfer_syntax
-        self.max_pdu_length = max_pdu_length
 
     def code_to_status(self, code):
         """Converts code to status
@@ -260,9 +254,9 @@ class VerificationServiceClass(ServiceClass):
         c_echo.message_id = msg_id
         c_echo.affected_sop_class_uid = self.uid
 
-        self.dimse.send(c_echo, self.pcid, self.max_pdu_length)
+        self.asce.send(c_echo, self.pcid)
 
-        response, msg_id = self.dimse.receive()
+        response, msg_id = self.asce.receive()
         return self.code_to_status(response.status)
 
     def scp(self, msg):
@@ -274,14 +268,14 @@ class VerificationServiceClass(ServiceClass):
         :param msg: incoming C-ECHO message
         """
         try:
-            status = self.ae.on_receive_echo(self)
+            status = self.asce.ae.on_receive_echo(self)
         except exceptions.EventHandlingError:
             status = UNABLE_TO_PROCESS
 
         rsp = dimsemessages.CEchoRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.status = status
-        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        self.asce.send(rsp, self.pcid)
 
 
 class StorageServiceClass(ServiceClass):
@@ -330,10 +324,10 @@ class StorageServiceClass(ServiceClass):
                                           self.transfer_syntax.is_implicit_VR,
                                           self.transfer_syntax.is_little_endian)
         # send c_store request
-        self.dimse.send(c_store, self.pcid, self.max_pdu_length)
+        self.asce.send(c_store, self.pcid)
 
         # wait for c-store response
-        response, id_ = self.dimse.receive()
+        response, id_ = self.asce.receive()
         return self.code_to_status(response.status)
 
     def scp(self, msg):
@@ -348,7 +342,7 @@ class StorageServiceClass(ServiceClass):
             ds = dsutils.decode(msg.data_set,
                                 self.transfer_syntax.is_implicit_VR,
                                 self.transfer_syntax.is_little_endian)
-            status = self.ae.on_receive_store(self, ds)
+            status = self.asce.ae.on_receive_store(self, ds)
         except exceptions.EventHandlingError:
             status = CANNOT_UNDERSTAND
         # make response
@@ -357,7 +351,7 @@ class StorageServiceClass(ServiceClass):
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(status)
-        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        self.asce.send(rsp, self.pcid)
 
 
 class QueryRetrieveFindSOPClass(ServiceClass):
@@ -390,15 +384,15 @@ class QueryRetrieveFindSOPClass(ServiceClass):
                                          self.transfer_syntax.is_little_endian)
 
         # send c-find request
-        self.dimse.send(c_find, self.pcid, self.max_pdu_length)
+        self.asce.send(c_find, self.pcid)
         while True:
-            response, _ = self.dimse.receive()
+            response, _ = self.asce.receive()
             data_set = dsutils.decode(response.data_set,
                                       self.transfer_syntax.is_implicit_VR,
                                       self.transfer_syntax.is_little_endian)
             status = self.code_to_status(response.status)
             yield data_set, status
-            if status != 'Pending':
+            if status.status_type != 'Pending':
                 break
 
     def scp(self, msg):
@@ -418,19 +412,19 @@ class QueryRetrieveFindSOPClass(ServiceClass):
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
-        gen = self.ae.on_receive_find(self, ds)
+        gen = self.asce.ae.on_receive_find(self, ds)
         for data_set, status in gen:
             rsp.status = int(status)
             rsp.data_set = dsutils.encode(data_set,
                                           self.transfer_syntax.is_implicit_VR,
                                           self.transfer_syntax.is_little_endian)
-            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+            self.asce.send(rsp, self.pcid)
 
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        self.asce.send(rsp, self.pcid)
 
 
 class QueryRetrieveGetSOPClass(ServiceClass):
@@ -452,10 +446,10 @@ class QueryRetrieveGetSOPClass(ServiceClass):
                                         self.transfer_syntax.is_little_endian)
 
         # send c-get primitive
-        self.dimse.send(c_get, self.pcid, self.max_pdu_length)
+        self.asce.send(c_get, self.pcid)
         while 1:
             # receive c-store
-            msg, id_ = self.dimse.receive()
+            msg, pc_id = self.asce.receive()
             if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
                 if self.code_to_status(msg.status).status_type == 'Pending':
                     pass  # pending. intermediate C-GET response
@@ -472,13 +466,13 @@ class QueryRetrieveGetSOPClass(ServiceClass):
                     d = dsutils.decode(msg.data_set,
                                        self.transfer_syntax.is_implicit_VR,
                                        self.transfer_syntax.is_little_endian)
-                    status = self.ae.on_receive_store(self, d)
+                    status = self.asce.ae.on_receive_store(self, d)
                     yield self, d
                 except exceptions.EventHandlingError:
                     status = CANNOT_UNDERSTAND
 
                 rsp.status = int(status)
-                self.dimse.send(rsp, id_, self.max_pdu_length)
+                self.asce.send(rsp, pc_id)
 
 
 class QueryRetrieveMoveSOPClass(ServiceClass):
@@ -500,12 +494,11 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
                                          self.transfer_syntax.is_implicit_VR,
                                          self.transfer_syntax.is_little_endian)
         # send c-find request
-        self.dimse.send(c_move, self.pcid, self.max_pdu_length)
+        self.asce.send(c_move, self.pcid)
 
         while 1:
             # wait for c-move responses
-            time.sleep(0.001)
-            response, id_ = self.dimse.receive()
+            response, _ = self.asce.receive()
             status = self.code_to_status(response.status).status_type
             if status != 'Pending':
                 break
@@ -519,13 +512,13 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         rsp = dimsemessages.CMoveRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
-        remote_ae, nop, gen = self.ae.on_receive_move(self, ds,
-                                                      msg.move_destination)
+        remote_ae, nop, gen = self.asce.ae.on_receive_move(self, ds,
+                                                           msg.move_destination)
         if not nop:
             # nothing to move
             self._send_response(msg, 0, 0, 0, 0)
 
-        with self.ae.request_association(remote_ae) as assoc:
+        with self.asce.ae.request_association(remote_ae) as assoc:
             failed = 0
             warning = 0
             completed = 0
@@ -545,7 +538,7 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
                 completed += 1
 
                 # send response
-                self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+                self.asce.send(rsp, self.pcid)
             self._send_response(msg, nop, failed, warning, completed)
 
     def _send_response(self, msg, nop, failed, warning, completed):
@@ -557,7 +550,7 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         rsp.num_of_failed_sub_ops = failed
         rsp.num_of_warning_sub_ops = warning
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        self.asce.send(rsp, self.pcid)
 
 
 class BasicWorkListServiceClass(ServiceClass):
@@ -580,11 +573,10 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
                                          self.transfer_syntax.is_little_endian)
 
         # send c-find request
-        self.dimse.send(c_find, self.pcid, self.max_pdu_length)
+        self.asce.send(c_find, self.pcid)
         while 1:
-            time.sleep(0.001)
             # wait for c-find responses
-            response, id_ = self.dimse.receive()
+            response, _ = self.asce.receive()
             d = dsutils.decode(response.data_set,
                                self.transfer_syntax.is_implicit_VR,
                                self.transfer_syntax.is_little_endian)
@@ -602,19 +594,18 @@ class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
-        gen = self.ae.on_receive_find(self, ds)
+        gen = self.asce.ae.on_receive_find(self, ds)
         for identifier_ds, status in gen:
             rsp.status = int(status)
             rsp.data_set = dsutils.encode(identifier_ds,
                                           self.transfer_syntax.is_implicit_VR,
                                           self.transfer_syntax.is_little_endian)
             # send response
-            self.dimse.send(rsp, self.pcid, self.max_pdu_length)
-            time.sleep(0.001)
+            self.asce.send(rsp, self.pcid)
 
         # send final response
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.dimse.send(rsp, self.pcid, self.max_pdu_length)
+        self.asce.send(rsp, self.pcid)
