@@ -360,10 +360,122 @@ class CCancelRQMessage(DIMSEResponseMessage):
     command_field = 0x0FFF
     command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo']
 
-    def from_params(self, params):
-        self.command_set[
-            (0x0000, 0x0120)].value = params.message_id_being_responded_to
-        self.set_length()
+
+class NEventReportRQMessage(DIMSERequestMessage):
+    command_field = 0x0100
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
+                      'AffectedSOPInstanceUID', 'EventTypeID']
+    event_type_id = dimse_property((0x0000, 0x1002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+@status_mixin
+class NEventReportRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8100
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'MessageIDBeingRespondedTo',
+                      'Status', 'AffectedSOPInstanceUID', 'EventTypeID']
+    event_type_id = dimse_property((0x0000, 0x1002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+class NGetRQMessage(DIMSERequestMessage):
+    command_field = 0x0110
+    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
+                      'RequestedSOPInstanceUID', 'AttributeIdentifierList']
+    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
+    attribute_identifier_list = dimse_property((0x0000, 0x1005))
+
+
+@status_mixin
+class NGetRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8110
+    command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo',
+                      'Status', 'AffectedSOPInstanceUID']
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+class NSetRQMessage(DIMSERequestMessage):
+    command_field = 0x0120
+    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID',
+                      'MessageID', 'RequestedSOPInstance']
+
+    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
+
+
+@status_mixin
+class NSetRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8120
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'AffectedSOPInstanceUID']
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+class NActionRQMessage(DIMSERequestMessage):
+    command_field = 0x0130
+    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
+                      'RequestedSOPInstanceUID', 'ActionTypeID']
+
+    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
+    action_type_id = dimse_property((0x0000, 0x1008))
+
+
+@status_mixin
+class NActionRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8130
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'AffectedSOPInstanceUID', 'ActionTypeID']
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+    action_type_id = dimse_property((0x0000, 0x1008))
+
+
+class NCreateRQMessage(DIMSERequestMessage):
+    command_field = 0x0140
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
+                      'AffectedSOPInstanceUID']
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+@status_mixin
+class NCreateRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8140
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'AffectedSOPInstanceUID']
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
+
+
+class NDeleteRQMessage(DIMSERequestMessage):
+    command_field = 0x0150
+    command_fields = ['RequestedSOPClassUID', 'MessageID',
+                      'RequestedSOPInstanceUID']
+
+    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
+
+
+@status_mixin
+class NDeleteRSPMessage(DIMSEResponseMessage):
+    command_field = 0x8150
+    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
+                      'MessageIDBeingRespondedTo', 'Status',
+                      'AffectedSOPInstanceUID']
+
+    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
 MESSAGE_TYPE = {
@@ -377,5 +489,17 @@ MESSAGE_TYPE = {
     0x0021: CMoveRQMessage,
     0x8021: CMoveRSPMessage,
     0x0030: CEchoRQMessage,
-    0x8030: CEchoRSPMessage
+    0x8030: CEchoRSPMessage,
+    0x0100: NEventReportRQMessage,
+    0x8100: NEventReportRSPMessage,
+    0x0110: NGetRQMessage,
+    0x8110: NGetRSPMessage,
+    0x0120: NSetRQMessage,
+    0x8120: NSetRSPMessage,
+    0x0130: NActionRQMessage,
+    0x8130: NActionRSPMessage,
+    0x0140: NCreateRQMessage,
+    0x8140: NCreateRSPMessage,
+    0x0150: NDeleteRQMessage,
+    0x8150: NDeleteRSPMessage
 }
