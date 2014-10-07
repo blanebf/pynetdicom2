@@ -7,6 +7,7 @@
 
 
 # This module provides association services
+import collections
 import time
 import SocketServer
 
@@ -21,18 +22,23 @@ import netdicom2.pdu as pdu
 import netdicom2.sopclass as sopclass
 import netdicom2.userdataitems as userdataitems
 
+PContextDef = collections.namedtuple(
+    'PContextDef',
+    ['sop_class', 'supported_ts']
+)
+
 
 APPLICATION_CONTEXT_NAME = '1.2.840.10008.3.1.1.1'
 
 
 def build_pres_context_def_list(context_def_list):
-    for context_def in context_def_list:
-        context_id = context_def[0]
-        abs_sub_item = pdu.AbstractSyntaxSubItem(context_def[1])
-        ts_sub_items = [pdu.TransferSyntaxSubItem(i)
-                        for i in context_def[2]]
-        yield pdu.PresentationContextItemRQ(context_id, abs_sub_item,
-                                            ts_sub_items)
+    return (
+        pdu.PresentationContextItemRQ(
+            pc_id, pdu.AbstractSyntaxSubItem(ctx.sop_class),
+            [pdu.TransferSyntaxSubItem(i) for i in ctx.supported_ts]
+        )
+        for pc_id, ctx in context_def_list.iteritems()
+    )
 
 
 class Association(object):
@@ -54,7 +60,6 @@ class Association(object):
         self.association_established = False
 
         self.max_pdu_length = 16000
-        self.accepted_presentation_contexts = []
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(self.ae.timeout)
@@ -123,7 +128,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         """
         Association.__init__(self, local_ae, request)
         self.is_killed = False
-        self.sop_classes_as_scp = []
+        self.sop_classes_as_scp = {}
 
         SocketServer.StreamRequestHandler.__init__(self,
                                                    request,
@@ -156,39 +161,41 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         """
         self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
 
-    def accept(self, assoc_req, acceptable_pres_contexts=None):
+    def accept(self, assoc_req, acceptable_pr_contexts):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
-        acceptable_presentation_contexts"""
+        acceptable_pr_contexts"""
         user_items = assoc_req.variable_items[-1]
         self.max_pdu_length = user_items.user_data[0].maximum_length_received
 
         # analyse proposed presentation contexts
         rsp = [assoc_req.variable_items[0]]
-        self.accepted_presentation_contexts = []
-        acceptable_sop = [x[0] for x in acceptable_pres_contexts]
-        for item in assoc_req.variable_items[1:-1]:
-            context_id = item.context_id
-            proposed_sop = item.abs_sub_item.name
-            proposed_ts = item.ts_sub_items
-            if proposed_sop not in acceptable_sop:
-                # Refuse sop class because of SOP class not supported
-                rsp.append(pdu.PresentationContextItemAC(
-                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+        requested = (
+            (item.context_id, item.abs_sub_item.name, item.ts_sub_items)
+            for item in assoc_req.variable_items[1:-1]
+        )
+
+        for pc_id, proposed_sop, proposed_ts in requested:
+            if proposed_sop not in acceptable_pr_contexts:
+                # refuse sop class because of SOP class not supported
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id, 1, pdu.TransferSyntaxSubItem(''))
+                )
                 continue
 
-            acceptable_ts = [x[1] for x in acceptable_pres_contexts
-                             if x[0] == proposed_sop][0]
             for ts in proposed_ts:
-                if ts.name in acceptable_ts:
-                    # accept sop class and ts
-                    rsp.append(pdu.PresentationContextItemAC(context_id, 0, ts))
-                    self.accepted_presentation_contexts.append(
-                        (item.context_id, proposed_sop, UID(ts.name)))
+                if ts.name in acceptable_pr_contexts[proposed_sop]:
+                    rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
+                    self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop,
+                                                      UID(ts.name))
                     break
             else:  # Refuse sop class because of TS not supported
-                rsp.append(pdu.PresentationContextItemAC(
-                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id, 1, pdu.TransferSyntaxSubItem(''))
+                )
+
         rsp.append(user_items)
         res = pdu.AAssociateAcPDU(
             called_ae_title=assoc_req.called_ae_title,
@@ -218,28 +225,20 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             self.reject(e.result, e.source, e.diagnostic)
             raise
 
-        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
-
-        # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
-                                   self.accepted_presentation_contexts]
+        self.accept(assoc_req, self.ae.acceptable_pr_contexts)
         self.association_established = True
 
     def _loop(self):
         while not self.is_killed:
-            time.sleep(0.001)
             dimse_msg, pcid = self.receive()
-            if dimse_msg:  # dimse message received
-                uid = dimse_msg.affected_sop_class_uid
-                try:
-                    pcid, sop_class, transfer_syntax = \
-                        [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
-                except IndexError:
-                    raise exceptions.ClassNotSupportedError(
-                        'SOP Class {0} not supported as SCP'.format(uid))
-                obj = sopclass.SOP_CLASSES[uid](self, sop_class, pcid,
-                                                transfer_syntax)
-                obj.scp(dimse_msg)  # run SCP
+            uid = dimse_msg.affected_sop_class_uid
+            try:
+                _, sop_class, ts = self.sop_classes_as_scp[pcid]
+            except IndexError:
+                raise exceptions.ClassNotSupportedError(
+                    'SOP Class {0} not supported as SCP'.format(uid))
+            obj = sopclass.SOP_CLASSES[uid](self, sop_class, pcid, ts)
+            obj.scp(dimse_msg)  # run SCP
 
 
 class AssociationRequester(Association):
@@ -248,7 +247,6 @@ class AssociationRequester(Association):
         self.ae = local_ae
         self.remote_ae = remote_ae
         self.sop_classes_as_scu = []
-        self.association_refused = False
         self._request()
 
     def abort(self, reason=0):
@@ -303,32 +301,29 @@ class AssociationRequester(Association):
             self.max_pdu_length = 16000
 
         # Get accepted presentation contexts
-        self.accepted_presentation_contexts = []
-        for context in response.variable_items[1:-1]:
-            if context.result_reason == 0:
-                uid = [x[1] for x in pcdl if x[0] == context.context_id][0]
-                self.accepted_presentation_contexts.append(
-                    (context.context_id, uid, UID(context.ts_sub_item.name)))
+        accepted = (ctx for ctx in response.variable_items[1:-1]
+                    if ctx.result_reason == 0)
+        self.sop_classes_as_scu = {
+            pcdl[ctx.context_id].sop_class: (ctx.context_id,
+                                             UID(ctx.ts_sub_item.name))
+            for ctx in accepted
+        }
         return response
 
     def _request(self):
-        ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
-               for i in self.ae.acceptable_presentation_contexts]
+        ext = [userdataitems.ScpScuRoleSelectionSubItem(uid, 0, 1)
+               for uid in self.ae.acceptable_pr_contexts.keys()]
         response = self.request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
             self.ae.context_def_list, users_pdu=ext
         )
         self.ae.on_association_response(response)
-        self.sop_classes_as_scu = [(context[0], context[1], context[2])
-                                   for context in
-                                   self.accepted_presentation_contexts]
         self.association_established = True
 
     def scu(self, ds, msg_id):
         uid = ds.SOPClassUID
         try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == uid][0]
+            pcid, transfer_syntax = self.sop_classes_as_scu[uid]
         except IndexError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU')
@@ -338,8 +333,7 @@ class AssociationRequester(Association):
 
     def get_scu(self, sop_class):
         try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
+            pcid, transfer_syntax = self.sop_classes_as_scu[sop_class]
         except IndexError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)

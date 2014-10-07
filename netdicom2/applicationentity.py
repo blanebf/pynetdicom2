@@ -8,6 +8,8 @@ import threading
 import platform
 import contextlib
 
+from itertools import izip
+
 import SocketServer
 
 from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
@@ -18,14 +20,10 @@ import netdicom2.asceprovider as asceprovider
 
 
 def _build_context_def_list(sop_classes, supported_ts):
-    count = 1
-    context_def_list = []
-    for sop_class in sop_classes:
-        context_def_list.append(
-            [count, UID(sop_class), [x for x in supported_ts]]
-        )
-        count += 2
-    return context_def_list
+    return {pc_id: asceprovider.PContextDef(UID(sop_class),
+                                            frozenset(x for x in supported_ts))
+            for sop_class, pc_id in izip(sop_classes,
+                                         xrange(1, len(sop_classes) + 1, 2))}
 
 
 class AEBase(object):
@@ -118,7 +116,7 @@ class ClientAE(AEBase):
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
         self.max_pdu_length = max_pdu_length
         self.context_def_list = _build_context_def_list(sop_scu, supported_ts)
-        self.acceptable_presentation_contexts = []
+        self.acceptable_pr_contexts = {}
 
 
 class AE(AEBase, SocketServer.ThreadingTCPServer):
@@ -158,9 +156,9 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         # association from a remote AE will be accepted or not.
         # This is based on the supported_sop_classes_as_scp and
         # supported_transfer_syntax values set for this AE.
-        self.acceptable_presentation_contexts = [
-            [sop_class, [x for x in supported_ts]] for sop_class in sop_scp
-        ]
+        self.acceptable_pr_contexts = {
+            sop_class: [x for x in supported_ts] for sop_class in sop_scp
+        }
 
     def __enter__(self):
         threading.Thread(target=self.serve_forever).start()
