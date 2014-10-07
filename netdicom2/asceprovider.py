@@ -8,6 +8,7 @@
 
 # This module provides association services
 import collections
+import functools
 import time
 import SocketServer
 
@@ -24,7 +25,7 @@ import netdicom2.userdataitems as userdataitems
 
 PContextDef = collections.namedtuple(
     'PContextDef',
-    ['sop_class', 'supported_ts']
+    ['id', 'sop_class', 'supported_ts']
 )
 
 
@@ -161,7 +162,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         """
         self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
 
-    def accept(self, assoc_req, acceptable_pr_contexts):
+    def accept(self, assoc_req):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
         acceptable_pr_contexts"""
@@ -176,7 +177,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         )
 
         for pc_id, proposed_sop, proposed_ts in requested:
-            if proposed_sop not in acceptable_pr_contexts:
+            if proposed_sop not in self.ae.supported_scp:
                 # refuse sop class because of SOP class not supported
                 rsp.append(
                     pdu.PresentationContextItemAC(
@@ -185,7 +186,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
                 continue
 
             for ts in proposed_ts:
-                if ts.name in acceptable_pr_contexts[proposed_sop]:
+                if ts.name in self.ae.supported_ts:
                     rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
                     self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop,
                                                       UID(ts.name))
@@ -225,20 +226,22 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             self.reject(e.result, e.source, e.diagnostic)
             raise
 
-        self.accept(assoc_req, self.ae.acceptable_pr_contexts)
+        self.accept(assoc_req)
         self.association_established = True
 
     def _loop(self):
         while not self.is_killed:
-            dimse_msg, pcid = self.receive()
+            dimse_msg, pc_id = self.receive()
             uid = dimse_msg.affected_sop_class_uid
             try:
-                _, sop_class, ts = self.sop_classes_as_scp[pcid]
-            except IndexError:
+                _, sop_class, ts = self.sop_classes_as_scp[pc_id]
+                factory, args, kwargs = self.ae.supported_scp[uid]
+            except KeyError:
                 raise exceptions.ClassNotSupportedError(
                     'SOP Class {0} not supported as SCP'.format(uid))
-            obj = sopclass.SOP_CLASSES[uid](self, sop_class, pcid, ts)
-            obj.scp(dimse_msg)  # run SCP
+            else:
+                service = factory(*args, **kwargs)
+                service.scp(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
 
 
 class AssociationRequester(Association):
@@ -312,7 +315,7 @@ class AssociationRequester(Association):
 
     def _request(self):
         ext = [userdataitems.ScpScuRoleSelectionSubItem(uid, 0, 1)
-               for uid in self.ae.acceptable_pr_contexts.keys()]
+               for uid in self.ae.supported_scp.keys()]
         response = self.request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
             self.ae.context_def_list, users_pdu=ext
@@ -323,20 +326,25 @@ class AssociationRequester(Association):
     def scu(self, ds, msg_id):
         uid = ds.SOPClassUID
         try:
-            pcid, transfer_syntax = self.sop_classes_as_scu[uid]
-        except IndexError:
+            pc_id, transfer_syntax = self.sop_classes_as_scu[uid]
+            factory, args, kwargs, = self.ae.supported_scu[uid]
+        except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU')
-
-        obj = sopclass.SOP_CLASSES[uid](self, uid, pcid, transfer_syntax)
-        return obj.scu(ds, msg_id)
+        else:
+            service = factory(*args, **kwargs)
+            return service.scu(self, PContextDef(pc_id, uid, transfer_syntax),
+                               ds, msg_id)
 
     def get_scu(self, sop_class):
         try:
-            pcid, transfer_syntax = self.sop_classes_as_scu[sop_class]
-        except IndexError:
+            pcid, ts = self.sop_classes_as_scu[sop_class]
+            factory, args, kwargs, = self.ae.supported_scu[sop_class]
+
+        except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)
-        obj = sopclass.SOP_CLASSES[sop_class](self, sop_class, pcid,
-                                              transfer_syntax)
-        return obj
+        else:
+            service = factory(*args, **kwargs)
+            return functools.partial(service.scu, self,
+                                     PContextDef(pcid, sop_class, ts))

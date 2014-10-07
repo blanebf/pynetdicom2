@@ -168,56 +168,14 @@ PATIENT_STUDY_ONLY_GET_SOP_CLASS = '1.2.840.10008.5.1.4.1.2.3.3'
 
 MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS = '1.2.840.10008.5.1.4.31'
 
-SOP_CLASSES = {}  # Initialized later
-
-
-class ServiceClassMeta(type):
-    """Simple metaclass for ServiceClass-based class.
-
-    Metaclass takes 'sop_classes' class attribute and registers created class
-    in module-level SOP_CLASSES dictionary for SOP Class UIDs listed in
-    the attribute
-    """
-
-    def __new__(mcs, name, bases, dct):
-        """Handles creation and registration of the new ServiceClass class
-
-        :param name: class name
-        :param bases: base class names
-        :param dct: attribute dictionary
-        :return: new ServiceClass class
-        """
-        new_class = type.__new__(mcs, name, bases, dct)
-        try:
-            SOP_CLASSES.update(
-                {sop_class: new_class for sop_class in dct['sop_classes']})
-        except KeyError:
-            pass
-        return new_class
-
 
 class ServiceClass(object):
     """Base class for all service classes.
 
     Class provides basic initialization and several utility methods.
     """
-    __metaclass__ = ServiceClassMeta
-
     statuses = []
     sop_classes = []
-
-    def __init__(self, asce, uid, pcid, transfer_syntax):
-        """
-
-        :param asce: AE instance that this service class belongs to
-        :param uid: service SOP Class UID
-        :param pcid: presentation context ID
-        :param transfer_syntax: service transfer syntax
-        """
-        self.asce = asce
-        self.uid = uid
-        self.pcid = pcid
-        self.transfer_syntax = transfer_syntax
 
     def code_to_status(self, code):
         """Converts code to status
@@ -235,7 +193,7 @@ class ServiceClass(object):
                       xrange(code, code))
 
 
-class VerificationServiceClass(ServiceClass):
+class VerificationService(ServiceClass):
     """Implementation of verification service SOP Class.
 
     Class provides implementation for both SCU as SCP roles.
@@ -243,7 +201,7 @@ class VerificationServiceClass(ServiceClass):
     statuses = [SUCCESS, UNABLE_TO_PROCESS]
     sop_classes = [VERIFICATION_SOP_CLASS]
 
-    def scu(self, msg_id):
+    def scu(self, asce, ctx, msg_id):
         """Sends verification request and returns it's status result
 
         :param msg_id: message ID
@@ -252,14 +210,14 @@ class VerificationServiceClass(ServiceClass):
         """
         c_echo = dimsemessages.CEchoRQMessage()
         c_echo.message_id = msg_id
-        c_echo.affected_sop_class_uid = self.uid
+        c_echo.affected_sop_class_uid = ctx.sop_class
 
-        self.asce.send(c_echo, self.pcid)
+        asce.send(c_echo, ctx.id)
 
-        response, msg_id = self.asce.receive()
+        response, msg_id = asce.receive()
         return self.code_to_status(response.status)
 
-    def scp(self, msg):
+    def scp(self, asce, ctx, msg):
         """Process received C-ECHO.
 
         Method delegates actual handling of C-ECHO to AE instance by calling
@@ -268,17 +226,17 @@ class VerificationServiceClass(ServiceClass):
         :param msg: incoming C-ECHO message
         """
         try:
-            status = self.asce.ae.on_receive_echo(self)
+            status = asce.ae.on_receive_echo(ctx)
         except exceptions.EventHandlingError:
             status = UNABLE_TO_PROCESS
 
         rsp = dimsemessages.CEchoRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.status = status
-        self.asce.send(rsp, self.pcid)
+        asce.send(rsp, ctx.id)
 
 
-class StorageServiceClass(ServiceClass):
+class StorageService(ServiceClass):
     """Simple implementation of the Storage service for various SOP classes.
 
     Service provides implementation for both SCU and SCP roles.
@@ -308,7 +266,7 @@ class StorageServiceClass(ServiceClass):
                    NM_IMAGE_STORAGE_SOP_CLASS, BASIC_TEXT_SR_STORAGE,
                    ENHANCED_SR_STORAGE, COMPREHENSIVE_SR_STORAGE]
 
-    def scu(self, dataset, msg_id):
+    def scu(self, asce, ctx, dataset, msg_id):
         """SCU role implementation.
 
         :param dataset: dataset that should be sent via Storage service
@@ -321,16 +279,16 @@ class StorageServiceClass(ServiceClass):
         c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
         c_store.priority = dimsemessages.PRIORITY_MEDIUM
         c_store.data_set = dsutils.encode(dataset,
-                                          self.transfer_syntax.is_implicit_VR,
-                                          self.transfer_syntax.is_little_endian)
+                                          ctx.supported_ts.is_implicit_VR,
+                                          ctx.supported_ts.is_little_endian)
         # send c_store request
-        self.asce.send(c_store, self.pcid)
+        asce.send(c_store, ctx.id)
 
         # wait for c-store response
-        response, id_ = self.asce.receive()
+        response, id_ = asce.receive()
         return self.code_to_status(response.status)
 
-    def scp(self, msg):
+    def scp(self, asce, ctx, msg):
         """SCP role implementation.
 
         Service extracts dataset from received message and passes it to
@@ -340,9 +298,9 @@ class StorageServiceClass(ServiceClass):
         """
         try:
             ds = dsutils.decode(msg.data_set,
-                                self.transfer_syntax.is_implicit_VR,
-                                self.transfer_syntax.is_little_endian)
-            status = self.asce.ae.on_receive_store(self, ds)
+                                ctx.supported_ts.is_implicit_VR,
+                                ctx.supported_ts.is_little_endian)
+            status = asce.ae.on_receive_store(ctx, ds)
         except exceptions.EventHandlingError:
             status = CANNOT_UNDERSTAND
         # make response
@@ -351,10 +309,10 @@ class StorageServiceClass(ServiceClass):
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(status)
-        self.asce.send(rsp, self.pcid)
+        asce.send(rsp, ctx.id)
 
 
-class QueryRetrieveFindSOPClass(ServiceClass):
+class QRFindService(ServiceClass):
     """Implementation for Query/Retrieve find service SOP classes.
 
     Class provides implementation for both SCU and SCP roles.
@@ -365,7 +323,7 @@ class QueryRetrieveFindSOPClass(ServiceClass):
                 UNABLE_TO_PROCESS, MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST,
                 SUCCESS, PENDING, PENDING_WARNING]
 
-    def scu(self, ds, msg_id):
+    def scu(self, asce, ctx, ds, msg_id):
         """SCU role is implement as iterator that returns responses from remote
         AE.
 
@@ -377,25 +335,25 @@ class QueryRetrieveFindSOPClass(ServiceClass):
         """
         c_find = dimsemessages.CFindRQMessage()
         c_find.message_id = msg_id
-        c_find.affected_sop_class_uid = self.uid
+        c_find.affected_sop_class_uid = ctx.sop_class
         c_find.priority = dimsemessages.PRIORITY_MEDIUM
         c_find.data_set = dsutils.encode(ds,
-                                         self.transfer_syntax.is_implicit_VR,
-                                         self.transfer_syntax.is_little_endian)
+                                         ctx.supported_ts.is_implicit_VR,
+                                         ctx.supported_ts.is_little_endian)
 
         # send c-find request
-        self.asce.send(c_find, self.pcid)
+        asce.send(c_find, ctx.id)
         while True:
-            response, _ = self.asce.receive()
+            response, _ = asce.receive()
             data_set = dsutils.decode(response.data_set,
-                                      self.transfer_syntax.is_implicit_VR,
-                                      self.transfer_syntax.is_little_endian)
+                                      ctx.supported_ts.is_implicit_VR,
+                                      ctx.supported_ts.is_little_endian)
             status = self.code_to_status(response.status)
             yield data_set, status
             if status.status_type != 'Pending':
                 break
 
-    def scp(self, msg):
+    def scp(self, asce, ctx, msg):
         """SCP role implementation.
 
         Method calls `on_receive_find` from AE with received C-FIND parameters
@@ -404,30 +362,30 @@ class QueryRetrieveFindSOPClass(ServiceClass):
 
         :param msg: received C-FIND message
         """
-        ds = dsutils.decode(msg.data_set, self.transfer_syntax.is_implicit_VR,
-                            self.transfer_syntax.is_little_endian)
+        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
 
         # make response
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
-        gen = self.asce.ae.on_receive_find(self, ds)
+        gen = asce.ae.on_receive_find(ctx, ds)
         for data_set, status in gen:
             rsp.status = int(status)
             rsp.data_set = dsutils.encode(data_set,
-                                          self.transfer_syntax.is_implicit_VR,
-                                          self.transfer_syntax.is_little_endian)
-            self.asce.send(rsp, self.pcid)
+                                          ctx.supported_ts.is_implicit_VR,
+                                          ctx.supported_ts.is_little_endian)
+            asce.send(rsp, ctx.id)
 
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.asce.send(rsp, self.pcid)
+        asce.send(rsp, ctx.id)
 
 
-class QueryRetrieveGetSOPClass(ServiceClass):
+class QRGetService(ServiceClass):
     sop_classes = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
                    PATIENT_STUDY_ONLY_GET_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES_NUMBER_OF_MATCHES,
@@ -435,21 +393,21 @@ class QueryRetrieveGetSOPClass(ServiceClass):
                 IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS,
                 UNABLE_TO_PROCESS, CANCEL, WARNING, SUCCESS, PENDING]
 
-    def scu(self, ds, msg_id):
+    def scu(self, asce, ctx, ds, msg_id):
         # build C-GET primitive
         c_get = dimsemessages.CGetRQMessage()
         c_get.message_id = msg_id
-        c_get.affected_sop_class_uid = self.uid
+        c_get.affected_sop_class_uid = ctx.sop_class
         c_get.priority = dimsemessages.PRIORITY_MEDIUM
         c_get.data_set = dsutils.encode(ds,
-                                        self.transfer_syntax.is_implicit_VR,
-                                        self.transfer_syntax.is_little_endian)
+                                        ctx.supported_ts.is_implicit_VR,
+                                        ctx.supported_ts.is_little_endian)
 
         # send c-get primitive
-        self.asce.send(c_get, self.pcid)
+        asce.send(c_get, ctx.id)
         while 1:
             # receive c-store
-            msg, pc_id = self.asce.receive()
+            msg, pc_id = asce.receive()
             if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
                 if self.code_to_status(msg.status).status_type == 'Pending':
                     pass  # pending. intermediate C-GET response
@@ -464,18 +422,18 @@ class QueryRetrieveGetSOPClass(ServiceClass):
                 rsp.affected_sop_class_uid = msg.affected_sop_class_uid
                 try:
                     d = dsutils.decode(msg.data_set,
-                                       self.transfer_syntax.is_implicit_VR,
-                                       self.transfer_syntax.is_little_endian)
-                    status = self.asce.ae.on_receive_store(self, d)
+                                       ctx.supported_ts.is_implicit_VR,
+                                       ctx.supported_ts.is_little_endian)
+                    status = asce.ae.on_receive_store(ctx, d)
                     yield self, d
                 except exceptions.EventHandlingError:
                     status = CANNOT_UNDERSTAND
 
                 rsp.status = int(status)
-                self.asce.send(rsp, pc_id)
+                asce.send(rsp, pc_id)
 
 
-class QueryRetrieveMoveSOPClass(ServiceClass):
+class QRMoveService(ServiceClass):
     sop_classes = [PATIENT_ROOT_MOVE_SOP_CLASS, STUDY_ROOT_MOVE_SOP_CLASS,
                    PATIENT_STUDY_ONLY_MOVE_SOP_CLASS]
     statuses = [OUT_OF_RESOURCES_NUMBER_OF_MATCHES,
@@ -483,42 +441,42 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
                 IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS, UNABLE_TO_PROCESS, CANCEL,
                 WARNING, SUCCESS, PENDING]
 
-    def scu(self, ds, dest_ae, msg_id):
+    def scu(self, asce, ctx, ds, dest_ae, msg_id):
         # build C-FIND primitive
         c_move = dimsemessages.CMoveRQMessage()
         c_move.message_id = msg_id
-        c_move.affected_sop_class_uid = self.uid
+        c_move.affected_sop_class_uid = ctx.sop_class
         c_move.move_destination = dest_ae
         c_move.priority = dimsemessages.PRIORITY_MEDIUM
         c_move.data_set = dsutils.encode(ds,
-                                         self.transfer_syntax.is_implicit_VR,
-                                         self.transfer_syntax.is_little_endian)
+                                         ctx.supported_ts.is_implicit_VR,
+                                         ctx.supported_ts.is_little_endian)
         # send c-find request
-        self.asce.send(c_move, self.pcid)
+        asce.send(c_move, ctx.id)
 
         while 1:
             # wait for c-move responses
-            response, _ = self.asce.receive()
+            response, _ = asce.receive()
             status = self.code_to_status(response.status).status_type
             if status != 'Pending':
                 break
             yield status
 
-    def scp(self, msg):
-        ds = dsutils.decode(msg.data_set, self.transfer_syntax.is_implicit_VR,
-                            self.transfer_syntax.is_little_endian)
+    def scp(self, asce, ctx, msg):
+        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
 
         # make response
         rsp = dimsemessages.CMoveRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
-        remote_ae, nop, gen = self.asce.ae.on_receive_move(self, ds,
+        remote_ae, nop, gen = asce.ae.on_receive_move(ctx, ds,
                                                            msg.move_destination)
         if not nop:
             # nothing to move
-            self._send_response(msg, 0, 0, 0, 0)
+            self._send_response(asce, ctx, msg, 0, 0, 0, 0)
 
-        with self.asce.ae.request_association(remote_ae) as assoc:
+        with asce.ae.request_association(remote_ae) as assoc:
             failed = 0
             warning = 0
             completed = 0
@@ -538,10 +496,11 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
                 completed += 1
 
                 # send response
-                self.asce.send(rsp, self.pcid)
-            self._send_response(msg, nop, failed, warning, completed)
+                asce.send(rsp, ctx.id)
+            self._send_response(asce, ctx, msg, nop, failed, warning, completed)
 
-    def _send_response(self, msg, nop, failed, warning, completed):
+    @staticmethod
+    def _send_response(asce, ctx, msg, nop, failed, warning, completed):
         rsp = dimsemessages.CMoveRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
@@ -550,62 +509,62 @@ class QueryRetrieveMoveSOPClass(ServiceClass):
         rsp.num_of_failed_sub_ops = failed
         rsp.num_of_warning_sub_ops = warning
         rsp.status = int(SUCCESS)
-        self.asce.send(rsp, self.pcid)
+        asce.send(rsp, ctx.id)
 
 
-class BasicWorkListServiceClass(ServiceClass):
+class BasicWorkListService(ServiceClass):
     sop_classes = [MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS]
 
 
-class ModalityWorkListServiceSOPClass(BasicWorkListServiceClass):
+class ModalityWorkListService(BasicWorkListService):
     statuses = [OUT_OF_RESOURCES, IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS,
                 UNABLE_TO_PROCESS, MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST,
                 SUCCESS, PENDING, PENDING_WARNING]
 
-    def scu(self, ds, msg_id):
+    def scu(self, asce, ctx, ds, msg_id):
         # build C-FIND primitive
         c_find = dimsemessages.CFindRQMessage()
         c_find.message_id = msg_id
-        c_find.affected_sop_class_uid = self.uid
+        c_find.affected_sop_class_uid = ctx.sop_class
         c_find.priority = dimsemessages.PRIORITY_MEDIUM
         c_find.data_set = dsutils.encode(ds,
-                                         self.transfer_syntax.is_implicit_VR,
-                                         self.transfer_syntax.is_little_endian)
+                                         ctx.supported_ts.is_implicit_VR,
+                                         ctx.supported_ts.is_little_endian)
 
         # send c-find request
-        self.asce.send(c_find, self.pcid)
+        asce.send(c_find, ctx.id)
         while 1:
             # wait for c-find responses
-            response, _ = self.asce.receive()
+            response, _ = asce.receive()
             d = dsutils.decode(response.data_set,
-                               self.transfer_syntax.is_implicit_VR,
-                               self.transfer_syntax.is_little_endian)
+                               ctx.supported_ts.is_implicit_VR,
+                               ctx.supported_ts.is_little_endian)
             status = self.code_to_status(response.status).status_type
             yield status, d
             if status != 'Pending':
                 break
 
-    def scp(self, msg):
-        ds = dsutils.decode(msg.data_set, self.transfer_syntax.is_implicit_VR,
-                            self.transfer_syntax.is_little_endian)
+    def scp(self, asce, ctx, msg):
+        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
 
         # make response
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
 
-        gen = self.asce.ae.on_receive_find(self, ds)
+        gen = asce.ae.on_receive_find(ctx, ds)
         for identifier_ds, status in gen:
             rsp.status = int(status)
             rsp.data_set = dsutils.encode(identifier_ds,
-                                          self.transfer_syntax.is_implicit_VR,
-                                          self.transfer_syntax.is_little_endian)
+                                          ctx.supported_ts.is_implicit_VR,
+                                          ctx.supported_ts.is_little_endian)
             # send response
-            self.asce.send(rsp, self.pcid)
+            asce.send(rsp, ctx.id)
 
         # send final response
         rsp = dimsemessages.CFindRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.affected_sop_class_uid = msg.affected_sop_class_uid
         rsp.status = int(SUCCESS)
-        self.asce.send(rsp, self.pcid)
+        asce.send(rsp, ctx.id)

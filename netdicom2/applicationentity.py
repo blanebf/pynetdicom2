@@ -19,16 +19,29 @@ import netdicom2.sopclass as sopclass
 import netdicom2.asceprovider as asceprovider
 
 
-def _build_context_def_list(sop_classes, supported_ts):
-    return {pc_id: asceprovider.PContextDef(UID(sop_class),
-                                            frozenset(x for x in supported_ts))
-            for sop_class, pc_id in izip(sop_classes,
-                                         xrange(1, len(sop_classes) + 1, 2))}
-
-
 class AEBase(object):
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
+
+    def __init__(self, supported_ts):
+        if supported_ts is None:
+            supported_ts = self.default_ts
+
+        self.supported_ts = frozenset(supported_ts)
+        self.timeout = 15
+
+        self.context_def_list = {}
+        self.supported_scu = {}
+        self.supported_scp = {}
+
+    def add_scu(self, service, args=(), kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        self.supported_scu.update({
+            uid: (service, args, kwargs) for uid in service.sop_classes
+        })
+        self._update_context_def_list(service.sop_classes)
+        return self
 
     @contextlib.contextmanager
     def request_association(self, remote_ae):
@@ -61,43 +74,47 @@ class AEBase(object):
         """
         pass
 
-    def on_receive_echo(self, service):
+    def on_receive_echo(self, context):
         """Default handling of C-ECHO command. Always returns SUCCESS code
 
         User should override this method in sub-class to provide custom
         handling of the command.
 
-        :param service: service instance that received C-ECHO
+        :param context: presentation context (contains ID, SOP Class UID and
+                        Transfer Syntax)
         :return: status that should be sent in response
         """
         return sopclass.SUCCESS
 
-    def on_receive_store(self, service, ds):
+    def on_receive_store(self, context, ds):
         """Default handling of C-STORE command. Always returns
         ELEMENT_DISCARDED code.
 
         User should override this method in sub-class to provide custom handling
         of the command
 
-        :param service: service that received command
+        :param context: presentation context (contains ID, SOP Class UID and
+                        Transfer Syntax)
         :param ds: dataset that should be stored
         :return: status code
         """
         return sopclass.ELEMENT_DISCARDED
 
-    def on_receive_find(self, service, ds):
+    def on_receive_find(self, context, ds):
         """Default handling of C-FIND command. Returns empty iterator.
 
-        :param service: service that received command
+        :param context: presentation context (contains ID, SOP Class UID and
+                        Transfer Syntax)
         :param ds: dataset with C-FIND parameters
         :return: iterator that returns tuples: (<result dataset>, <status code>)
         """
         return iter([])
 
-    def on_receive_move(self, service, ds, destination):
+    def on_receive_move(self, context, ds, destination):
         """Default handling of C-MOVE command. Returns empty empty values
 
-        :param service: service that received command
+        :param context: presentation context (contains ID, SOP Class UID and
+                        Transfer Syntax)
         :param ds: dataset with C-MOVE parameters
         :param destination: C-MOVE command destination
         :return: tuple: remote AE parameters, number of operations and iterator
@@ -105,18 +122,30 @@ class AEBase(object):
         """
         return None, 0, iter([])
 
+    def _update_context_def_list(self, sop_classes):
+        start = max(self.context_def_list.keys()) if self.context_def_list \
+            else 1
+
+        self.context_def_list.update(
+            self._build_context_def_list(sop_classes, start=start)
+        )
+
+    def _build_context_def_list(self, sop_classes, start):
+        return {pc_id: asceprovider.PContextDef(pc_id, UID(sop_class),
+                                                self.supported_ts)
+                for sop_class, pc_id in izip(sop_classes,
+                                             xrange(start,
+                                                    len(sop_classes) + 1,
+                                                    2))}
+
 
 class ClientAE(AEBase):
-    def __init__(self, ae_title, sop_scu, supported_ts=None,
+    def __init__(self, ae_title, supported_ts=None,
                  max_pdu_length=16000):
-        if supported_ts is None:
-            supported_ts = AE.default_ts
 
-        self.timeout = 15
+        super(ClientAE, self).__init__(supported_ts)
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
         self.max_pdu_length = max_pdu_length
-        self.context_def_list = _build_context_def_list(sop_scu, supported_ts)
-        self.acceptable_pr_contexts = {}
 
 
 class AE(AEBase, SocketServer.ThreadingTCPServer):
@@ -129,42 +158,35 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
     on received events.
     """
 
-    def __init__(self, ae_title, port, sop_scu, sop_scp,
-                 supported_ts=None, max_pdu_length=16000):
+    def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=16000):
         SocketServer.ThreadingTCPServer.__init__(
             self,
             ('', port),
             asceprovider.AssociationAcceptor
         )
+        AEBase.__init__(self, supported_ts)
 
         self.daemon_threads = True
         self.allow_reuse_address = True
 
-        if supported_ts is None:
-            supported_ts = AE.default_ts
-
-        self.timeout = 15
         self.local_ae = {'address': platform.node(), 'port': port,
                          'aet': ae_title}
         self.max_pdu_length = max_pdu_length
-        self.context_def_list = _build_context_def_list(
-            sop_scu + sop_scp,
-            supported_ts
-        )
-
-        # build acceptable context definition list used to decide whether an
-        # association from a remote AE will be accepted or not.
-        # This is based on the supported_sop_classes_as_scp and
-        # supported_transfer_syntax values set for this AE.
-        self.acceptable_pr_contexts = {
-            sop_class: [x for x in supported_ts] for sop_class in sop_scp
-        }
 
     def __enter__(self):
         threading.Thread(target=self.serve_forever).start()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.quit()
+
+    def add_scp(self, service, args=(), kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        self.supported_scp.update({
+            uid: (service, args, kwargs) for uid in service.sop_classes
+        })
+        self._update_context_def_list(service.sop_classes)
+        return self
 
     def quit(self):
         """Stops AE.
