@@ -23,12 +23,13 @@ class AEBase(object):
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
 
-    def __init__(self, supported_ts):
+    def __init__(self, supported_ts, max_pdu_length):
         if supported_ts is None:
             supported_ts = self.default_ts
 
         self.supported_ts = frozenset(supported_ts)
         self.timeout = 15
+        self.max_pdu_length = max_pdu_length
 
         self.context_def_list = {}
         self.supported_scu = {}
@@ -40,7 +41,7 @@ class AEBase(object):
         self.supported_scu.update({
             uid: (service, args, kwargs) for uid in service.sop_classes
         })
-        self._update_context_def_list(service.sop_classes)
+        self.update_context_def_list(service.sop_classes)
         return self
 
     @contextlib.contextmanager
@@ -122,7 +123,7 @@ class AEBase(object):
         """
         return None, 0, iter([])
 
-    def _update_context_def_list(self, sop_classes):
+    def update_context_def_list(self, sop_classes):
         start = max(self.context_def_list.keys()) if self.context_def_list \
             else 1
 
@@ -142,10 +143,8 @@ class AEBase(object):
 class ClientAE(AEBase):
     def __init__(self, ae_title, supported_ts=None,
                  max_pdu_length=16000):
-
-        super(ClientAE, self).__init__(supported_ts)
+        super(ClientAE, self).__init__(supported_ts, max_pdu_length)
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
-        self.max_pdu_length = max_pdu_length
 
 
 class AE(AEBase, SocketServer.ThreadingTCPServer):
@@ -164,14 +163,13 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
             ('', port),
             asceprovider.AssociationAcceptor
         )
-        AEBase.__init__(self, supported_ts)
+        AEBase.__init__(self, supported_ts, max_pdu_length)
 
         self.daemon_threads = True
         self.allow_reuse_address = True
 
         self.local_ae = {'address': platform.node(), 'port': port,
                          'aet': ae_title}
-        self.max_pdu_length = max_pdu_length
 
     def __enter__(self):
         threading.Thread(target=self.serve_forever).start()
@@ -185,7 +183,7 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         self.supported_scp.update({
             uid: (service, args, kwargs) for uid in service.sop_classes
         })
-        self._update_context_def_list(service.sop_classes)
+        self.update_context_def_list(service.sop_classes)
         return self
 
     def quit(self):
