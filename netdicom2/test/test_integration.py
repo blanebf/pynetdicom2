@@ -12,8 +12,8 @@ import netdicom2.sopclass as sc
 
 class CEchoTestCase(unittest.TestCase):
     def test_c_echo_positive(self):
-        ae1 = ae.ClientAE('AET1').add_scu(sc.VerificationService)
-        ae2 = ae.AE('AET2', 11112).add_scp(sc.VerificationService)
+        ae1 = ae.ClientAE('AET1').add_scu(sc.verification_scu)
+        ae2 = ae.AE('AET2', 11112).add_scp(sc.verification_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                              username='admin', password='123')
@@ -36,8 +36,8 @@ class CFindTestCase(unittest.TestCase):
 
         test = self
         test_name = 'Patient^Name^Test'
-        ae1 = ae.ClientAE('AET1').add_scu(sc.QRFindService)
-        ae2 = CFindServerAE('AET2', 11112).add_scp(sc.QRFindService)
+        ae1 = ae.ClientAE('AET1').add_scu(sc.qr_find_scu)
+        ae2 = CFindServerAE('AET2', 11112).add_scp(sc.qr_find_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                              username='admin', password='123')

@@ -8,7 +8,7 @@ import threading
 import platform
 import contextlib
 
-from itertools import izip
+from itertools import izip, count
 
 import SocketServer
 
@@ -35,14 +35,20 @@ class AEBase(object):
         self.supported_scu = {}
         self.supported_scp = {}
 
-    def add_scu(self, service, args=(), kwargs=None):
-        if kwargs is None:
-            kwargs = {}
+    def add_scu(self, service):
         self.supported_scu.update({
-            uid: (service, args, kwargs) for uid in service.sop_classes
+            uid: service for uid in service.sop_classes
         })
         self.update_context_def_list(service.sop_classes)
         return self
+
+    def update_context_def_list(self, sop_classes, store_in_file=False):
+        start = max(self.context_def_list.keys()) if self.context_def_list \
+            else 1
+
+        self.context_def_list.update(
+            self._build_context_def_list(sop_classes, start, store_in_file)
+        )
 
     @contextlib.contextmanager
     def request_association(self, remote_ae):
@@ -123,21 +129,11 @@ class AEBase(object):
         """
         return None, 0, iter([])
 
-    def update_context_def_list(self, sop_classes):
-        start = max(self.context_def_list.keys()) if self.context_def_list \
-            else 1
-
-        self.context_def_list.update(
-            self._build_context_def_list(sop_classes, start=start)
-        )
-
-    def _build_context_def_list(self, sop_classes, start):
+    def _build_context_def_list(self, sop_classes, start, store_in_file):
         return {pc_id: asceprovider.PContextDef(pc_id, UID(sop_class),
                                                 self.supported_ts)
                 for sop_class, pc_id in izip(sop_classes,
-                                             xrange(start,
-                                                    len(sop_classes) + 1,
-                                                    2))}
+                                             count(start, 2))}
 
 
 class ClientAE(AEBase):
@@ -177,11 +173,9 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.quit()
 
-    def add_scp(self, service, args=(), kwargs=None):
-        if kwargs is None:
-            kwargs = {}
+    def add_scp(self, service):
         self.supported_scp.update({
-            uid: (service, args, kwargs) for uid in service.sop_classes
+            uid: service for uid in service.sop_classes
         })
         self.update_context_def_list(service.sop_classes)
         return self

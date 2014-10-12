@@ -33,10 +33,8 @@
 import struct
 
 from dicom.dataset import Dataset
-from dicom.UID import ImplicitVRLittleEndian
 
 import netdicom2.dsutils as dsutils
-import netdicom2.exceptions as exceptions
 import netdicom2.pdu as pdu
 
 import dicom._dicom_dict as dicomdict
@@ -98,17 +96,23 @@ def value_or_none(elem):
     return elem.value if elem else None
 
 
-def fragment(max_pdu_length, str_):
-    s = str_
-    fragments = []
+def chunks(seq, size):
+    return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+
+
+def fragment(data_set, max_pdu_length, normal, last):
     maxsize = max_pdu_length - 6
-    while 1:
-        fragments.append(s[:maxsize])
-        s = s[maxsize:]
-        if len(s) <= maxsize:
-            if len(s) > 0:
-                fragments.append(s)
-            return fragments
+    for chunk in chunks(data_set, maxsize):
+        yield chunk, normal if len(chunk) == maxsize else last
+
+
+def fragment_file(f, max_pdu_length, normal, last):
+    maxsize = max_pdu_length - 6
+    while True:
+        chunk = f.read(maxsize)
+        if not chunk:
+            break
+        yield chunk, normal if len(chunk) == maxsize else last
 
 
 def dimse_property(tag):
@@ -154,19 +158,16 @@ class DIMSEMessage(object):
     command_field = None
     command_fields = []
 
-    def __init__(self):
-        self.encoded_data_set = []
-        self.encoded_command_set = []
+    def __init__(self, command_set=None):
         self._data_set = ''
-        self.pc_id = None  # TODO Remove this member
-
-        self.ts = ImplicitVRLittleEndian  # imposed by standard.
-
-        self.command_set = Dataset()
-        self.command_set.CommandField = self.command_field
-        self.command_set.DataSetType = NO_DATASET
-        for field in self.command_fields:
-            setattr(self.command_set, field, '')
+        if command_set:
+            self.command_set = command_set
+        else:
+            self.command_set = Dataset()
+            self.command_set.CommandField = self.command_field
+            self.command_set.DataSetType = NO_DATASET
+            for field in self.command_fields:
+                setattr(self.command_set, field, '')
 
     affected_sop_class_uid = dimse_property((0x0000, 0x0002))
 
@@ -183,72 +184,24 @@ class DIMSEMessage(object):
     def encode(self, pc_id, max_pdu_length):
         """Returns the encoded message as a series of P-DATA service
         parameter objects."""
-        p_datas = []
-        self.pc_id = pc_id
-        encoded_command_set = dsutils.encode(self.command_set,
-                                             self.ts.is_implicit_VR,
-                                             self.ts.is_little_endian)
+        encoded_command_set = dsutils.encode(self.command_set, True, True)
 
         # fragment command set
-        pdvs = fragment(max_pdu_length, encoded_command_set)
-        for pdv in pdvs[:-1]:
+        for item, bit in fragment(encoded_command_set, max_pdu_length, 1, 3):
             # send only one pdv per p-data primitive
             value_item = pdu.PresentationDataValueItem(
-                pc_id, struct.pack('b', 1) + pdv)
-            p_datas.append(pdu.PDataTfPDU([value_item]))
-
-        # last command fragment
-        value_item = pdu.PresentationDataValueItem(
-            pc_id, struct.pack('b', 3) + pdvs[-1])
-        p_datas.append(pdu.PDataTfPDU([value_item]))
+                pc_id, struct.pack('b', bit) + item)
+            yield pdu.PDataTfPDU([value_item])
 
         # fragment data set
         if self.data_set:
-            pdvs = fragment(max_pdu_length, self.data_set)
-            for pdv in pdvs[:-1]:
+            for item, bit in fragment(self.data_set, max_pdu_length, 0, 2):
                 value_item = pdu.PresentationDataValueItem(
-                    pc_id, struct.pack('b', 0) + pdv)
-                p_datas.append(pdu.PDataTfPDU([value_item]))
-            # last data fragment
-            value_item = pdu.PresentationDataValueItem(
-                pc_id, struct.pack('b', 2) + pdvs[-1])
-            p_datas.append(pdu.PDataTfPDU([value_item]))
-
-        return p_datas
-
-    def decode(self, p_data):
-        """Constructs itself receiving a series of P-DATA primitives.
-        Returns True when complete, False otherwise."""
-        for value_item in p_data.data_value_items:
-            # must be able to read P-DATA with several PDVs
-            self.pc_id = value_item.context_id
-            marker = struct.unpack('b', value_item.data_value[0])[0]
-            if marker in (1, 3):
-                self.encoded_command_set.append(value_item.data_value[1:])
-                if marker == 3:
-                    self.command_set = dsutils.decode(
-                        ''.join(self.encoded_command_set),
-                        self.ts.is_implicit_VR, self.ts.is_little_endian)
-                    self.encoded_command_set = []
-                    self.__class__ = MESSAGE_TYPE[
-                        self.command_set[(0x0000, 0x0100)].value]
-                    if self.command_set[(0x0000, 0x0800)].value == 0x0101:
-                        return True  # response: no dataset
-            elif marker in (0, 2):
-                self.encoded_data_set.append(value_item.data_value[1:])
-                if marker == 2:
-                    self.data_set = ''.join(self.encoded_data_set)
-                    self.encoded_data_set = []
-                    return True
-            else:
-                raise exceptions.DIMSEProcessingError(
-                    'Incorrect first PDV byte')
-
-        return False
+                    pc_id, struct.pack('b', bit) + item)
+                yield pdu.PDataTfPDU([value_item])
 
     def set_length(self):
-        it = (len(dsutils.encode_element(v, self.ts.is_implicit_VR,
-                                         self.ts.is_little_endian))
+        it = (len(dsutils.encode_element(v, True, True))
               for v in self.command_set.values()[1:])
         self.command_set[(0x0000, 0x0000)].value = sum(it)
 

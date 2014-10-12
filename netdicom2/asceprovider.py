@@ -11,16 +11,16 @@ import collections
 import functools
 import time
 import SocketServer
+import struct
 
 from dicom.UID import UID
 
 import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
 import netdicom2.dimsemessages as dimsemessages
+import netdicom2.dsutils as dsutils
 
 import netdicom2.pdu as pdu
-
-import netdicom2.sopclass as sopclass
 import netdicom2.userdataitems as userdataitems
 
 PContextDef = collections.namedtuple(
@@ -77,16 +77,57 @@ class Association(object):
 
     def send(self, dimse_msg, pc_id):
         dimse_msg.set_length()
-        p_data_list = dimse_msg.encode(pc_id, self.ae.max_pdu_length)
-        for p_data in p_data_list:
+        for p_data in dimse_msg.encode(pc_id, self.ae.max_pdu_length):
             self.dul.send(p_data)
 
     def receive(self):
-        message = dimsemessages.DIMSEMessage()
-        # loop until complete DIMSE message is received
-        while not message.decode(self.get_dul_message()):
-            pass
-        return message, message.pc_id
+        encoded_command_set = []
+        encoded_data_set = []
+
+        command_set_received = False
+        data_set_received = False
+
+        command_set = None
+        receiving = True
+
+        pc_id = None
+
+        while receiving:
+            p_data = self.get_dul_message()
+
+            for value_item in p_data.data_value_items:
+                # must be able to read P-DATA with several PDVs
+                pc_id = value_item.context_id
+                marker = struct.unpack('b', value_item.data_value[0])[0]
+                if marker in (1, 3):
+                    encoded_command_set.append(value_item.data_value[1:])
+                    if marker == 3:
+                        command_set_received = True
+                        command_set = dsutils.decode(
+                            ''.join(encoded_command_set),
+                            True, True
+                        )
+
+                        if (command_set[(0x0000, 0x0800)].value == 0x0101
+                                or data_set_received):
+                            receiving = False  # response: no dataset
+                            break
+
+                elif marker in (0, 2):
+                    encoded_data_set.append(value_item.data_value[1:])
+                    if marker == 2:
+                        data_set_received = True
+                        if command_set_received:
+                            receiving = False
+                            break
+                else:
+                    raise exceptions.DIMSEProcessingError(
+                        'Incorrect first PDV byte')
+
+        msg = self._command_set_to_message(command_set)
+        if data_set_received:
+            msg.data_set = ''.join(encoded_data_set)
+        return msg, pc_id
 
     def kill(self):
         """Stops internal DUL service provider.
@@ -113,6 +154,13 @@ class Association(object):
         rsp = self.dul.receive(self.ae.timeout)
         self.kill()
         return rsp
+
+    @staticmethod
+    def _command_set_to_message(command_set):
+        command_field = command_set[(0x0000, 0x0100)].value
+        msg_type = dimsemessages.MESSAGE_TYPE[command_field]
+        msg = msg_type(command_set)
+        return msg
 
 
 class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
@@ -235,13 +283,12 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             uid = dimse_msg.affected_sop_class_uid
             try:
                 _, sop_class, ts = self.sop_classes_as_scp[pc_id]
-                factory, args, kwargs = self.ae.supported_scp[uid]
+                service = self.ae.supported_scp[uid]
             except KeyError:
                 raise exceptions.ClassNotSupportedError(
                     'SOP Class {0} not supported as SCP'.format(uid))
             else:
-                service = factory(*args, **kwargs)
-                service.scp(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
+                service(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
 
 
 class AssociationRequester(Association):
@@ -327,24 +374,21 @@ class AssociationRequester(Association):
         uid = ds.SOPClassUID
         try:
             pc_id, transfer_syntax = self.sop_classes_as_scu[uid]
-            factory, args, kwargs, = self.ae.supported_scu[uid]
+            service = self.ae.supported_scu[uid]
         except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU')
         else:
-            service = factory(*args, **kwargs)
-            return service.scu(self, PContextDef(pc_id, uid, transfer_syntax),
-                               ds, msg_id)
+            return service(self, PContextDef(pc_id, uid, transfer_syntax),
+                           ds, msg_id)
 
     def get_scu(self, sop_class):
         try:
             pcid, ts = self.sop_classes_as_scu[sop_class]
-            factory, args, kwargs, = self.ae.supported_scu[sop_class]
-
+            service = self.ae.supported_scu[sop_class]
         except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)
         else:
-            service = factory(*args, **kwargs)
-            return functools.partial(service.scu, self,
-                                     PContextDef(pcid, sop_class, ts))
+            return functools.partial(service, self, PContextDef(pcid, sop_class,
+                                                                ts))
