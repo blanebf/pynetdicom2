@@ -39,7 +39,9 @@ class AEBase(object):
         self.supported_scu.update({
             uid: service for uid in service.sop_classes
         })
-        self.update_context_def_list(service.sop_classes)
+        store_in_file = (hasattr(service, 'store_in_file') and
+                         service.store_in_file)
+        self.update_context_def_list(service.sop_classes, store_in_file)
         return self
 
     def update_context_def_list(self, sop_classes, store_in_file=False):

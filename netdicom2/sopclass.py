@@ -208,6 +208,45 @@ def store_in_file(service):
     return service
 
 
+class MessageDispatcher(object):
+    message_to_method = {
+        0x0001: 'c_store',
+        0x0020: 'c_find',
+        0x0010: 'c_get',
+        0x0021: 'c_move',
+        0x0030: 'c_echo',
+        0x0100: 'n_event_report',
+        0x0110: 'n_get',
+        0x0120: 'n_set',
+        0x0130: 'n_action',
+        0x0140: 'n_create',
+        0x0150: 'n_delete',
+    }
+
+    def get_method(self, msg):
+        try:
+            name = self.message_to_method[msg.command_field]
+            return getattr(self, name)
+        except KeyError:
+            raise exceptions.DIMSEProcessingError('Unknown message type')
+        except AttributeError:
+            raise exceptions.DIMSEProcessingError(
+                'Message type is not supported by service class')
+
+
+class MessageDispatcherSCU(MessageDispatcher):
+    def __call__(self, asce, ctx, msg, *args, **kwargs):
+        method = self.get_method(msg)
+        return method(asce, ctx, msg, *args, **kwargs)
+
+
+class MessageDispatcherSCP(MessageDispatcher):
+    def __call__(self, asce, ctx, msg):
+        method = self.get_method(msg)
+        return method(asce, ctx, msg)
+
+
+
 @sop_classes([VERIFICATION_SOP_CLASS])
 def verification_scu(asce, ctx, msg_id):
     """Sends verification request and returns it's status result
