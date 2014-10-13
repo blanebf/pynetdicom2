@@ -72,6 +72,9 @@ class Association(object):
         elif dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
             raise exceptions.AssociationAbortedError(dul_msg.source,
                                                      dul_msg.reason_diag)
+        elif dul_msg.pdu_type == pdu.AAssociateRjPDU.pdu_type:
+            raise exceptions.AssociationRejectedError(
+                dul_msg.result, dul_msg.source, dul_msg.reason_diag)
         else:
             raise exceptions.NetDICOMError()
 
@@ -340,9 +343,7 @@ class AssociationRequester(Association):
                                                 remote_ae['port'])
         self.dul.send(assoc_rq)
         response = self.get_dul_message()
-        if response.pdu_type == pdu.AAssociateRjPDU.pdu_type:
-            raise exceptions.AssociationRejectedError(
-                response.result, response.source, response.reason_diag)
+
         # Get maximum pdu length from answer
         user_data = response.variable_items[-1].user_data
         try:
