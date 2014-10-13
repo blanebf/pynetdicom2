@@ -677,7 +677,11 @@ class UserInformationItem(object):
         item_type = next_type(stream)
         while item_type:
             try:
-                yield SUB_ITEM_TYPES[item_type].decode(stream)
+                factory = SUB_ITEM_TYPES.get(
+                    item_type,
+                    userdataitems.GenericUserDataSubItem
+                )
+                yield factory.decode(stream)
                 item_type = next_type(stream)
             except KeyError:
                 raise exceptions.PDUProcessingError(
