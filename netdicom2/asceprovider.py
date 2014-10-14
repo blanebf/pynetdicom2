@@ -59,6 +59,7 @@ class Association(object):
         self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
         self.association_established = False
+        self.context_def_list = local_ae.copy_context_def_list()
 
         self.max_pdu_length = 16000
 
@@ -366,7 +367,7 @@ class AssociationRequester(Association):
                for uid in self.ae.supported_scp.keys()]
         response = self.request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
-            self.ae.context_def_list, users_pdu=ext
+            self.context_def_list, users_pdu=ext
         )
         self.ae.on_association_response(response)
         self.association_established = True

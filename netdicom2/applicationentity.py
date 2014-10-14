@@ -6,9 +6,12 @@
 
 import threading
 import platform
+import copy
 import contextlib
 
 from itertools import izip, count
+from threading import Lock
+
 
 import SocketServer
 
@@ -32,8 +35,10 @@ class AEBase(object):
         self.max_pdu_length = max_pdu_length
 
         self.context_def_list = {}
+        self.store_in_file = set()
         self.supported_scu = {}
         self.supported_scp = {}
+        self.lock = Lock()
 
     def add_scu(self, service):
         self.supported_scu.update({
@@ -51,6 +56,10 @@ class AEBase(object):
         self.context_def_list.update(
             self._build_context_def_list(sop_classes, start, store_in_file)
         )
+
+    def copy_context_def_list(self):
+        with self.lock:
+            return copy.copy(self.context_def_list)
 
     @contextlib.contextmanager
     def request_association(self, remote_ae):
@@ -132,6 +141,8 @@ class AEBase(object):
         return None, 0, iter([])
 
     def _build_context_def_list(self, sop_classes, start, store_in_file):
+        if store_in_file:
+            self.store_in_file.update(sop_classes)
         return {pc_id: asceprovider.PContextDef(pc_id, UID(sop_class),
                                                 self.supported_ts)
                 for sop_class, pc_id in izip(sop_classes,
@@ -179,7 +190,9 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         self.supported_scp.update({
             uid: service for uid in service.sop_classes
         })
-        self.update_context_def_list(service.sop_classes)
+        store_in_file = (hasattr(service, 'store_in_file') and
+                         service.store_in_file)
+        self.update_context_def_list(service.sop_classes, store_in_file)
         return self
 
     def quit(self):

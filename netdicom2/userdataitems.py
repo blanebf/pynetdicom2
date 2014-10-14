@@ -202,62 +202,67 @@ class ScpScuRoleSelectionSubItem(object):
                    scu_role=scu_role, scp_role=scp_role)
 
 
-# needs to be re-worked
 class SOPClassExtendedNegotiationSubItem(object):
-    pass
-#    def __init__(self):
-# self.item_type = 0x56                                   # Unsigned byte
-# self.reserved = 0x00                                   # Unsigned byte - 0x00
-# self.item_length = None                                 # Unsigned short
-# self.SOPClassuid_length = None                          # Unsigned short
-# self.SOPClassUID = None                                # String
-# self.ServiceClassApplicationInformation = None         # Class
-#
-#    def from_params(self, Params):
-#        self.SOPClassUID = Params.SOPClassUID
-#        self.ServiceClassApplicationInformation = \
-#            Params.ServiceClassApplicationInformation()
-#        self.SOPClassuid_length = len(self.SOPClassUID)
-#        self.item_length = 2 + self.SOPClassUIDLength + \
-#        self.ServiceClassApplicationInformation.total_length()
-#
-#    def to_params(self):
-#        tmp = SOPClassExtentedNegociationSubItem()
-#        tmp.SOPClassUID = self.SOPClassUID
-#        tmp.ServiceClassApplicationInformation = \
-#            self.ServiceClassApplicationInformation
-#        return  (self.SOPClassUID, \
-#                  self.ServiceClassApplicationInformation.Decompose())
-#
-#    def encode(self):
-#        tmp = ''
-#        tmp = tmp + struct.pack('B', self.item_type)
-#        tmp = tmp + struct.pack('B', self.reserved)
-#        tmp = tmp + struct.pack('>H', self.item_length)
-#        tmp = tmp + struct.pack('>H', self.SOPClassUIDLength)
-#        tmp = tmp + self.SOPClassUID
-#        tmp = tmp + self.ServiceClassApplicationInformation.encode()
-#        return tmp
-#
-#    def decode(self,Stream):
-#        (self.item_type, self.reserved,
-#         self.item_length, self.SOPClassUIDLength) = \
-#              struct.unpack('> B B H H', Stream.read(6))
-#        self.SOPClassUID = Stream.read(self.UIDLength)
-#        self.ServiceClassApplicationInformation.decode(Stream)
-#
-#    def total_length(self):
-#        return 4 + self.item_length
-#
-#
-#
-#    def __repr__(self):
-#        tmp = "  SOP class extended negociation sub item\n"
-#        tmp = tmp + "   Item type: 0x%02x\n" % self.item_type
-#        tmp = tmp + "   Item length: %d\n" % self.item_length
-#        tmp = tmp + "   SOP class UID length: %d\n" % self.SOPClassUIDLength
-#        tmp = tmp + "   SOP class UID: %s" % self.SOPClassUID
-#        return tmp
+    """Represents sub-item described in D.3.3.5 Service-Object Pair (SOP) Class
+    Extended Negotiation.
+
+    Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
+    """
+    item_type = 0x56
+    header = struct.Struct('>B B H H')
+
+    def __init__(self, sop_class_uid, app_info, reserved=0x00):
+        """Initializes new sub item instance
+
+        :param sop_class_uid: service's SOP Class UID
+        :param app_info: application information specific to Service Class
+        :param reserved: reserved field, defaults to 0x00. In most cases you
+        should not change it's value or check it
+        """
+        self.reserved = reserved
+        self.sop_class_uid = sop_class_uid
+        self.app_info = app_info
+
+    @property
+    def item_length(self):
+        """Calculates item length
+
+        :return: item length
+        """
+        return 2 + len(self.sop_class_uid) + len(self.app_info)
+
+    @property
+    def total_length(self):
+        """Returns total item length, including header.
+
+        :return: total item length
+        """
+        return 4 + self.item_length
+
+    def encode(self):
+        """Encodes itself into binary form
+
+        :return: binary representation of an item
+        """
+        return ''.join(
+            [self.header.pack(self.item_type, self.reserved, self.item_length,
+                              len(self.sop_class_uid)),
+             self.sop_class_uid,
+             self.app_info])
+
+    @classmethod
+    def decode(cls, stream):
+        """Factory method. Creates sub-item from binary stream.
+
+        :param stream: binary stream that should be decoded
+        :return: new sub-item
+        """
+        _, reserved, item_length, uid_length = cls.header.unpack(stream.read(6))
+        sop_class_uid = stream.read(uid_length)
+        app_info_length = item_length - uid_length
+        app_info = stream.read(app_info_length)
+        return cls(reserved=reserved, sop_class_uid=sop_class_uid,
+                   app_info=app_info)
 
 
 class UserIdentityNegotiationSubItem(object):

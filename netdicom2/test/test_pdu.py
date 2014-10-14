@@ -75,6 +75,12 @@ class TestSubItemEncoding(unittest.TestCase):
             max_num_ops_invoked=5, max_num_ops_performed=7)
         self.decode_and_compare_sub_item(item)
 
+    def test_sop_class_extended_negotiation_sub_item(self):
+        item = netdicom2.userdataitems.SOPClassExtendedNegotiationSubItem(
+            sop_class_uid='1.2.3.4.5', app_info='test information'
+        )
+        self.decode_and_compare_sub_item(item)
+
     def test_user_identity_negotiation(self):
         item = netdicom2.userdataitems.UserIdentityNegotiationSubItem(
             'user', 'password')
