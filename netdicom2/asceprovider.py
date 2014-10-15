@@ -301,7 +301,7 @@ class AssociationRequester(Association):
         self.ae = local_ae
         self.remote_ae = remote_ae
         self.sop_classes_as_scu = []
-        self._request()
+        self.request()
 
     def abort(self, reason=0):
         """Aborts association with specified reason
@@ -312,7 +312,7 @@ class AssociationRequester(Association):
         self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
         self.kill()
 
-    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None):
+    def _request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None):
         """Requests an association with a remote AE and waits for association
         response."""
         self.max_pdu_length = mp
@@ -362,12 +362,13 @@ class AssociationRequester(Association):
         }
         return response
 
-    def _request(self):
+    def request(self):
         ext = [userdataitems.ScpScuRoleSelectionSubItem(uid, 0, 1)
                for uid in self.ae.supported_scp.keys()]
-        response = self.request(
+        custom_items = self.remote_ae.get('user_data', [])
+        response = self._request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
-            self.context_def_list, users_pdu=ext
+            self.context_def_list, users_pdu=ext+custom_items
         )
         self.ae.on_association_response(response)
         self.association_established = True
@@ -386,11 +387,11 @@ class AssociationRequester(Association):
 
     def get_scu(self, sop_class):
         try:
-            pcid, ts = self.sop_classes_as_scu[sop_class]
+            pc_id, ts = self.sop_classes_as_scu[sop_class]
             service = self.ae.supported_scu[sop_class]
         except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)
         else:
-            return functools.partial(service, self, PContextDef(pcid, sop_class,
-                                                                ts))
+            return functools.partial(service, self,
+                                     PContextDef(pc_id, sop_class, ts))
