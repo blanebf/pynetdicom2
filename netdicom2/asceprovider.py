@@ -284,7 +284,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
     def _loop(self):
         while not self.is_killed:
             dimse_msg, pc_id = self.receive()
-            uid = dimse_msg.affected_sop_class_uid
+            uid = dimse_msg.sop_class_uid
             try:
                 _, sop_class, ts = self.sop_classes_as_scp[pc_id]
                 service = self.ae.supported_scp[uid]

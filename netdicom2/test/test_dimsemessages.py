@@ -22,7 +22,7 @@ class CEchoRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id, '')
 
     def test_properties_set_values(self):
@@ -31,8 +31,8 @@ class CEchoRQMessage(MessageTesterBase):
         self.assertEqual(self.msg.message_id, message_id)
 
         affected_sop_class_uid = '1.2.3.4.5'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
 
@@ -44,7 +44,7 @@ class CEchoRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id_being_responded_to, '')
 
     def test_properties_set_values(self):
@@ -62,7 +62,7 @@ class CStoreRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id, '')
         self.assertEqual(self.msg.priority, '')
         self.assertEqual(self.msg.affected_sop_instance_uid, '')
@@ -71,8 +71,8 @@ class CStoreRQMessage(MessageTesterBase):
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id = 5
@@ -106,15 +106,15 @@ class CStoreRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id_being_responded_to, '')
         self.assertEqual(self.msg.status, '')
         self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id_being_responded_to = 5
@@ -140,14 +140,14 @@ class CFindRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id, '')
         self.assertEqual(self.msg.priority, '')
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id = 5
@@ -168,14 +168,14 @@ class CFindRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id_being_responded_to, '')
         self.assertEqual(self.msg.status, '')
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id_being_responded_to = 5
@@ -196,14 +196,14 @@ class CGetRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id, '')
         self.assertEqual(self.msg.priority, '')
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id = 5
@@ -224,7 +224,7 @@ class CGetRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id_being_responded_to, '')
         self.assertEqual(self.msg.status, '')
 
@@ -235,8 +235,8 @@ class CGetRSPMessage(MessageTesterBase):
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id_being_responded_to = 5
@@ -276,15 +276,15 @@ class CMoveRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id, '')
         self.assertEqual(self.msg.priority, '')
         self.assertEqual(self.msg.move_destination, '')
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id = 5
@@ -309,7 +309,7 @@ class CMoveRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEqual(self.msg.affected_sop_class_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
         self.assertEqual(self.msg.message_id_being_responded_to, '')
         self.assertEqual(self.msg.status, '')
 
@@ -320,8 +320,8 @@ class CMoveRSPMessage(MessageTesterBase):
 
     def test_properties_set_values(self):
         affected_sop_class_uid = '1.2.3.4'
-        self.msg.affected_sop_class_uid = affected_sop_class_uid
-        self.assertEqual(self.msg.affected_sop_class_uid,
+        self.msg.sop_class_uid = affected_sop_class_uid
+        self.assertEqual(self.msg.sop_class_uid,
                          affected_sop_class_uid)
 
         message_id_being_responded_to = 5
@@ -368,3 +368,155 @@ class CCancelRQMessage(MessageTesterBase):
         self.msg.message_id_being_responded_to = message_id_being_responded_to
         self.assertEqual(self.msg.message_id_being_responded_to,
                          message_id_being_responded_to)
+
+
+class NEventReportRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NEventReportRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.event_type_id, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NEventReportRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NEventReportRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.event_type_id, '')
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NGetRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NGetRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+        self.assertEquals(self.msg.attribute_identifier_list, '')
+
+
+class NGetRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NGetRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NSetRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NSetRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+
+
+class NSetRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NSetRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NActionRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NActionRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+        self.assertEquals(self.msg.action_type_id, '')
+
+
+class NActionRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NActionRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEquals(self.msg.action_type_id, '')
+
+
+class NCreateRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NCreateRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NCreateRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NCreateRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+
+
+class NDeleteRQMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NDeleteRQMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+
+
+class NDeleteRSPMessage(MessageTesterBase):
+    def setUp(self):
+        self.msg = netdicom2.dimsemessages.NDeleteRSPMessage()
+
+    def test_default_init(self):
+        self.assert_command_attributes(self.msg)
+
+    def test_properties_default_values(self):
+        self.assertEquals(self.msg.sop_class_uid, '')
+        self.assertEquals(self.msg.status, '')
+        self.assertEquals(self.msg.affected_sop_instance_uid, '')

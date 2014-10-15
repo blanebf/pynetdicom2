@@ -169,7 +169,7 @@ class DIMSEMessage(object):
             for field in self.command_fields:
                 setattr(self.command_set, field, '')
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
 
     @property
     def data_set(self):
@@ -336,7 +336,7 @@ class NGetRQMessage(DIMSERequestMessage):
     command_field = 0x0110
     command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
                       'RequestedSOPInstanceUID', 'AttributeIdentifierList']
-    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    sop_class_uid = dimse_property((0x0000, 0x0003))
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
     attribute_identifier_list = dimse_property((0x0000, 0x1005))
 
@@ -352,9 +352,9 @@ class NGetRSPMessage(DIMSEResponseMessage):
 class NSetRQMessage(DIMSERequestMessage):
     command_field = 0x0120
     command_fields = ['CommandGroupLength', 'RequestedSOPClassUID',
-                      'MessageID', 'RequestedSOPInstance']
+                      'MessageID', 'RequestedSOPInstanceUID']
 
-    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    sop_class_uid = dimse_property((0x0000, 0x0003))
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
 
 
@@ -365,7 +365,7 @@ class NSetRSPMessage(DIMSEResponseMessage):
                       'MessageIDBeingRespondedTo', 'Status',
                       'AffectedSOPInstanceUID']
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
@@ -374,7 +374,7 @@ class NActionRQMessage(DIMSERequestMessage):
     command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
                       'RequestedSOPInstanceUID', 'ActionTypeID']
 
-    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    sop_class_uid = dimse_property((0x0000, 0x0003))
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
     action_type_id = dimse_property((0x0000, 0x1008))
 
@@ -386,7 +386,7 @@ class NActionRSPMessage(DIMSEResponseMessage):
                       'MessageIDBeingRespondedTo', 'Status',
                       'AffectedSOPInstanceUID', 'ActionTypeID']
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
     action_type_id = dimse_property((0x0000, 0x1008))
 
@@ -396,7 +396,7 @@ class NCreateRQMessage(DIMSERequestMessage):
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
                       'AffectedSOPInstanceUID']
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
@@ -407,7 +407,7 @@ class NCreateRSPMessage(DIMSEResponseMessage):
                       'MessageIDBeingRespondedTo', 'Status',
                       'AffectedSOPInstanceUID']
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
@@ -416,7 +416,7 @@ class NDeleteRQMessage(DIMSERequestMessage):
     command_fields = ['RequestedSOPClassUID', 'MessageID',
                       'RequestedSOPInstanceUID']
 
-    requested_sop_class_uid = dimse_property((0x0000, 0x0003))
+    sop_class_uid = dimse_property((0x0000, 0x0003))
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
 
 
@@ -427,7 +427,7 @@ class NDeleteRSPMessage(DIMSEResponseMessage):
                       'MessageIDBeingRespondedTo', 'Status',
                       'AffectedSOPInstanceUID']
 
-    affected_sop_class_uid = dimse_property((0x0000, 0x0002))
+    sop_class_uid = dimse_property((0x0000, 0x0002))
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 

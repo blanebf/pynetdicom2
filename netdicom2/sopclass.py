@@ -257,7 +257,7 @@ def verification_scu(asce, ctx, msg_id):
     """
     c_echo = dimsemessages.CEchoRQMessage()
     c_echo.message_id = msg_id
-    c_echo.affected_sop_class_uid = ctx.sop_class
+    c_echo.sop_class_uid = ctx.sop_class
 
     asce.send(c_echo, ctx.id)
 
@@ -315,7 +315,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     """
     c_store = dimsemessages.CStoreRQMessage()
     c_store.message_id = msg_id
-    c_store.affected_sop_class_uid = dataset.SOPClassUID
+    c_store.sop_class_uid = dataset.SOPClassUID
     c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
     c_store.data_set = dsutils.encode(dataset,
@@ -350,13 +350,13 @@ def storage_scp(asce, ctx, msg):
     rsp = dimsemessages.CStoreRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
     rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
     rsp.status = int(status)
     asce.send(rsp, ctx.id)
 
 
-FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS,
-                    PATIENT_STUDY_ONLY_FIND_SOP_CLASS]
+FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS]
+                    #PATIENT_STUDY_ONLY_FIND_SOP_CLASS
 
 
 @sop_classes(FIND_SOP_CLASSES)
@@ -372,7 +372,7 @@ def qr_find_scu(asce, ctx, ds, msg_id):
     """
     c_find = dimsemessages.CFindRQMessage()
     c_find.message_id = msg_id
-    c_find.affected_sop_class_uid = ctx.sop_class
+    c_find.sop_class_uid = ctx.sop_class
     c_find.priority = dimsemessages.PRIORITY_MEDIUM
     c_find.data_set = dsutils.encode(ds,
                                      ctx.supported_ts.is_implicit_VR,
@@ -408,7 +408,7 @@ def qr_find_scp(asce, ctx, msg):
     # make response
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
 
     gen = asce.ae.on_receive_find(ctx, ds)
     for data_set, status in gen:
@@ -420,7 +420,7 @@ def qr_find_scp(asce, ctx, msg):
 
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
     rsp.status = int(SUCCESS)
     asce.send(rsp, ctx.id)
 
@@ -431,11 +431,11 @@ GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
 
 @store_in_file
 @sop_classes(GET_SOP_CLASSES)
-def qr_get_scu(self, asce, ctx, ds, msg_id):
+def qr_get_scu(asce, ctx, ds, msg_id):
     # build C-GET primitive
     c_get = dimsemessages.CGetRQMessage()
     c_get.message_id = msg_id
-    c_get.affected_sop_class_uid = ctx.sop_class
+    c_get.sop_class_uid = ctx.sop_class
     c_get.priority = dimsemessages.PRIORITY_MEDIUM
     c_get.data_set = dsutils.encode(ds,
                                     ctx.supported_ts.is_implicit_VR,
@@ -457,13 +457,13 @@ def qr_get_scu(self, asce, ctx, ds, msg_id):
             rsp = dimsemessages.CStoreRSPMessage()
             rsp.message_id_being_responded_to = msg.message_id
             rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
-            rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+            rsp.sop_class_uid = msg.sop_class_uid
             try:
                 d = dsutils.decode(msg.data_set,
                                    ctx.supported_ts.is_implicit_VR,
                                    ctx.supported_ts.is_little_endian)
                 status = asce.ae.on_receive_store(ctx, d)
-                yield self, d
+                yield ctx, d
             except exceptions.EventHandlingError:
                 status = CANNOT_UNDERSTAND
 
@@ -480,7 +480,7 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
     # build C-FIND primitive
     c_move = dimsemessages.CMoveRQMessage()
     c_move.message_id = msg_id
-    c_move.affected_sop_class_uid = ctx.sop_class
+    c_move.sop_class_uid = ctx.sop_class
     c_move.move_destination = dest_ae
     c_move.priority = dimsemessages.PRIORITY_MEDIUM
     c_move.data_set = dsutils.encode(ds,
@@ -506,7 +506,7 @@ def qr_move_scp(asce, ctx, msg):
     # make response
     rsp = dimsemessages.CMoveRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
     remote_ae, nop, gen = asce.ae.on_receive_move(ctx, ds,
                                                   msg.move_destination)
     if not nop:
@@ -540,7 +540,7 @@ def qr_move_scp(asce, ctx, msg):
 def _send_response(asce, ctx, msg, nop, failed, warning, completed):
     rsp = dimsemessages.CMoveRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
     rsp.num_of_remaining_sub_ops = nop - completed
     rsp.num_of_completed_sub_ops = completed
     rsp.num_of_failed_sub_ops = failed
@@ -554,7 +554,7 @@ def modality_work_list_scu(asce, ctx, ds, msg_id):
     # build C-FIND primitive
     c_find = dimsemessages.CFindRQMessage()
     c_find.message_id = msg_id
-    c_find.affected_sop_class_uid = ctx.sop_class
+    c_find.sop_class_uid = ctx.sop_class
     c_find.priority = dimsemessages.PRIORITY_MEDIUM
     c_find.data_set = dsutils.encode(ds,
                                      ctx.supported_ts.is_implicit_VR,
@@ -582,7 +582,7 @@ def modality_work_list_scp(asce, ctx, msg):
     # make response
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
 
     gen = asce.ae.on_receive_find(ctx, ds)
     for identifier_ds, status in gen:
@@ -596,6 +596,6 @@ def modality_work_list_scp(asce, ctx, msg):
     # send final response
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.affected_sop_class_uid = msg.affected_sop_class_uid
+    rsp.sop_class_uid = msg.sop_class_uid
     rsp.status = int(SUCCESS)
     asce.send(rsp, ctx.id)
