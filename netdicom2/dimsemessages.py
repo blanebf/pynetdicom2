@@ -413,7 +413,7 @@ class NCreateRSPMessage(DIMSEResponseMessage):
 
 class NDeleteRQMessage(DIMSERequestMessage):
     command_field = 0x0150
-    command_fields = ['RequestedSOPClassUID', 'MessageID',
+    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
                       'RequestedSOPInstanceUID']
 
     sop_class_uid = dimse_property((0x0000, 0x0003))
