@@ -2,6 +2,7 @@ __author__ = 'Blane'
 
 import unittest
 
+import dicom
 import dicom.UID
 import dicom.dataset
 import dicom.datadict
@@ -50,31 +51,53 @@ class CFindTestCase(unittest.TestCase):
                     self.assertEquals(status, sc.SUCCESS)
 
 
+class CStoreAE(ae.AE):
+    def __init__(self, test, rq, *args, **kwargs):
+        ae.AE.__init__(self, *args, **kwargs)
+        self.test = test
+        self.rq = rq
+
+    def on_receive_store(self, context, ds):
+        self.test.assertEquals(context.sop_class, self.rq.SOPClassUID)
+        self.test.assertEquals(ds.PatientName, self.rq.PatientName)
+        self.test.assertEquals(ds.StudyInstanceUID, self.rq.StudyInstanceUID)
+        self.test.assertEquals(ds.SeriesInstanceUID, self.rq.SeriesInstanceUID)
+        self.test.assertEquals(ds.SOPInstanceUID, self.rq.SOPInstanceUID)
+        self.test.assertEquals(ds.SOPClassUID, self.rq.SOPClassUID)
+        return sc.SUCCESS
+
+
 class CStoreTestCase(unittest.TestCase):
     def test_c_store_positive(self):
-        class CStoreAE(ae.AE):
-            def on_receive_store(self, context, ds):
-                test.assertEquals(context.sop_class, sc.BASIC_TEXT_SR_STORAGE)
-                test.assertEquals(ds.PatientName, rq.PatientName)
-                test.assertEquals(ds.StudyInstanceUID, rq.StudyInstanceUID)
-                test.assertEquals(ds.SeriesInstanceUID, rq.SeriesInstanceUID)
-                test.assertEquals(ds.SOPInstanceUID, rq.SOPInstanceUID)
-                test.assertEquals(ds.SOPClassUID, rq.SOPClassUID)
-                return sc.SUCCESS
+        rq = dicom.dataset.Dataset()
+        rq.PatientName = 'Patient^Name^Test'
+        rq.PatientID = 'TestID'
+        rq.StudyInstanceUID = '1.2.3.4.5'
+        rq.SeriesInstanceUID = '1.2.3.4.5.1'
+        rq.SOPInstanceUID = '1.2.3.4.5.1.1'
+        rq.SOPClassUID = sc.BASIC_TEXT_SR_STORAGE
 
-        test = self
         ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu)
-        ae2 = CStoreAE('AET2', 11112).add_scp(sc.storage_scp)
+        ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
             with ae1.request_association(remote_ae) as assoc:
                 service = assoc.get_scu(sc.BASIC_TEXT_SR_STORAGE)
-                rq = dicom.dataset.Dataset()
-                rq.PatientName = 'Patient^Name^Test'
-                rq.PatientID = 'TestID'
-                rq.StudyInstanceUID = '1.2.3.4.5'
-                rq.SeriesInstanceUID = '1.2.3.4.5.1'
-                rq.SOPInstanceUID = '1.2.3.4.5.1.1'
-                rq.SOPClassUID = sc.BASIC_TEXT_SR_STORAGE
+
                 status = service(rq, 1)
+                self.assertEquals(status, sc.SUCCESS)
+
+    def test_c_store_from_file(self):
+        file_name = 'test_sr.dcm'
+        rq = dicom.read_file(file_name)
+
+        ae1 = ae.ClientAE('AET1', [dicom.UID.ExplicitVRLittleEndian])\
+            .add_scu(sc.storage_scu)
+        ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
+        with ae2:
+            remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
+            with ae1.request_association(remote_ae) as assoc:
+                service = assoc.get_scu(sc.COMPREHENSIVE_SR_STORAGE)
+
+                status = service(file_name, 1)
                 self.assertEquals(status, sc.SUCCESS)

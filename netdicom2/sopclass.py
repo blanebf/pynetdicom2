@@ -23,6 +23,8 @@ Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
 (as SCU and SCP).
 """
 
+from dicom.filereader import read_preamble, _read_file_meta_info
+
 import netdicom2.dsutils as dsutils
 import netdicom2.exceptions as exceptions
 import netdicom2.dimsemessages as dimsemessages
@@ -315,14 +317,26 @@ def storage_scu(asce, ctx, dataset, msg_id):
     """
     c_store = dimsemessages.CStoreRQMessage()
     c_store.message_id = msg_id
-    c_store.sop_class_uid = dataset.SOPClassUID
-    c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
-    c_store.data_set = dsutils.encode(dataset,
-                                      ctx.supported_ts.is_implicit_VR,
-                                      ctx.supported_ts.is_little_endian)
-    # send c_store request
-    asce.send(c_store, ctx.id)
+
+    if isinstance(dataset, (str, unicode)):
+        # Got file name
+        with open(dataset, 'rb') as ds:
+            read_preamble(ds, False)
+            meta = _read_file_meta_info(ds)
+            c_store.sop_class_uid = meta.MediaStorageSOPClassUID
+            c_store.affected_sop_instance_uid = meta.MediaStorageSOPInstanceUID
+            c_store.data_set = ds
+            asce.send(c_store, ctx.id)
+    else:
+        # Assume it's dataset object
+        c_store.sop_class_uid = dataset.SOPClassUID
+        c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
+        ds = dsutils.encode(dataset, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
+        c_store.data_set = ds
+        # send c_store request
+        asce.send(c_store, ctx.id)
 
     # wait for c-store response
     response, _ = asce.receive()
@@ -443,7 +457,7 @@ def qr_get_scu(asce, ctx, ds, msg_id):
 
     # send c-get primitive
     asce.send(c_get, ctx.id)
-    while 1:
+    while True:
         # receive c-store
         msg, pc_id = asce.receive()
         if msg.command_field == dimsemessages.CGetRSPMessage.command_field:

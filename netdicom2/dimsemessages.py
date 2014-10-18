@@ -159,7 +159,7 @@ class DIMSEMessage(object):
     command_fields = []
 
     def __init__(self, command_set=None):
-        self._data_set = ''
+        self._data_set = None
         if command_set:
             self.command_set = command_set
         else:
@@ -195,7 +195,13 @@ class DIMSEMessage(object):
 
         # fragment data set
         if self.data_set:
-            for item, bit in fragment(self.data_set, max_pdu_length, 0, 2):
+            if isinstance(self.data_set, str):
+                # got dataset as byte array
+                gen = fragment(self.data_set, max_pdu_length, 0, 2)
+            else:
+                # assume that dataset is in file-like object
+                gen = fragment_file(self.data_set, max_pdu_length, 0, 2)
+            for item, bit in gen:
                 value_item = pdu.PresentationDataValueItem(
                     pc_id, struct.pack('b', bit) + item)
                 yield pdu.PDataTfPDU([value_item])
