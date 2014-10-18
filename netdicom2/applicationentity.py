@@ -64,12 +64,18 @@ class AEBase(object):
     @contextlib.contextmanager
     def request_association(self, remote_ae):
         """Requests association to a remote application entity"""
-        assoc = asceprovider.AssociationRequester(self, remote_ae=remote_ae)
-        yield assoc
-        if assoc.association_established:
-            assoc.release()
-        else:
-            assoc.kill()
+        assoc = None
+        try:
+            assoc = asceprovider.AssociationRequester(self, remote_ae=remote_ae)
+            yield assoc
+            if assoc.association_established:
+                assoc.release()
+            else:
+                assoc.kill()
+        except Exception:
+            if assoc:
+                assoc.kill()
+            raise
 
     def on_association_request(self, assoc):
         """Extra processing of the association request.

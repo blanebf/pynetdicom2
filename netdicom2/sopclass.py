@@ -325,7 +325,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     asce.send(c_store, ctx.id)
 
     # wait for c-store response
-    response, id_ = asce.receive()
+    response, _ = asce.receive()
     return code_to_status(response.status)
 
 
