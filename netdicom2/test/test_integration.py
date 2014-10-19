@@ -58,12 +58,13 @@ class CStoreAE(ae.AE):
         self.rq = rq
 
     def on_receive_store(self, context, ds):
+        d = dicom.read_file(ds)
         self.test.assertEquals(context.sop_class, self.rq.SOPClassUID)
-        self.test.assertEquals(ds.PatientName, self.rq.PatientName)
-        self.test.assertEquals(ds.StudyInstanceUID, self.rq.StudyInstanceUID)
-        self.test.assertEquals(ds.SeriesInstanceUID, self.rq.SeriesInstanceUID)
-        self.test.assertEquals(ds.SOPInstanceUID, self.rq.SOPInstanceUID)
-        self.test.assertEquals(ds.SOPClassUID, self.rq.SOPClassUID)
+        self.test.assertEquals(d.PatientName, self.rq.PatientName)
+        self.test.assertEquals(d.StudyInstanceUID, self.rq.StudyInstanceUID)
+        self.test.assertEquals(d.SeriesInstanceUID, self.rq.SeriesInstanceUID)
+        self.test.assertEquals(d.SOPInstanceUID, self.rq.SOPInstanceUID)
+        self.test.assertEquals(d.SOPClassUID, self.rq.SOPClassUID)
         return sc.SUCCESS
 
 
@@ -79,6 +80,7 @@ class CStoreTestCase(unittest.TestCase):
 
         ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu)
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
+        ae1.timeout = ae2.timeout = 360
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
             with ae1.request_association(remote_ae) as assoc:

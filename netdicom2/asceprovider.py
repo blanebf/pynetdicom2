@@ -59,9 +59,8 @@ class Association(object):
         self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
         self.association_established = False
-        self.context_def_list = local_ae.copy_context_def_list()
-
         self.max_pdu_length = 16000
+        self.accepted_contexts = {}
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(self.ae.timeout)
@@ -85,52 +84,76 @@ class Association(object):
             self.dul.send(p_data)
 
     def receive(self):
+        # TODO: Refactor this madness
         encoded_command_set = []
         encoded_data_set = []
 
         command_set_received = False
         data_set_received = False
 
-        command_set = None
         receiving = True
+        dataset = None
 
         pc_id = None
+        msg = None
 
-        while receiving:
-            p_data = self.get_dul_message()
+        start = 0
 
-            for value_item in p_data.data_value_items:
-                # must be able to read P-DATA with several PDVs
-                pc_id = value_item.context_id
-                marker = struct.unpack('b', value_item.data_value[0])[0]
-                if marker in (1, 3):
-                    encoded_command_set.append(value_item.data_value[1:])
-                    if marker == 3:
-                        command_set_received = True
-                        command_set = dsutils.decode(
-                            ''.join(encoded_command_set),
-                            True, True
-                        )
+        try:
+            while receiving:
+                p_data = self.get_dul_message()
 
-                        if (command_set[(0x0000, 0x0800)].value == 0x0101
-                                or data_set_received):
-                            receiving = False  # response: no dataset
-                            break
+                for value_item in p_data.data_value_items:
+                    # must be able to read P-DATA with several PDVs
+                    pc_id = value_item.context_id
+                    marker = struct.unpack('b', value_item.data_value[0])[0]
+                    if marker in (1, 3):
+                        encoded_command_set.append(value_item.data_value[1:])
+                        if marker == 3:
+                            command_set_received = True
+                            command_set = dsutils.decode(
+                                ''.join(encoded_command_set),
+                                True, True
+                            )
 
-                elif marker in (0, 2):
-                    encoded_data_set.append(value_item.data_value[1:])
-                    if marker == 2:
-                        data_set_received = True
-                        if command_set_received:
-                            receiving = False
-                            break
-                else:
-                    raise exceptions.DIMSEProcessingError(
-                        'Incorrect first PDV byte')
+                            msg = self._command_set_to_message(command_set)
+                            no_ds = command_set[(0x0000,
+                                                 0x0800)].value == 0x0101
+                            use_file = (msg.sop_class_uid in
+                                        self.ae.store_in_file)
+                            if not no_ds and use_file:
+                                ctx = self.accepted_contexts[pc_id]
+                                dataset, start = self.ae.get_file(ctx,
+                                                                  command_set)
+                                if encoded_data_set:
+                                    dataset.writelines(encoded_data_set)
+                            if no_ds or data_set_received:
+                                receiving = False  # response: no dataset
+                                break
+                    elif marker in (0, 2):
+                        if dataset:
+                            dataset.write(value_item.data_value[1:])
+                        else:
+                            encoded_data_set.append(value_item.data_value[1:])
+                        if marker == 2:
+                            data_set_received = True
+                            if command_set_received:
+                                receiving = False
+                                break
+                    else:
+                        raise exceptions.DIMSEProcessingError(
+                            'Incorrect first PDV byte')
+        except Exception:
+            if dataset:
+                dataset.close()
+            raise
 
-        msg = self._command_set_to_message(command_set)
         if data_set_received:
-            msg.data_set = ''.join(encoded_data_set)
+            if dataset:
+                dataset.seek(start)
+                msg.data_set = dataset
+            else:
+                msg.data_set = ''.join(encoded_data_set)
         return msg, pc_id
 
     def kill(self):
@@ -240,8 +263,12 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             for ts in proposed_ts:
                 if ts.name in self.ae.supported_ts:
                     rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
+                    ts_uid = UID(ts.name)
                     self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop,
-                                                      UID(ts.name))
+                                                      ts_uid)
+                    self.accepted_contexts[pc_id] = PContextDef(
+                        pc_id, proposed_sop, ts_uid
+                    )
                     break
             else:  # Refuse sop class because of TS not supported
                 rsp.append(
@@ -298,10 +325,9 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
 class AssociationRequester(Association):
     def __init__(self, local_ae, remote_ae=None):
         super(AssociationRequester, self).__init__(local_ae, None)
-        self.ae = local_ae
+        self.context_def_list = local_ae.copy_context_def_list()
         self.remote_ae = remote_ae
-        self.sop_classes_as_scu = []
-        self.request()
+        self.sop_classes_as_scu = {}
 
     def abort(self, reason=0):
         """Aborts association with specified reason
@@ -355,11 +381,13 @@ class AssociationRequester(Association):
         # Get accepted presentation contexts
         accepted = (ctx for ctx in response.variable_items[1:-1]
                     if ctx.result_reason == 0)
-        self.sop_classes_as_scu = {
-            pcdl[ctx.context_id].sop_class: (ctx.context_id,
-                                             UID(ctx.ts_sub_item.name))
-            for ctx in accepted
-        }
+        for ctx in accepted:
+            pc_id = ctx.context_id
+            sop_class = pcdl[ctx.context_id].sop_class
+            ts_uid = UID(ctx.ts_sub_item.name)
+            self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
+            self.accepted_contexts[pc_id] = PContextDef(pc_id, sop_class,
+                                                        ts_uid)
         return response
 
     def request(self):

@@ -354,12 +354,12 @@ def storage_scp(asce, ctx, msg):
     :param msg: received message
     """
     try:
-        ds = dsutils.decode(msg.data_set,
-                            ctx.supported_ts.is_implicit_VR,
-                            ctx.supported_ts.is_little_endian)
-        status = asce.ae.on_receive_store(ctx, ds)
+        status = asce.ae.on_receive_store(ctx, msg.data_set)
     except exceptions.EventHandlingError:
         status = CANNOT_UNDERSTAND
+    finally:
+        if msg.data_set:
+            msg.data_set.close()
     # make response
     rsp = dimsemessages.CStoreRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
@@ -405,7 +405,6 @@ def qr_find_scu(asce, ctx, ds, msg_id):
             break
 
 
-@store_in_file
 @sop_classes(FIND_SOP_CLASSES)
 def qr_find_scp(asce, ctx, msg):
     """SCP role implementation.
@@ -443,7 +442,6 @@ GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
                    PATIENT_STUDY_ONLY_GET_SOP_CLASS]
 
 
-@store_in_file
 @sop_classes(GET_SOP_CLASSES)
 def qr_get_scu(asce, ctx, ds, msg_id):
     # build C-GET primitive
