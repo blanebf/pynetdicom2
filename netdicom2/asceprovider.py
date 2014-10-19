@@ -205,6 +205,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         Association.__init__(self, local_ae, request)
         self.is_killed = False
         self.sop_classes_as_scp = {}
+        self.remote_ae = ''
 
         SocketServer.StreamRequestHandler.__init__(self,
                                                    request,
@@ -283,6 +284,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             variable_items=rsp
         )
         self.dul.send(res)
+        self.remote_ae = assoc_req.calling_ae_title
 
     def handle(self):
         try:

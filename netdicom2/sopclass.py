@@ -25,6 +25,10 @@ Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
 
 from dicom.filereader import read_preamble, _read_file_meta_info
 
+import dicom.UID
+import dicom.dataset
+import dicom.sequence
+
 import netdicom2.dsutils as dsutils
 import netdicom2.exceptions as exceptions
 import netdicom2.dimsemessages as dimsemessages
@@ -179,6 +183,8 @@ PATIENT_STUDY_ONLY_GET_SOP_CLASS = '1.2.840.10008.5.1.4.1.2.3.3'
 
 MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS = '1.2.840.10008.5.1.4.31'
 
+STORAGE_COMMITMENT_SOP_CLASS = '1.2.840.10008.1.20.1'
+
 
 def code_to_status(code):
         """Converts code to status
@@ -239,14 +245,13 @@ class MessageDispatcher(object):
 class MessageDispatcherSCU(MessageDispatcher):
     def __call__(self, asce, ctx, msg, *args, **kwargs):
         method = self.get_method(msg)
-        return method(asce, ctx, msg, *args, **kwargs)
+        return method(self, asce, ctx, msg, *args, **kwargs)
 
 
 class MessageDispatcherSCP(MessageDispatcher):
     def __call__(self, asce, ctx, msg):
         method = self.get_method(msg)
-        return method(asce, ctx, msg)
-
+        return method(self, asce, ctx, msg)
 
 
 @sop_classes([VERIFICATION_SOP_CLASS])
@@ -611,3 +616,132 @@ def modality_work_list_scp(asce, ctx, msg):
     rsp.sop_class_uid = msg.sop_class_uid
     rsp.status = int(SUCCESS)
     asce.send(rsp, ctx.id)
+
+
+STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS = '1.2.840.10008.1.20.1.1'
+
+
+class StorageCommitment(MessageDispatcherSCP):
+    sop_classes = [STORAGE_COMMITMENT_SOP_CLASS]
+
+    PROCESSING_FAILURE = 0x0110
+    NO_SUCH_OBJECT_INSTANCE = 0x0112
+    RESOURCE_LIMITATION = 0x0213
+    REFERENCED_SOP_CLASS_NOT_SUPPORTED = 0x0122
+    CLASS_OR_INSTANCE_CONFLICT = 0x0119
+    DUPLICATE_TRANSACTION_UID = 0x0131
+
+    def n_event_report(self, asce, ctx, msg):
+        rsp = dimsemessages.NEventReportRSPMessage()
+        rsp.sop_class_uid = ctx.sop_class
+        rsp.status = int(SUCCESS)
+        rsp.event_type_id = msg.event_type_id
+        rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
+
+        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
+        transaction_uid = ds.TransactionUID
+        if hasattr(ds, 'ReferencedSOPSequence'):
+            success = ((item.ReferencedSOPClassUID,
+                        item.ReferencedSOPInstanceUID)
+                       for item in ds.ReferencedSOPSequence)
+        else:
+            success = []
+
+        if hasattr(ds, 'FailedSOPSequence'):
+            failure = ((item.ReferencedSOPClassUID,
+                        item.ReferencedSOPInstanceUID,
+                        item.FailureReason)
+                       for item in ds.FailedSOPSequence)
+        else:
+            failure = []
+        try:
+            asce.ae.on_commitment_response(transaction_uid, success, failure)
+        except exceptions.EventHandlingError:
+            rsp.status = int(UNABLE_TO_PROCESS)
+        else:
+            asce.send(rsp)
+
+    def n_action(self, asce, ctx, msg):
+        instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
+        rsp = dimsemessages.NActionRSPMessage()
+        rsp.message_id_being_responded_to = msg.message_id
+        rsp.action_type_id = 1
+        rsp.sop_class_uid = ctx.sop_class
+        rsp.affected_sop_instance_uid = instance_uid
+        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
+                            ctx.supported_ts.is_little_endian)
+        uids = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
+                for item in ds.ReferencedSOPSequence)
+        try:
+            remote_ae, success, failure = asce.ae.on_commitment(
+                asce.remote_ae, uids
+            )
+        except exceptions.EventHandlingError:
+            rsp.status = int(UNABLE_TO_PROCESS)
+            asce.send(rsp, ctx.id)
+        else:
+            rsp.status = int(SUCCESS)
+            asce.send(rsp, ctx.id)
+
+            report = dimsemessages.NEventReportRQMessage()
+            report.sop_class_uid = ctx.sop_class
+            report.affected_sop_instance_uid = instance_uid
+            report.event_type_id = 2 if failure else 1
+
+            report_ds = dicom.dataset.Dataset()
+            report_ds.TransactionUID = ds.TransactionUID
+            if success:
+                seq = []
+                for sop_class_uid, sop_instance_uid in success:
+                    ref = dicom.dataset.Dataset()
+                    ref.ReferencedSOPClassUID = sop_class_uid
+                    ref.ReferencedSOPInstanceUID = sop_instance_uid
+                    seq.append(ref)
+                report_ds.ReferencedSOPSequence = dicom.sequence.Sequence(seq)
+
+            if failure:
+                seq = []
+                for sop_class_uid, sop_instance_uid, reason in failure:
+                    ref = dicom.dataset.Dataset()
+                    ref.ReferencedSOPClassUID = sop_class_uid
+                    ref.ReferencedSOPInstanceUID = sop_instance_uid
+                    ref.FailureReason = reason
+                    seq.append(ref)
+                report_ds.FailedSOPSequence = dicom.sequence.Sequence(seq)
+
+            report.data_set = dsutils.encode(report_ds,
+                                             ctx.supported_ts.is_implicit_VR,
+                                             ctx.supported_ts.is_little_endian)
+
+            with asce.ae.request_association(remote_ae) as assoc:
+                assoc.send(report)
+                assoc.recieve()  # Get response. Current implementation ignores
+                                 # it
+
+
+@sop_classes([STORAGE_COMMITMENT_SOP_CLASS])
+def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
+    rq = dimsemessages.NActionRQMessage()
+    rq.message_id = msg_id
+    rq.action_type_id = 1
+    rq.sop_class_uid = ctx.sop_class
+    rq.requested_sop_instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
+
+    ds = dicom.dataset.Dataset()
+    ds.TransactionUID = transaction_uid
+    seq = []
+    for sop_class_uid, sop_instance_uid in uids:
+        ref = dicom.dataset.Dataset()
+        ref.ReferencedSOPClassUID = sop_class_uid
+        ref.ReferencedSOPInstanceUID = sop_instance_uid
+        seq.append(ref)
+
+    ds.ReferencedSOPSequence = dicom.sequence.Sequence(seq)
+
+    rq.data_set = dsutils.encode(ds, ctx.supported_ts.is_implicit_VR,
+                                 ctx.supported_ts.is_little_endian)
+    asce.send(rq, ctx.id)
+
+    rsp, _ = asce.receive()
+    return rsp.status
