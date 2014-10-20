@@ -245,13 +245,13 @@ class MessageDispatcher(object):
 class MessageDispatcherSCU(MessageDispatcher):
     def __call__(self, asce, ctx, msg, *args, **kwargs):
         method = self.get_method(msg)
-        return method(self, asce, ctx, msg, *args, **kwargs)
+        return method(asce, ctx, msg, *args, **kwargs)
 
 
 class MessageDispatcherSCP(MessageDispatcher):
     def __call__(self, asce, ctx, msg):
         method = self.get_method(msg)
-        return method(self, asce, ctx, msg)
+        return method(asce, ctx, msg)
 
 
 @sop_classes([VERIFICATION_SOP_CLASS])
@@ -660,7 +660,7 @@ class StorageCommitment(MessageDispatcherSCP):
         except exceptions.EventHandlingError:
             rsp.status = int(UNABLE_TO_PROCESS)
         else:
-            asce.send(rsp)
+            asce.send(rsp, ctx.id)
 
     def n_action(self, asce, ctx, msg):
         instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
@@ -674,7 +674,7 @@ class StorageCommitment(MessageDispatcherSCP):
         uids = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
                 for item in ds.ReferencedSOPSequence)
         try:
-            remote_ae, success, failure = asce.ae.on_commitment(
+            remote_ae, success, failure = asce.ae.on_commitment_request(
                 asce.remote_ae, uids
             )
         except exceptions.EventHandlingError:
@@ -715,8 +715,8 @@ class StorageCommitment(MessageDispatcherSCP):
                                              ctx.supported_ts.is_little_endian)
 
             with asce.ae.request_association(remote_ae) as assoc:
-                assoc.send(report)
-                assoc.recieve()  # Get response. Current implementation ignores
+                assoc.send(report, ctx.id)
+                assoc.receive()  # Get response. Current implementation ignores
                                  # it
 
 
@@ -744,4 +744,4 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
     asce.send(rq, ctx.id)
 
     rsp, _ = asce.receive()
-    return rsp.status
+    return code_to_status(rsp.status)
