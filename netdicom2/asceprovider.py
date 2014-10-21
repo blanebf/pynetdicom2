@@ -168,6 +168,7 @@ class Association(object):
                 continue
             time.sleep(0.001)
         self.dul.kill()
+        self.association_established = False
 
     def release(self):
         """Releases association.

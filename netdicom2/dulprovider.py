@@ -7,9 +7,16 @@
 
 """
 This module implements the DUL service provider, allowing a DUL service user to
-send and receive DUL messages.  The User and Provider talk to each other using
-a TCP socket. The DULServer runs in a thread, so that and implements an event
-loop whose events will drive the state machine.
+send and receive DUL messages (PDUs).  The User and Provider talk to each
+other using a TCP socket. The DULServer runs in a thread, polling TCP socket
+for incoming messages and sending messages from user queue.
+Underlying logic of the service is implemented via state machine that is
+described in DICOM standard.
+
+In most of the cases you would not need to access
+:class:`~netdicom2.dulprovider.DULServiceProvider` directly, but rather would
+use higher level objects like sub-classes of
+:class:`~netdicom2.asceprovider.Association` or various services.
 """
 
 import collections
@@ -60,13 +67,29 @@ PDU_TO_EVENT = {
 
 
 class DULServiceProvider(threading.Thread):
+    """Implements DUL service.
+
+    This class is responsible for low-level operations with incoming and
+    outgoing PDUs.
+
+    Service can be initialized by providing open socket that service would
+    use for sending and receiving PDUs. In case if socket is not provider
+    service opens a client socket by itself when sending
+    :class:`~netdicom2.pdu.AAssociateRqPDU` instance.
+
+    Underlying implementation relies on state machine that is defined in :doc:`fsm`
+
+    """
+
     def __init__(self, dul_socket=None):
-        """
-        Three ways to call DULServiceProvider. If a port number is given,
-        the DUL will wait for incoming connections on this port. If a socket
-        is given, the DUL will use this socket as the client socket. If none
-        is given, the DUL will not be able to accept connections (but will
-        be able to initiate them.)
+        """Initializes DUL service.
+
+        If no socket is provided service will act as 'client' and will open
+        new client socket when sending :class:`~netdicom2.pdu.AAssociateRqPDU`
+        instance.
+
+        :param dul_socket: remote client socket that will be used to send and
+                           receive PDUs.
         """
         super(DULServiceProvider, self).__init__()
 
@@ -89,27 +112,55 @@ class DULServiceProvider(threading.Thread):
         self.is_killed = False
         self.start()
 
-    def kill(self):
-        """Immediately interrupts the thread"""
-        self.is_killed = True
-        self._is_killed.wait()
+    def send(self, primitive):
+        """Puts PDU into outgoing queue.
+
+        .. note::
+
+            PDU is not immediately written into the socket, but rather put into
+            queue that is processed by service event loop.
+
+        :param primitive: outgoing PDU. Possible PDU types are described
+                          in :doc:`pdu`
+        """
+        self.from_service_user.put(primitive)
+
+    def receive(self, timeout):
+        """Tries to get PDU from incoming queue.
+
+        If timeout is exceeded method
+        rises :class:`~netdicom2.exceptions.TimeoutError` exception.
+
+        :param timeout: the amount of seconds method waits for PDU to appear
+                        in incoming queue
+        :return: PDU instance. Possible PDU types are described
+                 in :doc:`pdu`
+        :raise exceptions.TimeoutError: If specified timeout is exceeded
+        """
+        try:
+            return self.to_service_user.get(timeout=timeout)
+        except Queue.Empty:
+            raise exceptions.TimeoutError()
 
     def stop(self):
-        """Interrupts the thread if state is "Sta1" """
+        """Tries to stop service for idle association.
+
+        If association is not in idle state, method will return ``False`` and
+        association will not be stopped.
+
+        :return: ``True`` if service termination flag was successfully set
+                 (current association state was 'idle'), ``False`` otherwise
+        """
         if self.state_machine.current_state == 'Sta1':
             self.is_killed = True
             return True
         else:
             return False
 
-    def send(self, primitive):
-        self.from_service_user.put(primitive)
-
-    def receive(self, timeout):
-        try:
-            return self.to_service_user.get(timeout=timeout)
-        except Queue.Empty:
-            raise exceptions.TimeoutError()
+    def kill(self):
+        """Sets termination flag for event loop and waits for thread to exit."""
+        self.is_killed = True
+        self._is_killed.wait()
 
     def check_incoming_pdu(self):
         # There is something to read

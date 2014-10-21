@@ -182,9 +182,9 @@ def aa_3(provider):
 
     If (service-user initiated abort):
        - Issue A-ABORT indication and close transport connection.
-    Otherwise (service-provider initiated abort):
+         Otherwise (service-provider initiated abort):
        - Issue A-P-ABORT indication and close transport connection.
-    This action is triggered by the reception of an A-ABORT PDU."""
+         This action is triggered by the reception of an A-ABORT PDU."""
     provider.to_service_user.put(provider.primitive)
     provider.dul_socket.close()
     provider.dul_socket = None

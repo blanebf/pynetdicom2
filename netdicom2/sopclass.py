@@ -8,19 +8,41 @@ Module contains implementation of the DICOM service classes. Module
 also contains useful constants for message statuses and service
 SOP Class UIDs.
 
-All services implementation subclass base ServiceClass class. Base class
-uses a little bit of meta-class magic, that helps to define service supported
-SOP Classes in a declarative manner (just list supported UIDs in sop_classes
-class attribute.
+Each service SCU or SCP role is represent by a callable. To define which
+service SOP Classes are supported by role implementation callable has an
+attribute ``sop_classes`` that lists all SOP Classes.
+For convenience module provides ``sop_classes`` decorator that can be used like
+this::
 
-If user wants to define their own custom service class they should inherit
-from ServiceClass, list supported UIDs in sop_class attributes. Expected status
-codes should also be listed in statuses class attribute.
-Each service class should have scu(...) and scp(...) methods if it is intended
-to be used as either SCU and(or) SCP respectively.
-Currently supported service classes are: Verification (as SCU and SCP),
-Storage (as SCU and SCP) Query/Retrieve (as SCU and SCP), Worklist
-(as SCU and SCP).
+    @sop_classes([UID1, UID2, UID3])
+    def sample_scp(asce, ctx, msg):
+        pass
+
+
+This decorator will set (or extend if already exists) ``sop_classes`` attribute
+of decorated function.
+
+Each SCP role implementation must conform to the following interface::
+
+    def sample_scp(asce, ctx, msg):
+        pass
+
+The arguments have the following meaning:
+    * ``asce`` - ``asceprovider.Association`` object. Can be used to send and
+      receive DIMSE messages, and get access to the Application Entity instance.
+    * ``ctx`` - presentation context definition (``asceprovider.PContextDef``).
+      contains context ID for current association, SOP Class UID and selected
+      transfer syntax.
+    * ``msg`` - received DIMSE message.
+
+Each SCU role implementation must conform to the following interface::
+
+    def sample_scu(asce, ctx, *args, **kwargs):
+        pass
+
+Arguments have similar meaning to SCP role implementation. First two mandatory
+arguments are provided by association and the rest are expected from service
+user.
 """
 
 from dicom.filereader import read_preamble, _read_file_meta_info
@@ -37,12 +59,13 @@ import netdicom2.dimsemessages as dimsemessages
 class Status(object):
     """Class represents message status.
 
-    This a helper class that provides convenience methods for printing and
+    This is a helper class that provides convenience methods for printing and
     converting status codes.
     """
 
     def __init__(self, status_type, description, code_range):
-        """Initializes new Status instance
+        """Initializes new Status instance based on type, description and
+        code range.
 
         :param status_type: status type (Success, Pending, Warning, Failure)
         :param description: status description
@@ -53,10 +76,10 @@ class Status(object):
         self.code_range = code_range
 
     def __int__(self):
-        """Converts status to integer (takes status lower value in range and
+        """Converts status to integer (takes status lowest value in range and
         returns it.
 
-        :return: lower value in code range
+        :return: lowest value in code range
         """
         return self.code_range[0]
 
@@ -187,13 +210,14 @@ STORAGE_COMMITMENT_SOP_CLASS = '1.2.840.10008.1.20.1'
 
 
 def code_to_status(code):
-        """Converts code to status
+        """Converts code to status.
 
         If unexpected code is passed (code does not fall into any of the ranges
-        of statuses that are listed in statuses class attribute) method
+        of the known statuses that are listed in this module) function
         returns 'Failure' status object.
+
         :param code: status code
-        :return: status object converted from code
+        :return: :class:`~netdicom2.sopclass.Status` object converted from code
         """
         for status in STATUSES:
             if code in status.code_range:
@@ -260,7 +284,7 @@ def verification_scu(asce, ctx, msg_id):
 
     :param msg_id: message ID
     :return: status in response message. `SUCCESS` if verification was
-    successfully completed.
+             successfully completed.
     """
     c_echo = dimsemessages.CEchoRQMessage()
     c_echo.message_id = msg_id

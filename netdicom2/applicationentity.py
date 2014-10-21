@@ -86,7 +86,9 @@ class AEBase(object):
             else:
                 assoc.kill()
         except Exception:
-            if assoc:
+            if assoc and assoc.association_established:
+                assoc.abort()
+            elif assoc:
                 assoc.kill()
             raise
 
