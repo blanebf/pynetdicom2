@@ -34,6 +34,15 @@ IMPLEMENTATION_UID = '1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000'
 PREAMBLE = b"\0" * 128
 
 
+def write_meta(fp, command_set, ts):
+    fp.write(PREAMBLE)
+    meta = dicom.dataset.Dataset()
+    meta.MediaStorageSOPClassUID = command_set.AffectedSOPClassUID
+    meta.MediaStorageSOPInstanceUID = command_set.AffectedSOPInstanceUID
+    meta.TransferSyntaxUID = ts
+    meta.ImplementationClassUID = IMPLEMENTATION_UID
+    _write_file_meta_info(DicomFileLike(fp), meta)
+
 class AEBase(object):
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]

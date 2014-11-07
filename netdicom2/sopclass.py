@@ -425,9 +425,12 @@ def qr_find_scu(asce, ctx, ds, msg_id):
     asce.send(c_find, ctx.id)
     while True:
         response, _ = asce.receive()
-        data_set = dsutils.decode(response.data_set,
-                                  ctx.supported_ts.is_implicit_VR,
-                                  ctx.supported_ts.is_little_endian)
+        if response.data_set:
+            data_set = dsutils.decode(response.data_set,
+                                      ctx.supported_ts.is_implicit_VR,
+                                      ctx.supported_ts.is_little_endian)
+        else:
+            data_set = None
         status = code_to_status(response.status)
         yield data_set, status
         if status.status_type != 'Pending':
@@ -473,7 +476,10 @@ GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
 
 @sop_classes(GET_SOP_CLASSES)
 def qr_get_scu(asce, ctx, ds, msg_id):
-    # build C-GET primitive
+    def decode_ds(ds):
+        return dsutils.decode(ds, ctx.supported_ts.is_implicit_VR,
+                              ctx.supported_ts.is_little_endian)
+
     c_get = dimsemessages.CGetRQMessage()
     c_get.message_id = msg_id
     c_get.sop_class_uid = ctx.sop_class
@@ -482,7 +488,6 @@ def qr_get_scu(asce, ctx, ds, msg_id):
                                     ctx.supported_ts.is_implicit_VR,
                                     ctx.supported_ts.is_little_endian)
 
-    # send c-get primitive
     asce.send(c_get, ctx.id)
     while True:
         # receive c-store
@@ -492,21 +497,23 @@ def qr_get_scu(asce, ctx, ds, msg_id):
                 pass  # pending. intermediate C-GET response
             else:
                 break  # last answer
-        elif (msg.command_field ==
-                dimsemessages.CStoreRQMessage.command_field):
-            # send c-store response
+        elif (msg.command_field == dimsemessages.CStoreRQMessage.command_field):
+            store_ctx = asce.ae.context_def_list[pc_id]
+            in_file = store_ctx.sop_class in asce.ae.store_in_file
+
             rsp = dimsemessages.CStoreRSPMessage()
             rsp.message_id_being_responded_to = msg.message_id
             rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
             rsp.sop_class_uid = msg.sop_class_uid
+
             try:
-                d = dsutils.decode(msg.data_set,
-                                   ctx.supported_ts.is_implicit_VR,
-                                   ctx.supported_ts.is_little_endian)
-                status = asce.ae.on_receive_store(ctx, d)
-                yield ctx, d
+                status = asce.ae.on_receive_store(ctx, msg.data_set)
+                yield ctx, msg.data_set if in_file else decode_ds(msg.data_set)
             except exceptions.EventHandlingError:
                 status = CANNOT_UNDERSTAND
+            finally:
+                if in_file and msg.data_set:
+                    msg.data_set.close()
 
             rsp.status = int(status)
             asce.send(rsp, pc_id)
