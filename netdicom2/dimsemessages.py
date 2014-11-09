@@ -6,29 +6,18 @@
 #
 
 """
-    All DIMSE Message classes implement the following methods:
+In this module you can find classes that implements DIMSE-C and DIMSE-N messages
+as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
 
-      from_params(DIMSEServiceParameter)    :  Builds a DIMSE message from a
-                                              DULServiceParameter
-                                              object. Used when receiving
-                                              primitives from the
-                                              DIMSEServiceUser.
-      to_params()                           :  Convert the Message into a
-                                              DIMSEServiceParameter object.
-                                              Used for sending primitives to
-                                              the DIMSEServiceUser.
-      encode()                             :  Returns the encoded message in
-                                              one or several P-DATA parameters
-                                              structure.
-      decode(pdata)                        :  Construct the message from one
-                                              or several P-DATA primitives
+.. note::
 
-                          from_params               encode
-  |----------------------| ------->  |----------| -------> |---------------|
-  | Service parameters   |           |   DIMSE  |          |     P-DATA    |
-  |      object          |           |  message |          |  primitive(s) |
-  |______________________| <-------  |__________| <------- |_______________|
-                           to_params                decode
+    Please note, that in this version of the library message classes does not
+    provide any form of validation for required and conditional fields. If your
+    service class requires such validation you are responsible for implementing
+    one.
+    Service classes implementations provided in :doc:`sopclass` do not expose
+    messages to the user. With that said if you are using services from this
+    library you should not worry about any kind of message validation.
 """
 import struct
 

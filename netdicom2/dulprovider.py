@@ -33,7 +33,7 @@ import netdicom2.pdu as pdu
 import netdicom2.exceptions as exceptions
 
 
-def recv_n(sock, n):
+def _recv_n(sock, n):
     ret = []
     read_length = 0
     while read_length < n:
@@ -162,60 +162,23 @@ class DULServiceProvider(threading.Thread):
         self.is_killed = True
         self._is_killed.wait()
 
-    def check_incoming_pdu(self):
-        # There is something to read
+    def run(self):
         try:
-            raw_pdu = self.dul_socket.recv(1)
-        except socket.error:
-            self.event.append('Evt17')
-            self.dul_socket.close()
-            self.dul_socket = None
-            return
+            while not self.is_killed:
+                self._check_network() or self._check_outgoing_pdu() or\
+                    self._check_timer()
+                try:
+                    evt = self.event.popleft()
+                except IndexError:
+                    continue
+                self.state_machine.action(evt, self)
+        except Exception:
+            self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
+            raise
+        finally:
+            self._is_killed.set()
 
-        if raw_pdu == '':
-            # Remote port has been closed
-            self.event.append('Evt17')
-            self.dul_socket.close()
-            self.dul_socket = None
-            return
-        else:
-            res = recv_n(self.dul_socket, 1)
-            raw_pdu += res
-            length = recv_n(self.dul_socket, 4)
-            raw_pdu += length
-            length = struct.unpack('>L', length)
-            tmp = recv_n(self.dul_socket, length[0])
-            raw_pdu += tmp
-
-            # Determine the type of PDU coming on remote port and set the event
-            # accordingly
-            try:
-                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
-                self.primitive = pdu_type.decode(raw_pdu)
-                self.event.append(event)
-            except KeyError:
-                self.event.append('Evt19')
-
-    def check_timer(self):
-        if self.timer.check() is False:
-            self.event.append('Evt18')  # Timer expired
-            return True
-        else:
-            return False
-
-    def check_incoming_primitive(self):
-        try:
-            self.primitive = self.from_service_user.get(False, None)
-            self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
-            return True
-        except KeyError:
-            raise exceptions.PDUProcessingError(
-                'Unknown PDU {0} with type {1}'.format(self.primitive,
-                                                       self.primitive.pdu_type))
-        except Queue.Empty:
-            return False
-
-    def check_network(self):
+    def _check_network(self):
         if self.state_machine.current_state == 'Sta13':
             # waiting for connection to close
             if self.dul_socket is None:
@@ -242,23 +205,60 @@ class DULServiceProvider(threading.Thread):
 
         # check if something comes in the client socket
         if select.select([self.dul_socket], [], [], 0.05)[0]:
-            self.check_incoming_pdu()
+            self._check_incoming_pdu()
             return True
         else:
             return False
 
-    def run(self):
+    def _check_outgoing_pdu(self):
         try:
-            while not self.is_killed:
-                self.check_network() or self.check_incoming_primitive() or\
-                    self.check_timer()
-                try:
-                    evt = self.event.popleft()
-                except IndexError:
-                    continue
-                self.state_machine.action(evt, self)
-        except Exception:
-            self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
-            raise
-        finally:
-            self._is_killed.set()
+            self.primitive = self.from_service_user.get(False, None)
+            self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
+            return True
+        except KeyError:
+            raise exceptions.PDUProcessingError(
+                'Unknown PDU {0} with type {1}'.format(self.primitive,
+                                                       self.primitive.pdu_type))
+        except Queue.Empty:
+            return False
+
+    def _check_timer(self):
+        if self.timer.check() is False:
+            self.event.append('Evt18')  # Timer expired
+            return True
+        else:
+            return False
+
+    def _check_incoming_pdu(self):
+        # There is something to read
+        try:
+            raw_pdu = self.dul_socket.recv(1)
+        except socket.error:
+            self.event.append('Evt17')
+            self.dul_socket.close()
+            self.dul_socket = None
+            return
+
+        if raw_pdu == '':
+            # Remote port has been closed
+            self.event.append('Evt17')
+            self.dul_socket.close()
+            self.dul_socket = None
+            return
+        else:
+            res = _recv_n(self.dul_socket, 1)
+            raw_pdu += res
+            length = _recv_n(self.dul_socket, 4)
+            raw_pdu += length
+            length = struct.unpack('>L', length)
+            tmp = _recv_n(self.dul_socket, length[0])
+            raw_pdu += tmp
+
+            # Determine the type of PDU coming on remote port and set the event
+            # accordingly
+            try:
+                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
+                self.primitive = pdu_type.decode(raw_pdu)
+                self.event.append(event)
+            except KeyError:
+                self.event.append('Evt19')

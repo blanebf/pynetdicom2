@@ -247,7 +247,7 @@ def store_in_file(service):
 class MessageDispatcher(object):
     """Base class for message dispatcher service.
 
-    Class provideds method for selecting method based on incoming message type.
+    Class provides method for selecting method based on incoming message type.
     """
     message_to_method = {
         0x0001: 'c_store',
@@ -431,7 +431,7 @@ def qr_find_scu(asce, ctx, ds, msg_id):
 
     SCU is implemented as generator that yields responses (dataset and status) 
     from remote AE.
-    If status changes from 'Pending' generator extis.
+    If status changes from 'Pending' generator exits.
 
     :param ds: dataset that is passed to remote AE with C-FIND command
     :param msg_id: message identifier

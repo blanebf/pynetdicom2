@@ -6,56 +6,27 @@
 #
 
 """
-Implementation of DICOM Standard, PS 3.8, section 9.3
-DICOM Upper Layer Protocol for TCP/IP
-Data Unit Structure
+Module contains implementation of the DICOM Protocol Data Units (or PDU for
+short). Each PDU is represented by class that follows the simple interface that
+has only two methods:
 
+    * ``encode`` - method that transforms PDU into raw byte string
+    * ``decode`` - factory method that transforms raw byte string to PDU
+      instance
 
-Module implementing the Data Unit Structures
-There are seven different PDUs, each of them corresponds to distinct class.
-    A_ASSOCIATE_RQ_PDU
-    A_ASSOCIATE_AC_PDU
-    A_ASSOCIATE_RJ_PDU
-    P_DATA_TF_PDU
-    A_RELEASE_RQ_PDU
-    A_RELEASE_RP_PDU
-    A_ABORT_PDU
+In addition to PDUs, several items and sub-items classes can be found in this
+module. These classes are:
 
+        :class:`~netdicom2.pdu.ApplicationContextItem`
+        :class:`~netdicom2.pdu.PresentationContextItemRQ`
+        :class:`~netdicom2.pdu.AbstractSyntaxSubItem`
+        :class:`~netdicom2.pdu.TransferSyntaxSubItem`
+        :class:`~netdicom2.pdu.UserInformationItem`
+        :class:`~netdicom2.pdu.PresentationContextItemAC`
+        :class:`~netdicom2.pdu.PresentationDataValueItem`
 
-    All PDU classes implement the following methods:
-
-      from_params(DULServiceParameterObject):  Builds a PDU from a
-                                              DULServiceParameter object.
-                                              Used when receiving primitives
-                                              from the DULServiceUser.
-      to_params()                           :  Convert the PDU into a
-                                              DULServiceParameter object.
-                                              Used for sending primitives to
-                                              the DULServiceUser.
-      encode()                     :  Returns the encoded PDU as a string,
-                                      ready to be sent over the net.
-      decode(string)               :  Construct PDU from "string".
-                                      Used for reading PDU's from the net.
-
-                        from_params                 encode
-  |------------ -------| ------->  |------------| -------> |------------|
-  | Service parameters |           |     PDU    |          |    TCP     |
-  |       object       |           |   object   |          |   socket   |
-  |____________________| <-------  |____________| <------- |____________|
-                         to_params                  decode
-
-
-
-In addition to PDUs, several items and sub-items classes are implemented.
-These classes are:
-
-        ApplicationContextItem
-        PresentationContextItemRQ
-        AbstractSyntaxSubItem
-        TransferSyntaxSubItem
-        UserInformationItem
-        PresentationContextItemAC
-        PresentationDataValueItem
+The rest sub-items for User Data Information Item can be found at
+:doc:`userdataitems`.
 """
 
 import struct
