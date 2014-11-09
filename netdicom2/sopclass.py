@@ -227,6 +227,9 @@ def code_to_status(code):
 
 
 def sop_classes(uids):
+    """Simple decorator that adds or extends ``sop_classes`` attribute
+    with provided list of UIDs.
+    """
     def augemnt(service):
         if not hasattr(service, 'sop_classes'):
             service.sop_classes = []
@@ -236,11 +239,16 @@ def sop_classes(uids):
 
 
 def store_in_file(service):
+    """Sets ``store_in_file`` attribute to ``True``"""
     service.store_in_file = True
     return service
 
 
 class MessageDispatcher(object):
+    """Base class for message dispatcher service.
+
+    Class provideds method for selecting method based on incoming message type.
+    """
     message_to_method = {
         0x0001: 'c_store',
         0x0020: 'c_find',
@@ -256,6 +264,10 @@ class MessageDispatcher(object):
     }
 
     def get_method(self, msg):
+        """Gets object's method based on incoming message type
+
+        :param msg: incoming message
+        """
         try:
             name = self.message_to_method[msg.command_field]
             return getattr(self, name)
@@ -267,12 +279,21 @@ class MessageDispatcher(object):
 
 
 class MessageDispatcherSCU(MessageDispatcher):
+    """Message dispatcher for service class user.
+
+    When object instance is called with specific message method type appropriate
+    method is selected and all arguments are forwarded to it.
+    """
     def __call__(self, asce, ctx, msg, *args, **kwargs):
         method = self.get_method(msg)
         return method(asce, ctx, msg, *args, **kwargs)
 
 
 class MessageDispatcherSCP(MessageDispatcher):
+    """Messages dispatcher for service class provider.
+
+    Object dispatches incoming message to appropriate method.
+    """
     def __call__(self, asce, ctx, msg):
         method = self.get_method(msg)
         return method(asce, ctx, msg)
@@ -338,9 +359,9 @@ STORAGE_SOP_CLASSES = [
 
 @sop_classes(STORAGE_SOP_CLASSES)
 def storage_scu(asce, ctx, dataset, msg_id):
-    """SCU role implementation.
+    """Simple storage SCU role implementation.
 
-    :param dataset: dataset that should be sent via Storage service
+    :param dataset: dataset or filename that should be sent via Storage service
     :param msg_id: message identifier
     :return: status code when dataset is stored.
     """
@@ -348,7 +369,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     c_store.message_id = msg_id
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
 
-    if isinstance(dataset, (str, unicode)):
+    if isinstance(dataset, basestring):
         # Got file name
         with open(dataset, 'rb') as ds:
             read_preamble(ds, False)
@@ -375,10 +396,12 @@ def storage_scu(asce, ctx, dataset, msg_id):
 @store_in_file
 @sop_classes(STORAGE_SOP_CLASSES)
 def storage_scp(asce, ctx, msg):
-    """SCP role implementation.
+    """Storage SCP role implementation.
 
-    Service extracts dataset from received message and passes it to
-    `on_receive_store` method of the application entity.
+    Service simple passes file object from received message to
+    ``on_receive_store`` method of the application entity.
+    If message handler raises :class:`~netdicom2.exceptions.EventHandlingError`
+    service response with ``CANNOT_UNDERSTAND`` code.
 
     :param msg: received message
     """
@@ -404,11 +427,11 @@ FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS]
 
 @sop_classes(FIND_SOP_CLASSES)
 def qr_find_scu(asce, ctx, ds, msg_id):
-    """SCU role is implement as iterator that returns responses from remote
-    AE.
+    """Query/Retrieve find service user role implementation.
 
-    Method yields dataset and status for each one received from server.
-    If status changes from 'Pending' iteration stops.
+    SCU is implemented as generator that yields responses (dataset and status) 
+    from remote AE.
+    If status changes from 'Pending' generator extis.
 
     :param ds: dataset that is passed to remote AE with C-FIND command
     :param msg_id: message identifier
@@ -439,7 +462,7 @@ def qr_find_scu(asce, ctx, ds, msg_id):
 
 @sop_classes(FIND_SOP_CLASSES)
 def qr_find_scp(asce, ctx, msg):
-    """SCP role implementation.
+    """Query/Retrieve find SCP role implementation.
 
     Method calls `on_receive_find` from AE with received C-FIND parameters
     and expect generator that would yield dataset responses for
