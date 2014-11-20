@@ -368,6 +368,8 @@ def storage_scu(asce, ctx, dataset, msg_id):
     c_store = dimsemessages.CStoreRQMessage()
     c_store.message_id = msg_id
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
+    c_store.move_originator_aet = asce.ae.local_ae['aet']
+    c_store.move_originator_message_id = msg_id
 
     if isinstance(dataset, basestring):
         # Got file name
