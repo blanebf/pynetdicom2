@@ -493,7 +493,7 @@ def qr_find_scu(asce, ctx, ds, msg_id):
 def qr_find_scp(asce, ctx, msg):
     """Query/Retrieve find SCP role implementation.
 
-    Method calls `on_receive_find` from AE with received C-FIND parameters
+    Service calls `on_receive_find` from AE with received C-FIND parameters
     and expect generator that would yield dataset responses for
     C-FIND command.
 
@@ -528,8 +528,25 @@ GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
 
 @sop_classes(GET_SOP_CLASSES)
 def qr_get_scu(asce, ctx, ds, msg_id):
-    def decode_ds(ds):
-        return dsutils.decode(ds, ctx.supported_ts.is_implicit_VR,
+    """Query/Retrieve C-GET service implementation.
+
+    C-GET service is probably one of the most trickiest service to use.
+    First of all you should remember that C-STORE request messages are received
+    in current association (unlike when you are using C-MOVE), so remember
+    to add proper presentation context for expected object(s).
+    Second, it is strongly advised you add presentation contexts to your AE
+    with ``store_in_file`` set to ``True``, unless you are expecting something
+    small like Structure Report documents.
+    Upon receiving datasets service would call ``on_receive_store`` method of
+    parent AE (just like C-MOVE service) and than yield context and dataset.
+    If ``store_in_file`` is set to ``True`` then dataset is a file object.
+    If not service yields ``dicom.dataset.Dataset`` object
+
+    :param ds: dataset that contains request parameters.
+    :param msg_id: message ID
+    """
+    def decode_ds(_ds):
+        return dsutils.decode(_ds, ctx.supported_ts.is_implicit_VR,
                               ctx.supported_ts.is_little_endian)
 
     c_get = dimsemessages.CGetRQMessage()
@@ -549,7 +566,7 @@ def qr_get_scu(asce, ctx, ds, msg_id):
                 pass  # pending. intermediate C-GET response
             else:
                 break  # last answer
-        elif (msg.command_field == dimsemessages.CStoreRQMessage.command_field):
+        elif msg.command_field == dimsemessages.CStoreRQMessage.command_field:
             store_ctx = asce.ae.context_def_list[pc_id]
             in_file = store_ctx.sop_class in asce.ae.store_in_file
 
@@ -577,7 +594,16 @@ MOVE_SOP_CLASSES = [PATIENT_ROOT_MOVE_SOP_CLASS, STUDY_ROOT_MOVE_SOP_CLASS,
 
 @sop_classes(MOVE_SOP_CLASSES)
 def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
-    # build C-FIND primitive
+    """Query/Retrieve C-MOVE service implementation.
+
+    Service is pretty simple to use. All you have to do is provide C-MOVE
+    request parameters and destination AE. Service will than yield statuses
+    and response messages, that can be used for tracking progress.
+
+    :param ds: dataset that contains request parameters.
+    :param dest_ae: C-MOVE destination
+    :param msg_id: message ID.
+    """
     c_move = dimsemessages.CMoveRQMessage()
     c_move.message_id = msg_id
     c_move.sop_class_uid = ctx.sop_class
@@ -586,16 +612,15 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
     c_move.data_set = dsutils.encode(ds,
                                      ctx.supported_ts.is_implicit_VR,
                                      ctx.supported_ts.is_little_endian)
-    # send c-find request
     asce.send(c_move, ctx.id)
 
-    while 1:
+    while True:
         # wait for c-move responses
         response, _ = asce.receive()
         status = code_to_status(response.status).status_type
         if status != 'Pending':
             break
-        yield status
+        yield status, response
 
 
 @sop_classes(MOVE_SOP_CLASSES)

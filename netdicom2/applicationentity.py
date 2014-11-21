@@ -43,6 +43,7 @@ def write_meta(fp, command_set, ts):
     meta.ImplementationClassUID = IMPLEMENTATION_UID
     _write_file_meta_info(DicomFileLike(fp), meta)
 
+
 class AEBase(object):
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
