@@ -45,7 +45,7 @@ arguments are provided by association and the rest are expected from service
 user.
 """
 
-from dicom.filereader import read_preamble, _read_file_meta_info
+from dicom.filereader import read_preamble, _read_file_meta_info, read_file
 
 import dicom.UID
 import dicom.dataset
@@ -374,10 +374,24 @@ def storage_scu(asce, ctx, dataset, msg_id):
     if isinstance(dataset, basestring):
         # Got file name
         with open(dataset, 'rb') as ds:
+            zero = ds.tell()
             read_preamble(ds, False)
             meta = _read_file_meta_info(ds)
             c_store.sop_class_uid = meta.MediaStorageSOPClassUID
-            c_store.affected_sop_instance_uid = meta.MediaStorageSOPInstanceUID
+            try:
+                instance_uid = meta.MediaStorageSOPInstanceUID
+            except AttributeError:
+                # Dataset was written by a bunch of a-holes (No SOP Instance UID
+                # in file meta).
+                # If it still fails, then dataset was written
+                # by a bunch of ****s
+                start = ds.tell()
+                ds.seek(zero)
+                ds_full = read_file(ds, stop_before_pixels=True)
+                instance_uid = ds_full.SOPInstanceUID
+                ds.seek(start)
+
+            c_store.affected_sop_instance_uid = instance_uid
             c_store.data_set = ds
             asce.send(c_store, ctx.id)
     else:
