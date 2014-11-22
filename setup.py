@@ -1,11 +1,7 @@
 #!/usr/bin/env python
-from distribute_setup import use_setuptools
-use_setuptools()
 
 from setuptools import setup, find_packages
-
-__version__ = open('netdicom/__version__.py').read().split('"')[1]
-print __version__
+from netdicom2.__version__ import __version__
 
 setup(name="pynetdicom2",
       packages=find_packages(),
@@ -13,9 +9,9 @@ setup(name="pynetdicom2",
       version=__version__,
       zip_safe=False,  # want users to be able to see included examples,tests
       description="Pure python implementation of the DICOM network protocol",
-      author="Patrice Munger",
-      author_email="patricemunger@gmail.com",
-      url="http://pynetdicom.googlecode.com",
+      author="Pavel 'Blane' Tuchin",
+      author_email="blane.public@gmail.com",
+      url="https://github.com/blanebf/pynetdicom2",
       license="LICENCE.txt",
       keywords="dicom python medicalimaging",
       classifiers=["License :: OSI Approved :: MIT License",
@@ -29,5 +25,5 @@ setup(name="pynetdicom2",
                    "Topic :: Scientific/Engineering :: Medical Science Apps.",
                    "Topic :: Scientific/Engineering :: Physics",
                    "Topic :: Software Development :: Libraries"],
-      long_description=open('README.txt').read(),
+      long_description=open('README.rst').read(),
       install_requires=["pydicom >= 0.9.7"])
