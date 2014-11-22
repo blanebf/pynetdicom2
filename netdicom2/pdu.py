@@ -297,7 +297,7 @@ class AReleasePDUBase(object):
         """Factory method. Decodes A-RELEASE-* PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of the
-        A-RELEASE-* PDU
+                          A-RELEASE-* PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)

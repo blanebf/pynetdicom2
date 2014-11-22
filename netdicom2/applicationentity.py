@@ -35,6 +35,15 @@ PREAMBLE = b"\0" * 128
 
 
 def write_meta(fp, command_set, ts):
+    """Writes file meta information.
+
+    This is a small utility function can be useful when overriding ``get_file``
+    method of :class:`~netdicom2.applicationentity.AEBase`
+
+    :param fp: file or file-like object where dataset will be stored
+    :param command_set: command dataset of received message
+    :param ts: dataset transfer syntax
+    """
     fp.write(PREAMBLE)
     meta = dicom.dataset.Dataset()
     meta.MediaStorageSOPClassUID = command_set.AffectedSOPClassUID
@@ -45,6 +54,12 @@ def write_meta(fp, command_set, ts):
 
 
 class AEBase(object):
+    """Base Application Entity class.
+
+    This class is intended for sub-classing and should not be used directly.
+    Use :class:`~netdicom2.applicationentity.ClientAE` or
+    :class:`~netdicom2.applicationentity.AE`
+    """
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
 
@@ -63,6 +78,14 @@ class AEBase(object):
         self.lock = Lock()
 
     def add_scu(self, service):
+        """Adds service as SCU to the AE.
+
+        Presentation context definition list is updated based on SOP Class UIDs
+        that are handled by this service. Calls to this method could be
+        chained, so you can add multiple services in one statement.
+
+        :param service: DICOM service
+        """
         self.supported_scu.update({
             uid: service for uid in service.sop_classes
         })
@@ -72,6 +95,13 @@ class AEBase(object):
         return self
 
     def update_context_def_list(self, sop_classes, store_in_file=False):
+        """Updates presentation context definition list.
+
+        :param sop_classes: new SOP Class UIDs that should be added to
+                            presentation contexts definition list
+        :param store_in_file: indicates if incoming datasets for these SOP
+                              Classes should be stored in file.
+        """
         start = max(self.context_def_list.keys()) if self.context_def_list \
             else 1
 
@@ -80,12 +110,32 @@ class AEBase(object):
         )
 
     def copy_context_def_list(self):
+        """Makes a shallow copy of presentation context definition list.
+
+        .. note::
+
+            This method is tread-safe.
+
+        :return: copy of the presentation context definition list.
+        """
         with self.lock:
             return copy.copy(self.context_def_list)
 
     @contextlib.contextmanager
     def request_association(self, remote_ae):
-        """Requests association to a remote application entity"""
+        """Requests association to a remote application entity.
+
+        Request is formed based on configuration dictionary that is passed in.
+        Currently supported parameters are:
+
+            * **aet** - remote AE title
+            * **address** - remote AE IP address
+            * **port** - remote AE port
+            * **username** - username for DICOM authentication
+            * **password** - password for DICOM authentication
+
+        :param remote_ae: dictionary that contains remote AE configuration.
+        """
         assoc = None
         try:
             assoc = asceprovider.AssociationRequester(self, remote_ae=remote_ae)
@@ -116,18 +166,12 @@ class AEBase(object):
         :param context: presentation context
         :param command_set: command dataset of the received message
         :return: file where association can store received dataset and file
-        starting position.
+                 starting position.
         """
         tmp = tempfile.TemporaryFile()
         start = tmp.tell()
         try:
-            tmp.write(PREAMBLE)
-            meta = dicom.dataset.Dataset()
-            meta.MediaStorageSOPClassUID = command_set.AffectedSOPClassUID
-            meta.MediaStorageSOPInstanceUID = command_set.AffectedSOPInstanceUID
-            meta.TransferSyntaxUID = context.supported_ts
-            meta.ImplementationClassUID = IMPLEMENTATION_UID
-            _write_file_meta_info(DicomFileLike(tmp), meta)
+            write_meta(tmp, command_set, context.supported_ts)
         except Exception:
             tmp.close()
             raise
@@ -199,7 +243,7 @@ class AEBase(object):
         :param ds: dataset with C-MOVE parameters
         :param destination: C-MOVE command destination
         :return: tuple: remote AE parameters, number of operations and iterator
-        that will return datasets for moving
+                 that will return datasets for moving
         """
         return None, 0, iter([])
 
@@ -242,23 +286,51 @@ class AEBase(object):
 
 
 class ClientAE(AEBase):
+    """Simple SCU-only application entity.
+
+    Use this class if you only intent to use SCUs service roles. This AE won't
+    handle any incoming connections.
+    """
     def __init__(self, ae_title, supported_ts=None,
-                 max_pdu_length=16000):
+                 max_pdu_length=65536):
+        """Initializes new ClientAE instance
+
+        :param ae_title: AE title (up to 16 characters)
+        :param supported_ts: list of supported transfer syntaxes. If you are
+                             using Storage or Q/R C-GET services be sure to
+                             add only transfer syntax of the expected dataset.
+        :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
+        """
         super(ClientAE, self).__init__(supported_ts, max_pdu_length)
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
 
 
 class AE(AEBase, SocketServer.ThreadingTCPServer):
-    """Represents a DICOM application entity
+    """Represents a DICOM application entity based on
+    ``SocketServer.ThreadingTCPServer``
 
-    Instance if this class represent an application entity. Once
-    instantiated, it starts a new thread and enters an event loop,
-    where events are association requests from remote AEs. Events
-    trigger callback functions that perform user defined actions based
-    on received events.
+    Unlike :class:`~netdicom2.applicationentity.ClientAE` this one is full
+    functional application entity that can take on both SCU and SCP roles.
+    For convenience :class:`~netdicom2.applicationentity.AE` supports context
+    manager interface so it can be used like this::
+
+        from netdicom2.sopclass import verification_scp
+
+        ae = AE('AET', 104).add_scp(verification_scp)
+        with ae:
+            pass  # AE is running and accepting connection.
+
+    Upon exiting context AE is stopped.
     """
 
-    def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=16000):
+    def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=65536):
+        """Initializes new AE instance.
+
+        :param ae_title: AE title (up to 16 characters)
+        :param port: port that AE listens on for incoming connection
+        :param supported_ts: list of transfer syntaxes supported by AE
+        :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
+        """
         SocketServer.ThreadingTCPServer.__init__(
             self,
             ('', port),
@@ -272,13 +344,14 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         self.local_ae = {'address': platform.node(), 'port': port,
                          'aet': ae_title}
 
-    def __enter__(self):
-        threading.Thread(target=self.serve_forever).start()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.quit()
-
     def add_scp(self, service):
+        """Adds service as SCP to the AE.
+
+        Method is similar to ``add_scu`` method of the
+        :class:`~netdicom2.applicationentity.AEBase` base class.
+
+        :param service: DICOM service.
+        """
         self.supported_scp.update({
             uid: service for uid in service.sop_classes
         })
@@ -288,10 +361,12 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
         return self
 
     def quit(self):
-        """Stops AE.
-
-        This will close any open associations and will break from event loop
-        for AEs that supports service SOP Classes as SCP.
-        """
+        """Stops AE from accepting any more connections."""
         self.shutdown()
         self.server_close()
+
+    def __enter__(self):
+        threading.Thread(target=self.serve_forever).start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.quit()

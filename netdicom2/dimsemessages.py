@@ -15,9 +15,10 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     provide any form of validation for required and conditional fields. If your
     service class requires such validation you are responsible for implementing
     one.
-    Service classes implementations provided in :doc:`sopclass` do not expose
-    messages to the user. With that said if you are using services from this
-    library you should not worry about any kind of message validation.
+    Service classes implementations provided in :doc:`sopclasses` do not expose
+    messages to the user (aside from C-MOVE SCU, but it only yields received
+    message). With that said if you are using services from this library you
+    should not worry about any kind of message validation.
 """
 import struct
 

@@ -353,8 +353,7 @@ class AssociationRequester(Association):
         password = remote_ae.get('password')
         if username and password:
             user_information.append(
-                userdataitems.UserIdentityNegotiationSubItem(username,
-                                                             password))
+                userdataitems.UserIdentityNegotiationSubItem(username, password))
         elif username:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
