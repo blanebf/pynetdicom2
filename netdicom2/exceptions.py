@@ -178,6 +178,11 @@ class AssociationAbortedError(AssociationError):
         self.reason_diag = reason_diag
 
 
+class TimeoutError(NetDICOMError):
+    """Raised if timeout occurred when expected PDU from DUL."""
+    pass
+
+
 class EventHandlingError(NetDICOMError):
     """This exception is not raised by the package itself.
 

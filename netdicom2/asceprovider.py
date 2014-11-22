@@ -7,32 +7,39 @@
 
 
 # This module provides association services
-import threading
+import collections
+import functools
 import time
+import SocketServer
+import struct
 
 from dicom.UID import UID
 
 import netdicom2.exceptions as exceptions
 import netdicom2.dulprovider as dulprovider
-import netdicom2.dimseprovider as dimseprovider
+import netdicom2.dimsemessages as dimsemessages
+import netdicom2.dsutils as dsutils
 
 import netdicom2.pdu as pdu
-
-import netdicom2.sopclass as sopclass
 import netdicom2.userdataitems as userdataitems
+
+PContextDef = collections.namedtuple(
+    'PContextDef',
+    ['id', 'sop_class', 'supported_ts']
+)
 
 
 APPLICATION_CONTEXT_NAME = '1.2.840.10008.3.1.1.1'
 
 
 def build_pres_context_def_list(context_def_list):
-    for context_def in context_def_list:
-        context_id = context_def[0]
-        abs_sub_item = pdu.AbstractSyntaxSubItem(context_def[1])
-        ts_sub_items = [pdu.TransferSyntaxSubItem(i)
-                        for i in context_def[2]]
-        yield pdu.PresentationContextItemRQ(context_id, abs_sub_item,
-                                            ts_sub_items)
+    return (
+        pdu.PresentationContextItemRQ(
+            pc_id, pdu.AbstractSyntaxSubItem(ctx.sop_class),
+            [pdu.TransferSyntaxSubItem(i) for i in ctx.supported_ts]
+        )
+        for pc_id, ctx in context_def_list.iteritems()
+    )
 
 
 class Association(object):
@@ -49,29 +56,105 @@ class Association(object):
         :param local_ae: local AE title parameters
         :param dul_socket: socket for DUL provider or None if it's not needed
         """
-        super(Association, self).__init__()
         self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
         self.association_established = False
-
         self.max_pdu_length = 16000
-        self.accepted_presentation_contexts = []
-        self.dimse = dimseprovider.DIMSEServiceProvider(self)
+        self.accepted_contexts = {}
 
-    def get_dul_message(self, timeout=None):
-        dul_msg = self.dul.receive(True, timeout)
-        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type:
+    def get_dul_message(self):
+        dul_msg = self.dul.receive(self.ae.timeout)
+        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type\
+                or dul_msg.pdu_type == pdu.AAssociateAcPDU.pdu_type:
             return dul_msg
         elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
             raise exceptions.AssociationReleasedError()
         elif dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
             raise exceptions.AssociationAbortedError(dul_msg.source,
                                                      dul_msg.reason_diag)
+        elif dul_msg.pdu_type == pdu.AAssociateRjPDU.pdu_type:
+            raise exceptions.AssociationRejectedError(
+                dul_msg.result, dul_msg.source, dul_msg.reason_diag)
         else:
             raise exceptions.NetDICOMError()
 
-    def send(self, primitive):
-        self.dul.send(primitive)
+    def send(self, dimse_msg, pc_id):
+        dimse_msg.set_length()
+        for p_data in dimse_msg.encode(pc_id, self.ae.max_pdu_length):
+            self.dul.send(p_data)
+
+    def receive(self):
+        # TODO: Refactor this madness
+        encoded_command_set = []
+        encoded_data_set = []
+
+        command_set_received = False
+        data_set_received = False
+
+        receiving = True
+        dataset = None
+
+        pc_id = None
+        msg = None
+
+        start = 0
+
+        try:
+            while receiving:
+                p_data = self.get_dul_message()
+
+                for value_item in p_data.data_value_items:
+                    # must be able to read P-DATA with several PDVs
+                    pc_id = value_item.context_id
+                    marker = struct.unpack('b', value_item.data_value[0])[0]
+                    if marker in (1, 3):
+                        encoded_command_set.append(value_item.data_value[1:])
+                        if marker == 3:
+                            command_set_received = True
+                            command_set = dsutils.decode(
+                                ''.join(encoded_command_set),
+                                True, True
+                            )
+
+                            msg = self._command_set_to_message(command_set)
+                            no_ds = command_set[(0x0000,
+                                                 0x0800)].value == 0x0101
+                            use_file = (msg.sop_class_uid in
+                                        self.ae.store_in_file)
+                            if not no_ds and use_file:
+                                ctx = self.accepted_contexts[pc_id]
+                                dataset, start = self.ae.get_file(ctx,
+                                                                  command_set)
+                                if encoded_data_set:
+                                    dataset.writelines(encoded_data_set)
+                            if no_ds or data_set_received:
+                                receiving = False  # response: no dataset
+                                break
+                    elif marker in (0, 2):
+                        if dataset:
+                            dataset.write(value_item.data_value[1:])
+                        else:
+                            encoded_data_set.append(value_item.data_value[1:])
+                        if marker == 2:
+                            data_set_received = True
+                            if command_set_received:
+                                receiving = False
+                                break
+                    else:
+                        raise exceptions.DIMSEProcessingError(
+                            'Incorrect first PDV byte')
+        except Exception:
+            if dataset:
+                dataset.close()
+            raise
+
+        if data_set_received:
+            if dataset:
+                dataset.seek(start)
+                msg.data_set = dataset
+            else:
+                msg.data_set = ''.join(encoded_data_set)
+        return msg, pc_id
 
     def kill(self):
         """Stops internal DUL service provider.
@@ -85,6 +168,7 @@ class Association(object):
                 continue
             time.sleep(0.001)
         self.dul.kill()
+        self.association_established = False
 
     def release(self):
         """Releases association.
@@ -95,29 +179,39 @@ class Association(object):
         :rtype : None
         """
         self.dul.send(pdu.AReleaseRqPDU())
-        rsp = self.dul.receive(wait=True)
+        rsp = self.dul.receive(self.ae.timeout)
         self.kill()
         return rsp
 
+    @staticmethod
+    def _command_set_to_message(command_set):
+        command_field = command_set[(0x0000, 0x0100)].value
+        msg_type = dimsemessages.MESSAGE_TYPE[command_field]
+        msg = msg_type(command_set)
+        return msg
 
-class AssociationAcceptor(threading.Thread, Association):
+
+class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
     """'Server-side' association implementation.
 
     Class is intended for handling incoming association requests.
     """
 
-    def __init__(self, local_ae, client_socket):
+    def __init__(self, request, client_address, local_ae):
         """Initializes AssociationAcceptor instance with specified client socket
 
         :param local_ae: local AE title
-        :param client_socket: client socket
+        :param request: client socket
         """
-        Association.__init__(self, local_ae, client_socket)
-        threading.Thread.__init__(self)
-        self.client_socket = client_socket
+        Association.__init__(self, local_ae, request)
         self.is_killed = False
-        self.sop_classes_as_scp = []
-        self.start()
+        self.sop_classes_as_scp = {}
+        self.remote_ae = ''
+
+        SocketServer.StreamRequestHandler.__init__(self,
+                                                   request,
+                                                   client_address,
+                                                   local_ae)
 
     def kill(self):
         """Overrides base class kill method to set stop-flag for running thread
@@ -145,39 +239,45 @@ class AssociationAcceptor(threading.Thread, Association):
         """
         self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
 
-    def accept(self, assoc_req, acceptable_pres_contexts=None):
+    def accept(self, assoc_req):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
-        acceptable_presentation_contexts"""
+        acceptable_pr_contexts"""
         user_items = assoc_req.variable_items[-1]
         self.max_pdu_length = user_items.user_data[0].maximum_length_received
 
         # analyse proposed presentation contexts
         rsp = [assoc_req.variable_items[0]]
-        self.accepted_presentation_contexts = []
-        acceptable_sop = [x[0] for x in acceptable_pres_contexts]
-        for item in assoc_req.variable_items[1:-1]:
-            context_id = item.context_id
-            proposed_sop = item.abs_sub_item.name
-            proposed_ts = item.ts_sub_items
-            if proposed_sop not in acceptable_sop:
-                # Refuse sop class because of SOP class not supported
-                rsp.append(pdu.PresentationContextItemAC(
-                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+        requested = (
+            (item.context_id, item.abs_sub_item.name, item.ts_sub_items)
+            for item in assoc_req.variable_items[1:-1]
+        )
+
+        for pc_id, proposed_sop, proposed_ts in requested:
+            if proposed_sop not in self.ae.supported_scp:
+                # refuse sop class because of SOP class not supported
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id, 1, pdu.TransferSyntaxSubItem(''))
+                )
                 continue
 
-            acceptable_ts = [x[1] for x in acceptable_pres_contexts
-                             if x[0] == proposed_sop][0]
             for ts in proposed_ts:
-                if ts.name in acceptable_ts:
-                    # accept sop class and ts
-                    rsp.append(pdu.PresentationContextItemAC(context_id, 0, ts))
-                    self.accepted_presentation_contexts.append(
-                        (item.context_id, proposed_sop, UID(ts.name)))
+                if ts.name in self.ae.supported_ts:
+                    rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
+                    ts_uid = UID(ts.name)
+                    self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop,
+                                                      ts_uid)
+                    self.accepted_contexts[pc_id] = PContextDef(
+                        pc_id, proposed_sop, ts_uid
+                    )
                     break
             else:  # Refuse sop class because of TS not supported
-                rsp.append(pdu.PresentationContextItemAC(
-                    context_id, 1, pdu.TransferSyntaxSubItem('')))
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id, 1, pdu.TransferSyntaxSubItem(''))
+                )
+
         rsp.append(user_items)
         res = pdu.AAssociateAcPDU(
             called_ae_title=assoc_req.called_ae_title,
@@ -185,61 +285,52 @@ class AssociationAcceptor(threading.Thread, Association):
             variable_items=rsp
         )
         self.dul.send(res)
+        self.remote_ae = assoc_req.calling_ae_title
 
-    def loop(self):
-        while not self.is_killed:
-            time.sleep(0.001)
-            dimse_msg, pcid = self.dimse.receive(wait=False, timeout=None)
-            if dimse_msg:  # dimse message received
-                uid = dimse_msg.affected_sop_class_uid
-                try:
-                    pcid, sop_class, transfer_syntax = \
-                        [x for x in self.sop_classes_as_scp if x[0] == pcid][0]
-                except IndexError:
-                    raise exceptions.ClassNotSupportedError(
-                        'SOP Class {0} not supported as SCP'.format(uid))
-                obj = sopclass.SOP_CLASSES[uid](
-                    ae=self.ae, uid=sop_class,
-                    dimse=self.dimse, pcid=pcid,
-                    transfer_syntax=transfer_syntax,
-                    max_pdu_length=self.max_pdu_length)
-                obj.scp(dimse_msg)  # run SCP
-
-    def run(self):
-        assoc_req = self.dul.receive(wait=True)
+    def handle(self):
         try:
-            self.ae.on_association_request(assoc_req)
-        except exceptions.AssociationRejectedError as e:
-            self.reject(e.result, e.source, e.diagnostic)
-            self.kill()
-            return
-
-        self.accept(assoc_req, self.ae.acceptable_presentation_contexts)
-
-        # build list of SOPClasses supported
-        self.sop_classes_as_scp = [(c[0], c[1], c[2]) for c in
-                                   self.accepted_presentation_contexts]
-        self.association_established = True
-
-        # association established. Listening on local and remote interfaces
-        try:
-            self.loop()
+            self._establish()
+            self._loop()
         except exceptions.AssociationReleasedError:
             self.dul.send(pdu.AReleaseRpPDU())
         except exceptions.AssociationAbortedError:
             pass  # TODO: Log abort
+        except exceptions.TimeoutError:
+            pass  # TODO: Handle timeout error
         finally:
             self.kill()
+
+    def _establish(self):
+        try:
+            assoc_req = self.dul.receive(self.ae.timeout)
+            self.ae.on_association_request(assoc_req)
+        except exceptions.AssociationRejectedError as e:
+            self.reject(e.result, e.source, e.diagnostic)
+            raise
+
+        self.accept(assoc_req)
+        self.association_established = True
+
+    def _loop(self):
+        while not self.is_killed:
+            dimse_msg, pc_id = self.receive()
+            uid = dimse_msg.sop_class_uid
+            try:
+                _, sop_class, ts = self.sop_classes_as_scp[pc_id]
+                service = self.ae.supported_scp[uid]
+            except KeyError:
+                raise exceptions.ClassNotSupportedError(
+                    'SOP Class {0} not supported as SCP'.format(uid))
+            else:
+                service(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
 
 
 class AssociationRequester(Association):
     def __init__(self, local_ae, remote_ae=None):
         super(AssociationRequester, self).__init__(local_ae, None)
-        self.ae = local_ae
+        self.context_def_list = local_ae.copy_context_def_list()
         self.remote_ae = remote_ae
-        self.sop_classes_as_scu = []
-        self.association_refused = False
-        self._request()
+        self.sop_classes_as_scu = {}
 
     def abort(self, reason=0):
         """Aborts association with specified reason
@@ -250,8 +341,7 @@ class AssociationRequester(Association):
         self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
         self.kill()
 
-    def request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None,
-                timeout=30):
+    def _request(self, local_ae, remote_ae, mp, pcdl, users_pdu=None):
         """Requests an association with a remote AE and waits for association
         response."""
         self.max_pdu_length = mp
@@ -263,8 +353,7 @@ class AssociationRequester(Association):
         password = remote_ae.get('password')
         if username and password:
             user_information.append(
-                userdataitems.UserIdentityNegotiationSubItem(username,
-                                                             password))
+                userdataitems.UserIdentityNegotiationSubItem(username, password))
         elif username:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
@@ -282,12 +371,8 @@ class AssociationRequester(Association):
         assoc_rq.called_presentation_address = (remote_ae['address'],
                                                 remote_ae['port'])
         self.dul.send(assoc_rq)
-        response = self.dul.receive(True, timeout)
-        if not response:
-            return False
-        if response.pdu_type == pdu.AAssociateRjPDU.pdu_type:
-            raise exceptions.AssociationRejectedError(
-                response.result, response.source, response.reason_diag)
+        response = self.get_dul_message()
+
         # Get maximum pdu length from answer
         user_data = response.variable_items[-1].user_data
         try:
@@ -296,55 +381,47 @@ class AssociationRequester(Association):
             self.max_pdu_length = 16000
 
         # Get accepted presentation contexts
-        self.accepted_presentation_contexts = []
-        for context in response.variable_items[1:-1]:
-            if context.result_reason == 0:
-                uid = [x[1] for x in pcdl if x[0] == context.context_id][0]
-                self.accepted_presentation_contexts.append(
-                    (context.context_id, uid, UID(context.ts_sub_item.name)))
+        accepted = (ctx for ctx in response.variable_items[1:-1]
+                    if ctx.result_reason == 0)
+        for ctx in accepted:
+            pc_id = ctx.context_id
+            sop_class = pcdl[ctx.context_id].sop_class
+            ts_uid = UID(ctx.ts_sub_item.name)
+            self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
+            self.accepted_contexts[pc_id] = PContextDef(pc_id, sop_class,
+                                                        ts_uid)
         return response
 
-    def _request(self):
-        ext = [userdataitems.ScpScuRoleSelectionSubItem(i[0], 0, 1)
-               for i in self.ae.acceptable_presentation_contexts]
-        response = self.request(
+    def request(self):
+        ext = [userdataitems.ScpScuRoleSelectionSubItem(uid, 0, 1)
+               for uid in self.ae.supported_scp.keys()]
+        custom_items = self.remote_ae.get('user_data', [])
+        response = self._request(
             self.ae.local_ae, self.remote_ae, self.ae.max_pdu_length,
-            self.ae.presentation_context_definition_list, users_pdu=ext
+            self.context_def_list, users_pdu=ext+custom_items
         )
         self.ae.on_association_response(response)
-        self.sop_classes_as_scu = [(context[0], context[1], context[2])
-                                   for context in
-                                   self.accepted_presentation_contexts]
         self.association_established = True
 
-    def scu(self, ds, id_):
+    def scu(self, ds, msg_id):
         uid = ds.SOPClassUID
         try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == uid][0]
-        except IndexError:
+            pc_id, transfer_syntax = self.sop_classes_as_scu[uid]
+            service = self.ae.supported_scu[uid]
+        except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU')
-
-        obj = sopclass.SOP_CLASSES[uid](
-            ae=self.ae, uid=uid,
-            dimse=self.dimse, pcid=pcid,
-            transfer_syntax=transfer_syntax,
-            max_pdu_length=self.max_pdu_length
-        )
-        return obj.scu(ds, id_)
+        else:
+            return service(self, PContextDef(pc_id, uid, transfer_syntax),
+                           ds, msg_id)
 
     def get_scu(self, sop_class):
         try:
-            pcid, _, transfer_syntax = \
-                [x for x in self.sop_classes_as_scu if x[1] == sop_class][0]
-        except IndexError:
+            pc_id, ts = self.sop_classes_as_scu[sop_class]
+            service = self.ae.supported_scu[sop_class]
+        except KeyError:
             raise exceptions.ClassNotSupportedError(
                 'SOP Class %s not supported as SCU' % sop_class)
-        obj = sopclass.SOP_CLASSES[sop_class](
-            ae=self.ae, uid=sop_class,
-            dimse=self.dimse, pcid=pcid,
-            transfer_syntax=transfer_syntax,
-            max_pdu_length=self.max_pdu_length
-        )
-        return obj
+        else:
+            return functools.partial(service, self,
+                                     PContextDef(pc_id, sop_class, ts))

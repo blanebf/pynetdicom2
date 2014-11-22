@@ -7,20 +7,24 @@
 
 """
 This module implements the DUL service provider, allowing a DUL service user to
-send and receive DUL messages.  The User and Provider talk to each other using
-a TCP socket. The DULServer runs in a thread, so that and implements an event
-loop whose events will drive the state machine.
+send and receive DUL messages (PDUs).  The User and Provider talk to each
+other using a TCP socket. The DULServer runs in a thread, polling TCP socket
+for incoming messages and sending messages from user queue.
+Underlying logic of the service is implemented via state machine that is
+described in DICOM standard.
+
+In most of the cases you would not need to access
+:class:`~netdicom2.dulprovider.DULServiceProvider` directly, but rather would
+use higher level objects like sub-classes of
+:class:`~netdicom2.asceprovider.Association` or various services.
 """
 
 import collections
 
 import threading
 import socket
-import time
-import os
 import select
 import Queue
-import logging
 import struct
 
 import netdicom2.timer as timer
@@ -29,10 +33,7 @@ import netdicom2.pdu as pdu
 import netdicom2.exceptions as exceptions
 
 
-logger = logging.getLogger(__name__)
-
-
-def recv_n(sock, n):
+def _recv_n(sock, n):
     ret = []
     read_length = 0
     while read_length < n:
@@ -66,144 +67,150 @@ PDU_TO_EVENT = {
 
 
 class DULServiceProvider(threading.Thread):
-    def __init__(self, socket_=None, port=None, name=''):
+    """Implements DUL service.
+
+    This class is responsible for low-level operations with incoming and
+    outgoing PDUs.
+
+    Service can be initialized by providing open socket that service would
+    use for sending and receiving PDUs. In case if socket is not provider
+    service opens a client socket by itself when sending
+    :class:`~netdicom2.pdu.AAssociateRqPDU` instance.
+
+    Underlying implementation relies on state machine that is defined in :doc:`fsm`
+
+    """
+
+    def __init__(self, dul_socket=None):
+        """Initializes DUL service.
+
+        If no socket is provided service will act as 'client' and will open
+        new client socket when sending :class:`~netdicom2.pdu.AAssociateRqPDU`
+        instance.
+
+        :param dul_socket: remote client socket that will be used to send and
+                           receive PDUs.
         """
-        Three ways to call DULServiceProvider. If a port number is given,
-        the DUL will wait for incoming connections on this port. If a socket
-        is given, the DUL will use this socket as the client socket. If none
-        is given, the DUL will not be able to accept connections (but will
-        be able to initiate them.)
-        """
+        super(DULServiceProvider, self).__init__()
 
-        if socket_ and port:
-            raise RuntimeError('Cannot have both socket and port')
-
-        super(DULServiceProvider, self).__init__(name=name)
-
-        # current primitive and pdu
-        self.primitive = None
-        self.pdu = None
+        self.primitive = None  # current pdu
         self.event = collections.deque()
-        # These variables provide communication between the DUL service
-        # user and the DUL service provider. An event occurs when the DUL
-        # service user writes the variable self.from_service_user.
-        # A primitive is sent to the service user when the DUL service provider
-        # writes the variable self.to_service_user.
-        # The "None" value means that nothing happens.
+
         self.to_service_user = Queue.Queue()
         self.from_service_user = Queue.Queue()
 
         # Setup the timer and finite state machines
         self.timer = timer.Timer(10)
         self.state_machine = fsm.StateMachine(self)
+        self._is_killed = threading.Event()
 
-        if socket_:
-            # A client socket has been given. Generate an event 5
+        if dul_socket:  # A client socket has been given. Generate an event 5
             self.event.append('Evt5')
-            self.remote_client_socket = socket_
-            self.remote_connection_address = None
-            self.local_server_socket = None
-        elif port:
-            # Setup the remote server socket
-            # This is the socket that will accept connections
-            # from the remote DUL provider
-            # start this instance of DULServiceProvider in a thread.
-            self.local_server_socket = socket.socket(socket.AF_INET,
-                                                     socket.SOCK_STREAM)
-            self.local_server_socket.setsockopt(socket.SOL_SOCKET,
-                                                socket.SO_REUSEADDR, 1)
 
-            self.local_server_port = port
-            if self.local_server_port:
-                try:
-                    self.local_server_socket.bind((
-                        os.popen('hostname').read()[:-1],
-                        self.local_server_port))
-                except IOError:
-                    logger.exception("Failed to bind socket")
-                self.local_server_socket.listen(1)
-            else:
-                self.local_server_socket = None
-            self.remote_client_socket = None
-            self.remote_connection_address = None
-        else:
-            # No port nor socket
-            self.local_server_socket = None
-            self.remote_client_socket = None
-            self.remote_connection_address = None
+        self.dul_socket = dul_socket
 
         self.is_killed = False
         self.start()
 
-    def kill(self):
-        """Immediately interrupts the thread"""
-        self.is_killed = True
+    def send(self, primitive):
+        """Puts PDU into outgoing queue.
+
+        .. note::
+
+            PDU is not immediately written into the socket, but rather put into
+            queue that is processed by service event loop.
+
+        :param primitive: outgoing PDU. Possible PDU types are described
+                          in :doc:`pdu`
+        """
+        self.from_service_user.put(primitive)
+
+    def receive(self, timeout):
+        """Tries to get PDU from incoming queue.
+
+        If timeout is exceeded method
+        rises :class:`~netdicom2.exceptions.TimeoutError` exception.
+
+        :param timeout: the amount of seconds method waits for PDU to appear
+                        in incoming queue
+        :return: PDU instance. Possible PDU types are described
+                 in :doc:`pdu`
+        :raise exceptions.TimeoutError: If specified timeout is exceeded
+        """
+        try:
+            return self.to_service_user.get(timeout=timeout)
+        except Queue.Empty:
+            raise exceptions.TimeoutError()
 
     def stop(self):
-        """Interrupts the thread if state is "Sta1" """
+        """Tries to stop service for idle association.
+
+        If association is not in idle state, method will return ``False`` and
+        association will not be stopped.
+
+        :return: ``True`` if service termination flag was successfully set
+                 (current association state was 'idle'), ``False`` otherwise
+        """
         if self.state_machine.current_state == 'Sta1':
             self.is_killed = True
             return True
         else:
             return False
 
-    def send(self, params):
-        self.from_service_user.put(params)
+    def kill(self):
+        """Sets termination flag for event loop and waits for thread to exit."""
+        self.is_killed = True
+        self._is_killed.wait()
 
-    def receive(self, wait=False, timeout=None):
-        # if not self.remote_client_socket: return None
+    def run(self):
         try:
-            tmp = self.to_service_user.get(wait, timeout)
-            return tmp
-        except Queue.Empty:
-            return None
+            while not self.is_killed:
+                self._check_network() or self._check_outgoing_pdu() or\
+                    self._check_timer()
+                try:
+                    evt = self.event.popleft()
+                except IndexError:
+                    continue
+                self.state_machine.action(evt, self)
+        except Exception:
+            self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
+            raise
+        finally:
+            self._is_killed.set()
 
-    def check_incoming_pdu(self):
-        # There is something to read
-        try:
-            raw_pdu = self.remote_client_socket.recv(1)
-        except socket.error:
-            self.event.append('Evt17')
-            self.remote_client_socket.close()
-            self.remote_client_socket = None
-            return
+    def _check_network(self):
+        if self.state_machine.current_state == 'Sta13':
+            # waiting for connection to close
+            if self.dul_socket is None:
+                return False
 
-        if raw_pdu == '':
-            # Remote port has been closed
-            self.event.append('Evt17')
-            self.remote_client_socket.close()
-            self.remote_client_socket = None
-            return
-        else:
-            res = recv_n(self.remote_client_socket, 1)
-            raw_pdu += res
-            length = recv_n(self.remote_client_socket, 4)
-            raw_pdu += length
-            length = struct.unpack('>L', length)
-            tmp = recv_n(self.remote_client_socket, length[0])
-            raw_pdu += tmp
-
-            # Determine the type of PDU coming on remote port and set the event
-            # accordingly
+            # wait for remote connection to close
             try:
-                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
-                self.pdu = pdu_type.decode(raw_pdu)
-                self.event.append(event)
-                self.primitive = self.pdu
-            except KeyError:
-                logger.error('Unrecognized or invalid PDU')
-                self.event.append('Evt19')
+                while self.dul_socket.recv(1) != '':
+                    continue
+            except socket.error:
+                return False
 
-    def check_timer(self):
-        if self.timer.check() is False:
-            logger.debug('%s: timer expired', self.name)
-            self.event.append('Evt18')  # Timer expired
+            self.dul_socket.close()
+            self.dul_socket = None
+            self.event.append('Evt17')
+            return True
+
+        if not self.dul_socket:
+            return False
+
+        if self.state_machine.current_state == 'Sta4':
+            self.event.append('Evt2')
+            return True
+
+        # check if something comes in the client socket
+        if select.select([self.dul_socket], [], [], 0.05)[0]:
+            self._check_incoming_pdu()
             return True
         else:
             return False
 
-    def check_incoming_primitive(self):
-        # look at self.ReceivePrimitive for incoming primitives
+    def _check_outgoing_pdu(self):
         try:
             self.primitive = self.from_service_user.get(False, None)
             self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
@@ -215,56 +222,43 @@ class DULServiceProvider(threading.Thread):
         except Queue.Empty:
             return False
 
-    def check_network(self):
-        if self.state_machine.current_state == 'Sta13':
-            # wainting for connection to close
-            if self.remote_client_socket is None:
-                return False
-            # wait for remote connection to close
-            try:
-                while self.remote_client_socket.recv(1) != '':
-                    continue
-            except socket.error:
-                return False
-            self.remote_client_socket.close()
-            self.remote_client_socket = None
-            self.event.append('Evt17')
+    def _check_timer(self):
+        if self.timer.check() is False:
+            self.event.append('Evt18')  # Timer expired
             return True
-        if self.local_server_socket and not self.remote_client_socket:
-            # local server is listening
-            a, _, _ = select.select([self.local_server_socket], [], [], 0)
-            if a:
-                # got an incoming connection
-                self.remote_client_socket, \
-                    address = self.local_server_socket.accept()
-                self.event.append('Evt5')
-                return True
-        elif self.remote_client_socket:
-            if self.state_machine.current_state == 'Sta4':
-                self.event.append('Evt2')
-                return True
-            # check if something comes in the client socket
-            a, _, _ = select.select([self.remote_client_socket], [], [], 0)
-            if a:
-                self.check_incoming_pdu()
-                return True
         else:
             return False
 
-    def run(self):
-        logger.debug('%s: DUL loop started', self.name)
+    def _check_incoming_pdu(self):
+        # There is something to read
         try:
-            while not self.is_killed:
-                time.sleep(0.001)
-                # catch an event
-                self.check_network() or self.check_incoming_primitive() or\
-                    self.check_timer()
-                try:
-                    evt = self.event.popleft()
-                except IndexError:
-                    continue
-                self.state_machine.action(evt, self)
-        except Exception:
-            self.event.append(pdu.AAbortPDU(source=0, reason_diag=0))
-            raise
-        logger.debug('%s: DUL loop ended', self.name)
+            raw_pdu = self.dul_socket.recv(1)
+        except socket.error:
+            self.event.append('Evt17')
+            self.dul_socket.close()
+            self.dul_socket = None
+            return
+
+        if raw_pdu == '':
+            # Remote port has been closed
+            self.event.append('Evt17')
+            self.dul_socket.close()
+            self.dul_socket = None
+            return
+        else:
+            res = _recv_n(self.dul_socket, 1)
+            raw_pdu += res
+            length = _recv_n(self.dul_socket, 4)
+            raw_pdu += length
+            length = struct.unpack('>L', length)
+            tmp = _recv_n(self.dul_socket, length[0])
+            raw_pdu += tmp
+
+            # Determine the type of PDU coming on remote port and set the event
+            # accordingly
+            try:
+                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
+                self.primitive = pdu_type.decode(raw_pdu)
+                self.event.append(event)
+            except KeyError:
+                self.event.append('Evt19')
