@@ -87,13 +87,15 @@ def value_or_none(elem):
 
 
 def chunks(seq, size):
-    return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+    l = len(seq)
+    return ((seq[pos:pos + size], True if pos + size < l else False)
+            for pos in xrange(0, l, size))
 
 
 def fragment(data_set, max_pdu_length, normal, last):
     maxsize = max_pdu_length - 6
-    for chunk in chunks(data_set, maxsize):
-        yield chunk, normal if len(chunk) == maxsize else last
+    for chunk, has_next in chunks(data_set, maxsize):
+        yield chunk, normal if has_next else last
 
 
 def fragment_file(f, max_pdu_length, normal, last):
@@ -102,7 +104,11 @@ def fragment_file(f, max_pdu_length, normal, last):
         chunk = f.read(maxsize)
         if not chunk:
             break
-        yield chunk, normal if len(chunk) == maxsize else last
+        has_next = f.read(1)
+        if has_next:
+            f.seek(-1, 1)
+
+        yield chunk, normal if has_next else last
 
 
 def dimse_property(tag):

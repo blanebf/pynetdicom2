@@ -80,7 +80,7 @@ class Association(object):
 
     def send(self, dimse_msg, pc_id):
         dimse_msg.set_length()
-        for p_data in dimse_msg.encode(pc_id, self.ae.max_pdu_length):
+        for p_data in dimse_msg.encode(pc_id, self.max_pdu_length):
             self.dul.send(p_data)
 
     def receive(self):
@@ -173,7 +173,7 @@ class Association(object):
     def release(self):
         """Releases association.
 
-        Requests the release of the associations and waits for
+        Requests the release of the association and waits for
         confirmation
 
         :rtype : None
