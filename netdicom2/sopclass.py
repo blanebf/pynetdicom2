@@ -534,7 +534,7 @@ def qr_get_scu(asce, ctx, ds, msg_id):
     First of all you should remember that C-STORE request messages are received
     in current association (unlike when you are using C-MOVE), so remember
     to add proper presentation context for expected object(s).
-    Second, it is strongly advised you add presentation contexts to your AE
+    Second, it is strongly recommended to add presentation contexts to your AE
     with ``store_in_file`` set to ``True``, unless you are expecting something
     small like Structure Report documents.
     Upon receiving datasets service would call ``on_receive_store`` method of
