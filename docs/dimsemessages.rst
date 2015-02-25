@@ -1,5 +1,5 @@
 DIMSE Messages
-=====================
+==============
 
 .. automodule:: netdicom2.dimsemessages
 	:members:

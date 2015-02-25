@@ -58,7 +58,14 @@ class AEBase(object):
 
     This class is intended for sub-classing and should not be used directly.
     Use :class:`~netdicom2.applicationentity.ClientAE` or
-    :class:`~netdicom2.applicationentity.AE`
+    :class:`~netdicom2.applicationentity.AE` instead
+
+    Class provides common API for application entities, such as:
+        * requesting association
+        * adding services as SCU
+        * handful of useful public properties (presentation context definition
+          list, supported transfer syntax list, maximum pdu size)
+
     """
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
@@ -288,19 +295,18 @@ class AEBase(object):
 class ClientAE(AEBase):
     """Simple SCU-only application entity.
 
-    Use this class if you only intent to use SCUs service roles. This AE won't
+    Use this class if you only intend to use SCUs service roles. This AE won't
     handle any incoming connections.
+
+    :param ae_title: AE title (up to 16 characters)
+    :param supported_ts: list of supported transfer syntaxes. If you are
+                         using Storage or Q/R C-GET services be sure to
+                         add only transfer syntax of the expected dataset.
+    :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
     """
     def __init__(self, ae_title, supported_ts=None,
                  max_pdu_length=65536):
-        """Initializes new ClientAE instance
-
-        :param ae_title: AE title (up to 16 characters)
-        :param supported_ts: list of supported transfer syntaxes. If you are
-                             using Storage or Q/R C-GET services be sure to
-                             add only transfer syntax of the expected dataset.
-        :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
-        """
+        """Initializes new ClientAE instance"""
         super(ClientAE, self).__init__(supported_ts, max_pdu_length)
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
 
@@ -309,7 +315,7 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
     """Represents a DICOM application entity based on
     ``SocketServer.ThreadingTCPServer``
 
-    Unlike :class:`~netdicom2.applicationentity.ClientAE` this one is full
+    Unlike :class:`~netdicom2.applicationentity.ClientAE` this one is fully
     functional application entity that can take on both SCU and SCP roles.
     For convenience :class:`~netdicom2.applicationentity.AE` supports context
     manager interface so it can be used like this::
@@ -321,16 +327,15 @@ class AE(AEBase, SocketServer.ThreadingTCPServer):
             pass  # AE is running and accepting connection.
 
     Upon exiting context AE is stopped.
+
+    :param ae_title: AE title (up to 16 characters)
+    :param port: port that AE listens on for incoming connection
+    :param supported_ts: list of transfer syntaxes supported by AE
+    :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
     """
 
     def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=65536):
-        """Initializes new AE instance.
-
-        :param ae_title: AE title (up to 16 characters)
-        :param port: port that AE listens on for incoming connection
-        :param supported_ts: list of transfer syntaxes supported by AE
-        :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
-        """
+        """Initializes new AE instance."""
         SocketServer.ThreadingTCPServer.__init__(
             self,
             ('', port),
