@@ -66,9 +66,33 @@ class AEBase(object):
         * handful of useful public properties (presentation context definition
           list, supported transfer syntax list, maximum pdu size)
 
+    :ivar supported_ts:  Set of transfer syntaxes supported by this
+                         application entity. This attribute defaults to
+                         :attr:`~netdicom2.applicationentity.AEBase.default_ts`.
+    :ivar timeout: Connection timeout in seconds. Default value is 15.
+    :ivar max_pdu_length: Maximum size of PDU in bytes.
+    :ivar supported_scu: Dictionary that maps Abstract syntax UIDs to specific
+                         services that are support in SCU role.
+                         This attribute is populated by adding services using
+                         :meth:`~netdicom2.applicationentity.AEBase.add_scu`
+                         method.
+                         This attribute is intended for **read-only** use
+                         by class clients.
+
+    :ivar supported_scp: Dictionary that maps Abstract syntax UIDs to
+                         specific services that are support in SCP role.
+                         This attribute is populated by adding services using
+                         :meth:`~netdicom2.applicationentity.AE.add_scp` method
+                         of the full AE class
+                         This attribute is intended for **read-only** use by
+                         class clients.
+
     """
     default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
                   ExplicitVRBigEndian]
+    """
+    Default list of supported transfer syntaxes.
+    """
 
     def __init__(self, supported_ts, max_pdu_length):
         if supported_ts is None:
