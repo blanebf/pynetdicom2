@@ -32,8 +32,8 @@ class MaximumLengthSubItem(object):
 
         This item has a fixed length of 8, so method always returns 8 regardless
         of specific instance
-        :rtype : int
-        :return: item total length
+        :rtype int
+        :return item total length
         """
         return 0x08
 
@@ -46,9 +46,9 @@ class MaximumLengthSubItem(object):
     def decode(cls, stream):
         """Decodes maximum length sub-item from data stream
 
-        :rtype : MaximumLengthSubItem
+        :rtype MaximumLengthSubItem
         :param stream: raw data stream
-        :return: decoded maximum length sub-item
+        :return decoded maximum length sub-item
         """
         _, reserved, item_length, \
             maximum_length_received = cls.item_format.unpack(stream.read(8))
@@ -207,18 +207,17 @@ class SOPClassExtendedNegotiationSubItem(object):
     Extended Negotiation.
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
+
+    :param sop_class_uid: service's SOP Class UID
+    :param app_info: application information specific to Service Class
+    :param reserved: reserved field, defaults to 0x00. In most cases you
+                     should not change it's value or check it
     """
     item_type = 0x56
     header = struct.Struct('>B B H H')
 
     def __init__(self, sop_class_uid, app_info, reserved=0x00):
-        """Initializes new sub item instance
-
-        :param sop_class_uid: service's SOP Class UID
-        :param app_info: application information specific to Service Class
-        :param reserved: reserved field, defaults to 0x00. In most cases you
-        should not change it's value or check it
-        """
+        """Initializes new sub item instance"""
         self.reserved = reserved
         self.sop_class_uid = sop_class_uid
         self.app_info = app_info
@@ -271,25 +270,24 @@ class UserIdentityNegotiationSubItem(object):
 
     Passes user identification information based on login (and password) or
     kerberos service ticket
+
+    :param primary_field: user name or kerberos ticket depending on
+                          value of `user_identity_type`
+    :param secondary_field: password. Used only if `user_identity_type` has
+                           value of 2
+    :param user_identity_type: type of user identification. Defaults to 2
+                               which is username/password identification
+    :param positive_response_req: 0 - no response requested,
+                                  1 - positive response requested
+    :param reserved: reserved field, defaults to 0x00. In most cases you
+                     should not change it's value or check it
     """
     item_type = 0x58
     header = struct.Struct('>B B H B B H')
 
     def __init__(self, primary_field, secondary_field='', user_identity_type=2,
                  positive_response_req=0, reserved=0x00):
-        """Initializes new sub item instance
-
-        :param primary_field: user name or kerberos ticket depending on
-        value of `user_identity_type`
-        :param secondary_field: password. Used only if `user_identity_type` has
-        value of 2
-        :param user_identity_type: type of user identification. Defaults to 2
-        which is username/password identification
-        :param positive_response_req: 0 - no response requested,
-        1 - positive response requested
-        :param reserved: reserved field, defaults to 0x00. In most cases you
-        should not change it's value or check it
-        """
+        """Initializes new sub item instance"""
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
         self.positive_response_req = positive_response_req
@@ -356,18 +354,17 @@ class UserIdentityNegotiationSubItemAc(object):
 
     Server response (accept) user identification sub-item. This item is
     expected only if `positive_response_req` was set to 1 in request sub-item.
+
+    :param server_response: kerberos service ticket or SAML response,
+                            depending on requested user identification type
+    :param reserved: reserved field, defaults to 0x00. In most cases you
+                     should not change it's value or check it
     """
     item_type = 0x59
     header = struct.Struct('>B B H H')
 
     def __init__(self, server_response, reserved=0x00):
-        """Initializes new response sub-item
-
-        :param server_response: kerberos service ticket or SAML response,
-        depending on requested user identification type
-        :param reserved: reserved field, defaults to 0x00. In most cases you
-        should not change it's value or check it
-        """
+        """Initializes new response sub-item"""
         self.reserved = reserved  # byte
         self.server_response = server_response  # string
 
@@ -452,7 +449,7 @@ class GenericUserDataSubItem(object):
 
         User data value is left in raw string format. The Application Entity
         is responsible for dealing with it.
-        :rtype : GenericUserDataSubItem
+
         :param stream: raw data stream
         :return: decoded generic data sub-item
         """
