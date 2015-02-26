@@ -37,8 +37,9 @@ PREAMBLE = b"\0" * 128
 def write_meta(fp, command_set, ts):
     """Writes file meta information.
 
-    This is a small utility function can be useful when overriding ``get_file``
-    method of :class:`~netdicom2.applicationentity.AEBase`
+    This is a small utility function that can be useful when overriding
+    :meth:`~netdicom2.applicationentity.AEBase.get_file` method of the
+    :class:`~netdicom2.applicationentity.AEBase` class
 
     :param fp: file or file-like object where dataset will be stored
     :param command_set: command dataset of received message
