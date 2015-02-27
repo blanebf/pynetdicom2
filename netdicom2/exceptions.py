@@ -3,6 +3,7 @@
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
+
 """
 Module contains all exception class that are used in this package.
 
@@ -10,16 +11,16 @@ NetDICOMError serves as base exception class.
 
 The class hierarchy for exceptions is:
 
-Exception
- +-- NetDICOMError
-      +-- ClassNotSupportedError
-      +-- PDUProcessingError
-      +-- DIMSEProcessingError
-      +-- AssociationError
-           +-- AssociationRejectedError
-           +-- AssociationReleasedError
-           +-- AssociationAbortedError
-      +-- EventHandlingError
+| Exception
+| +-- NetDICOMError
+|      +-- ClassNotSupportedError
+|      +-- PDUProcessingError
+|      +-- DIMSEProcessingError
+|      +-- AssociationError
+|           +-- AssociationRejectedError
+|           +-- AssociationReleasedError
+|           +-- AssociationAbortedError
+|      +-- EventHandlingError
 
 """
 
@@ -28,11 +29,7 @@ class NetDICOMError(Exception):
     """Base class for all library specific exceptions exception."""
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(NetDICOMError, self).__init__(*args, **kwargs)
 
 
@@ -41,11 +38,7 @@ class ClassNotSupportedError(NetDICOMError):
     application entity."""
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(ClassNotSupportedError, self).__init__(*args, **kwargs)
 
 
@@ -56,11 +49,7 @@ class PDUProcessingError(NetDICOMError):
     """
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(PDUProcessingError, self).__init__(*args, **kwargs)
 
 
@@ -72,11 +61,7 @@ class DIMSEProcessingError(NetDICOMError):
     """
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(DIMSEProcessingError, self).__init__(*args, **kwargs)
 
 
@@ -88,61 +73,72 @@ class AssociationError(NetDICOMError):
     """
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(AssociationError, self).__init__(*args, **kwargs)
 
 
 class AssociationRejectedError(AssociationError):
     """Raised when remote application entity has rejected
     requested association.
+
     Exception has 3 instance attributes to indicate why association was
     rejected:
+
         * Result,
         * Source,
         * Reason/Diag
-    as  described in PS 3.8 (9.3.4 A-ASSOCIATE-RJ PDU STRUCTURE)."""
+
+    as described in PS 3.8 (9.3.4 A-ASSOCIATE-RJ PDU STRUCTURE).
+
+    For convenience the following documentation has quotes from DICOM
+    standard (2011) explaining possible values of the exception attributes
+    and their meaning.
+
+    :param result: 1 - rejected-permanent or  2 - rejected-transient
+    :param source: This Source field shall contain an integer value
+                   encoded as an unsigned binary number.
+                   One of the following values shall be used:
+
+                        * 1 - DICOM UL service-user
+                        * 2 - DICOM UL service-provider
+                          (ACSE related function)
+                        * 3 - DICOM UL service-provider
+                          (Presentation related function)
+
+    :param diagnostic: This field shall contain an integer value encoded
+                       as an unsigned binary number. If the Source field has the
+                       value
+                       (1) DICOM UL service-user, it shall take one of the
+                       following:
+
+                            * 1 - no-reason-given
+                            * 2 - application-context-name-not-supported
+                            * 3 - calling-AE-title-not-recognized
+                            * 4-6 - reserved
+                            * 7 - called-AE-title-not-recognized
+                            * 8-10 - reserved
+
+                       If the Source field has the value (2) DICOM UL service
+                       provided (ACSE related function), it shall take one of
+                       the following:
+
+                            * 1 - no-reason-given
+                            * 2 - protocol-version-not-supported
+
+                       If the Source field has the value (3) DICOM UL service
+                       provided (Presentation related function), it shall take
+                       one of the following:
+
+                            * 0 - reserved
+                            * 1 - temporary-congestion
+                            * 2 - local-limit-exceeded
+                            * 3-7 - reserved
+
+    """
 
     def __init__(self, result, source, diagnostic, *args, **kwargs):
-        """Overrides base exception initialization
+        """Overrides base exception initialization."""
 
-        For convenience the following documentation has quotes from DICOM
-        standard (2011) explaining possible values of the exception attributes
-        and their meaning
-
-        :param result: 1 - rejected-permanent or  2 - rejected-transient
-        :param source: This Source field shall contain an integer value
-        encoded as an unsigned binary number.
-        One of the following values shall be used:
-            * 1 - DICOM UL service-user
-            * 2 - DICOM UL service-provider (ACSE related function)
-            * 3 - DICOM UL service-provider
-                 (Presentation related function)
-        :param diagnostic: This field shall contain an integer value encoded
-        as an unsigned binary number. If the Source field has the value
-        (1) DICOM UL service-user, it shall take one of the following:
-            * 1 - no-reason-given
-            * 2 - application-context-name-not-supported
-            * 3 - calling-AE-title-not-recognized
-            * 4-6 - reserved
-            * 7 - called-AE-title-not-recognized
-            * 8-10 - reserved
-        If the Source field has the value (2) DICOM UL service provided
-        (ACSE related function), it shall take one of the following:
-            * 1 - no-reason-given
-            * 2 - protocol-version-not-supported
-        If the Source field has the value (3) DICOM UL service provided
-        (Presentation related function), it shall take one of the following:
-            * 0 - reserved
-            * 1 - temporary-congestion
-            * 2 - local-limit-exceeded
-            * 3-7 - reserved
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
         super(AssociationRejectedError, self).__init__(*args, **kwargs)
         self.result = result
         self.source = source
@@ -150,29 +146,22 @@ class AssociationRejectedError(AssociationError):
 
 
 class AssociationReleasedError(AssociationError):
-    """Raised when remote application entity has released active
-    association."""
+    """Raised when remote application entity has released active association."""
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(AssociationReleasedError, self).__init__(*args, **kwargs)
 
 
 class AssociationAbortedError(AssociationError):
-    """Raised when remote application entity has aborted association."""
+    """Raised when remote application entity has aborted association.
+
+    :param source:
+    :param reason_diag:
+    """
 
     def __init__(self, source, reason_diag, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param source:
-        :param reason_diag
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(AssociationAbortedError, self).__init__(*args, **kwargs)
         self.source = source
         self.reason_diag = reason_diag
@@ -194,9 +183,5 @@ class EventHandlingError(NetDICOMError):
     it."""
 
     def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization
-
-        :param args: positional arguments
-        :param kwargs: keyword arguments
-        """
+        """Overrides base exception initialization."""
         super(EventHandlingError, self).__init__(*args, **kwargs)

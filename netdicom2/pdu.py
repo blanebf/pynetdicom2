@@ -17,13 +17,13 @@ has only two methods:
 In addition to PDUs, several items and sub-items classes can be found in this
 module. These classes are:
 
-        :class:`~netdicom2.pdu.ApplicationContextItem`
-        :class:`~netdicom2.pdu.PresentationContextItemRQ`
-        :class:`~netdicom2.pdu.AbstractSyntaxSubItem`
-        :class:`~netdicom2.pdu.TransferSyntaxSubItem`
-        :class:`~netdicom2.pdu.UserInformationItem`
-        :class:`~netdicom2.pdu.PresentationContextItemAC`
-        :class:`~netdicom2.pdu.PresentationDataValueItem`
+        * :class:`~netdicom2.pdu.ApplicationContextItem`
+        * :class:`~netdicom2.pdu.PresentationContextItemRQ`
+        * :class:`~netdicom2.pdu.AbstractSyntaxSubItem`
+        * :class:`~netdicom2.pdu.TransferSyntaxSubItem`
+        * :class:`~netdicom2.pdu.UserInformationItem`
+        * :class:`~netdicom2.pdu.PresentationContextItemAC`
+        * :class:`~netdicom2.pdu.PresentationDataValueItem`
 
 The rest sub-items for User Data Information Item can be found at
 :doc:`userdataitems`.
@@ -89,11 +89,9 @@ class AAssociatePDUBase(object):
     def decode(cls, rawstring):
         """Factory method. Decodes A-ASSOCIATE-RQ PDU instance from raw string.
 
-        :rtype : AAssociateRqPDU
         :param rawstring: rawstring containing binary representation of the
         A-ASSOCIATE-RQ PDU
-        :return: decoded PDU
-        :raise RuntimeError:
+        :return decoded PDU
         """
         def iter_items():
             item_type = next_type(stream)
@@ -129,8 +127,12 @@ class AAssociatePDUBase(object):
 
 
 class AAssociateRqPDU(AAssociatePDUBase):
-    """This class represents the A-ASSOCIATE-RQ PDU"""
+    """This class represents the A-ASSOCIATE-RQ PDU
+
+    Refer to DICOM PS3.8 9.3.2 for A-ASSOCIATE-RQ structure and fields"""
+
     pdu_type = 0x01
+    """PDU Type"""
 
     def __repr__(self):
         return 'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", ' \
@@ -142,8 +144,12 @@ class AAssociateRqPDU(AAssociatePDUBase):
 
 
 class AAssociateAcPDU(AAssociatePDUBase):
-    """This class represents the A-ASSOCIATE-AC PDU"""
+    """This class represents the A-ASSOCIATE-AC PDU
+
+    Refer to DICOM PS3.8 9.3.3 for A-ASSOCIATE-AC structure and fields"""
+
     pdu_type = 0x02
+    """PDU Type"""
 
     def __repr__(self):
         return 'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", ' \
@@ -155,26 +161,34 @@ class AAssociateAcPDU(AAssociatePDUBase):
 
 
 class AAssociateRjPDU(object):
-    """This class represents the A-ASSOCIATE-RJ PDU (PS 3.8 9.3.4)"""
+    """This class represents the A-ASSOCIATE-RJ PDU (PS 3.8 9.3.4)
+
+    You can look up possible values for fields in DICOM standard
+    (referenced above) or in documentation for
+    :class:`~netdicom2.exceptions.AssociationRejectedError`
+
+    :param result: Result PDU field. (unsigned byte)
+    :param source: Source PDU field (unsigned byte)
+    :param reason_diag: Reason/Diag. PDU field (unsigned byte)
+    :param reserved1: Reserved field, defaults to 0 (unsigned byte)
+    :param reserved2: Reserved field, defaults to 0 (unsigned byte)
+    """
+
     pdu_type = 0x03
-    pdu_length = 4  # PDU has fixed length
+    """PDU Type"""
+
+    pdu_length = 4
+    """This PDU has fixed length of 4 bytes"""
+
     format = struct.Struct('>B B I B B B B')
 
     def __init__(self, result, source, reason_diag, reserved1=0x00,
                  reserved2=0x00):
-        """Initializes new ASSOCIATE-RJ PDU with specified field values
-        as described in PS 3.8 9.3.4.
-
-        You can look up possible values for fields in DICOM standard
-        (referenced above) or in documentation for
-        `netdicom2.exceptions.AssociationRejectedError`
-
-        :param result: Result PDU field. (unsigned byte)
-        :param source: Source PDU field (unsigned byte)
-        :param reason_diag: Reason/Diag. PDU field (unsigned byte)
-        :param reserved1: Reserved field, defaults to 0 (unsigned byte)
-        :param reserved2: Reserved field, defaults to 0 (unsigned byte)
         """
+        Initializes new ASSOCIATE-RJ PDU with specified field values
+        as described in PS 3.8 9.3.4.
+        """
+
         self.reserved1 = reserved1
         self.reserved2 = reserved2
         self.result = result
@@ -189,7 +203,6 @@ class AAssociateRjPDU(object):
     def encode(self):
         """Converts PDU class to its binary representation
 
-        :rtype : str
         :return: PDU as a string of bytes
         """
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
@@ -200,9 +213,8 @@ class AAssociateRjPDU(object):
     def decode(cls, rawstring):
         """Factory method. Decodes A-ASSOCIATE-RJ PDU instance from raw string.
 
-        :rtype : AAssociateRjPDU
         :param rawstring: rawstring containing binary representation of the
-        A-ASSOCIATE-RJ PDU
+                          A-ASSOCIATE-RJ PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
@@ -217,14 +229,20 @@ class AAssociateRjPDU(object):
 
         This PDU has a fixed length of 10, so method always returns 10
         regardless of specific instance
+
         :return: PDU total length
         """
         return 10
 
 
 class PDataTfPDU(object):
-    """This class represents the P-DATA-TF PDU"""
+    """
+    This class represents the P-DATA-TF PDU (as described in PS 3.8 9.3.5).
+    """
+
     pdu_type = 0x04
+    """PDU Type"""
+
     header = struct.Struct('>B B I')
 
     def __init__(self, data_value_items, reserved=0x00):
@@ -253,9 +271,8 @@ class PDataTfPDU(object):
     def decode(cls, rawstring):
         """Factory method. Decodes P-DATA-TF PDU instance from raw string.
 
-        :rtype : PDataTfPDU
         :param rawstring: rawstring containing binary representation of the
-        P-DATA-TF PDU
+                          P-DATA-TF PDU
         :return: decoded PDU
         """
         def iter_items():
@@ -276,8 +293,11 @@ class PDataTfPDU(object):
 
 class AReleasePDUBase(object):
     """Base class for the A-RELEASE-* PDUs."""
+
     pdu_type = None
-    pdu_length = 0x00000004  # unsigned int
+    pdu_length = 4
+    """Association Release PDUs have fixed length of 4 bytes"""
+
     format = struct.Struct('>B B I I')
 
     def __init__(self, reserved1=0x00, reserved2=0x00):
@@ -310,18 +330,19 @@ class AReleasePDUBase(object):
 
         This PDU has a fixed length of 10, so method always returns 10
         regardless of specific instance
-        :rtype : int
+
         :return: PDU total length
         """
         return 10
 
 
 class AReleaseRqPDU(AReleasePDUBase):
-    """This class represents the A-RELEASE-RQ PDU.
-
-    PS 3.8-2009 9.3.6 A-RELEASE-RQ PDU STRUCTURE
     """
+    This class represents the A-RELEASE-RQ PDU as described in PS 3.8 9.3.6
+    """
+
     pdu_type = 0x05
+    """PDU Type"""
 
     def __repr__(self):
         return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
@@ -329,11 +350,12 @@ class AReleaseRqPDU(AReleasePDUBase):
 
 
 class AReleaseRpPDU(AReleasePDUBase):
-    """This class represents the A-RELEASE-RP PDU.
-
-    PS 3.8-2009 9.3.7 A-RELEASE-RP PDU STRUCTURE
     """
+    This class represents the A-RELEASE-RP PDU as described in PS 3.8 9.3.7
+    """
+
     pdu_type = 0x06
+    """PDU Type"""
 
     def __repr__(self):
         return 'AReleaseRpPDU(reserved1={0}, reserved2={1})'.format(
@@ -341,9 +363,15 @@ class AReleaseRpPDU(AReleasePDUBase):
 
 
 class AAbortPDU(object):
-    """This class represents the A-ABORT PDU"""
+    """
+    This class represents the A-ABORT PDU as described in PS 3.8 9.3.8
+    """
     pdu_type = 0x07
-    pdu_length = 0x00000004  # unsigned int
+    """PDU Type"""
+
+    pdu_length = 4
+    """Association Abort PDU have fixed length of 4 bytes"""
+
     format = struct.Struct('>B B I B B B B')
 
     def __init__(self, source, reason_diag, reserved1=0x00, reserved2=0x00,
@@ -369,9 +397,8 @@ class AAbortPDU(object):
     def decode(cls, rawstring):
         """Factory method. Decodes A-ABORT PDU instance from raw string.
 
-        :rtype : AAbortPDU
         :param rawstring: rawstring containing binary representation of
-        the A-ABORT PDU
+                          the A-ABORT PDU
         :return: decoded PDU
         """
         stream = StringIO(rawstring)
@@ -387,7 +414,7 @@ class AAbortPDU(object):
 
         This PDU has a fixed length of 10, so method always returns 10
         regardless of specific instance
-        :rtype : int
+
         :return: PDU total length
         """
         return 10
@@ -397,7 +424,13 @@ class AAbortPDU(object):
 
 
 class ApplicationContextItem(object):
+    """
+    Application Context Item (PS 3.8 9.3.2.1)
+    """
+
     item_type = 0x10
+    """PDU Item-type"""
+
     header = struct.Struct('> B B H')
 
     def __init__(self, context_name, reserved=0x00):
@@ -420,9 +453,8 @@ class ApplicationContextItem(object):
     def decode(cls, stream):
         """Decodes application context item from data stream
 
-        :rtype : ApplicationContextItem
         :param stream: raw data stream
-        :return decoded item
+        :return: decoded item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
         context_name = stream.read(item_length)
@@ -433,7 +465,13 @@ class ApplicationContextItem(object):
 
 
 class PresentationContextItemRQ(object):
+    """
+    Presentation Context Item (request) PS 3.8 9.3.2.2
+    """
+
     item_type = 0x20
+    """PDU Item-type"""
+
     header = struct.Struct('>B B H B B B B')
 
     def __init__(self, context_id, abs_sub_item, ts_sub_items, reserved1=0x00,
@@ -472,7 +510,6 @@ class PresentationContextItemRQ(object):
     def decode(cls, stream):
         """Decodes presentation context item 'request' from data stream
 
-        :rtype : PresentationContextItemRQ
         :param stream: raw data stream
         :return: decoded context item
         """
@@ -494,7 +531,13 @@ class PresentationContextItemRQ(object):
 
 
 class PresentationContextItemAC(object):
+    """
+    Presentation Context Item (response) PS 3.8 9.3.3.2
+    """
+
     item_type = 0x21
+    """PDU Item-type"""
+
     header = struct.Struct('>B B H B B B B')
 
     def __init__(self, context_id, result_reason, ts_sub_item,
@@ -529,7 +572,6 @@ class PresentationContextItemAC(object):
     def decode(cls, stream):
         """Decodes presentation context item 'accepted' from data stream
 
-        :rtype : PresentationContextItemAC
         :param stream: raw data stream
         :return: decoded context item
         """
@@ -545,7 +587,16 @@ class PresentationContextItemAC(object):
 
 
 class AbstractSyntaxSubItem(object):
+    """
+    Abstract Syntax Sub-Item (PS 3.8 9.3.2.2.1)
+
+    :param name: Abstract Syntax name (UID) as byte string
+    :param reserved: reserved field. In most cases value should be default
+                     (0x00). Standard advises against testing this field value.
+    """
     item_type = 0x30
+    """Item type"""
+
     header = struct.Struct('>B B H')
 
     def __init__(self, name, reserved=0x00):
@@ -569,7 +620,6 @@ class AbstractSyntaxSubItem(object):
     def decode(cls, stream):
         """Decodes abstract syntax sub-item from data stream
 
-        :rtype : AbstractSyntaxSubItem
         :param stream: raw data stream
         :return: decoded abstract syntax sub-item
         """
@@ -582,7 +632,16 @@ class AbstractSyntaxSubItem(object):
 
 
 class TransferSyntaxSubItem(object):
+    """
+    Transfer Syntax Sub-Item (PS 3.8 9.3.2.2.2)
+
+    :param name: Transfer Syntax name (UID) as byte string
+    :param reserved: reserved field. In most cases value should be default
+                     (0x00). Standard advises against testing this field value.
+    """
     item_type = 0x40
+    """Item type"""
+
     header = struct.Struct('>B B H')
 
     def __init__(self, name, reserved=0x00):
@@ -606,7 +665,6 @@ class TransferSyntaxSubItem(object):
     def decode(cls, stream):
         """Decodes transfer syntax sub-item from data stream
 
-        :rtype : TransferSyntaxSubItem
         :param stream: raw data stream
         :return: decoded transfer syntax sub-item
         """
@@ -619,15 +677,24 @@ class TransferSyntaxSubItem(object):
 
 
 class UserInformationItem(object):
+    """
+    User Information Item (PS 3.8 9.3.2.3)
+
+    :param reserved: reserved field. In most cases value should be default
+                     (0x00). Standard advises against testing this field value.
+    :param user_data: list containing the following:
+
+                            * one :class:`~netdicom2.userdataitems.MaximumLengthSubItem`
+                            * zero or more raw strings encoding user data items
+
+    """
     item_type = 0x50
     header = struct.Struct('>B B H')
 
     def __init__(self, user_data, reserved=0x00):
         self.reserved = reserved  # unsigned byte
 
-        #  user_data is a list containing the following:
-        #  1 MaximumLengthItem
-        #  0 or more raw strings encoding user data items
+        #  user_data is a
         self.user_data = user_data
 
     def __repr__(self):
@@ -662,7 +729,6 @@ class UserInformationItem(object):
     def decode(cls, stream):
         """Decodes user information item from data stream
 
-        :rtype : UserInformationItem
         :param stream: raw data stream
         :return: decoded user information item
         """
@@ -702,7 +768,7 @@ class PresentationDataValueItem(object):
 
         Presentation data value is left in raw string format.
         The Application Entity is responsible for dealing with it.
-        :rtype : PresentationDataValueItem
+
         :param stream: raw data stream
         :return: decoded presentation data value item
         """
