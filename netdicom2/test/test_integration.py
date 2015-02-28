@@ -10,6 +10,8 @@ import dicom.datadict
 import netdicom2.applicationentity as ae
 import netdicom2.sopclass as sc
 
+from netdicom2 import c_find
+
 
 class CEchoTestCase(unittest.TestCase):
     def test_c_echo_positive(self):
@@ -26,19 +28,25 @@ class CEchoTestCase(unittest.TestCase):
                 self.assertEqual(result.status_type, 'Success')
 
 
+class CFindServerAE(ae.AE):
+    def __init__(self, test_name, test, *args, **kwargs):
+        super(CFindServerAE, self).__init__(*args, **kwargs)
+        self.test_name = test_name
+        self.test = test
+
+    def on_receive_find(self, context, ds):
+        self.test.assertEquals(ds.PatientName, self.test_name)
+        rsp = dicom.dataset.Dataset()
+        rsp.PatientName = self.test_name
+        return iter([(rsp, sc.SUCCESS)])
+
+
 class CFindTestCase(unittest.TestCase):
     def test_c_find_positive(self):
-        class CFindServerAE(ae.AE):
-            def on_receive_find(self, context, ds):
-                test.assertEquals(ds.PatientName, test_name)
-                rsp = dicom.dataset.Dataset()
-                rsp.PatientName = test_name
-                return iter([(rsp, sc.SUCCESS)])
-
-        test = self
         test_name = 'Patient^Name^Test'
         ae1 = ae.ClientAE('AET1').add_scu(sc.qr_find_scu)
-        ae2 = CFindServerAE('AET2', 11112).add_scp(sc.qr_find_scp)
+        ae2 = CFindServerAE(test_name, self, 'AET2', 11112)\
+            .add_scp(sc.qr_find_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                              username='admin', password='123')
@@ -49,6 +57,23 @@ class CFindTestCase(unittest.TestCase):
                 for result, status in service(req, 1):
                     self.assertEquals(result.PatientName, test_name)
                     self.assertEquals(status, sc.SUCCESS)
+
+
+class CFindWrapperTestCase(unittest.TestCase):
+    def test_c_find_positive(self):
+        test_name = 'Patient^Name^Test'
+        remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
+                         username='admin', password='123')
+
+        ds = dicom.dataset.Dataset()
+        ds.PatientName = test_name
+
+        ae2 = CFindServerAE(test_name, self, 'AET2', 11112)\
+            .add_scp(sc.qr_find_scp)
+        with ae2:
+            for result, status in c_find(remote_ae, 'AET1', ds):
+                self.assertEquals(result.PatientName, test_name)
+                self.assertEquals(status, sc.SUCCESS)
 
 
 class CStoreAE(ae.AE):
