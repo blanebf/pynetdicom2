@@ -1,9 +1,7 @@
 pynetdicom2
 ===========
 
-.. image:: https://readthedocs.org/projects/pynetdicom2/badge/?version=latest
-:target: https://readthedocs.org/projects/pynetdicom2/?badge=latest
-:alt: Documentation Status
+.. image:: https://readthedocs.org/projects/pynetdicom2/badge/?version=latest :target: https://readthedocs.org/projects/pynetdicom2/?badge=latest :alt: Documentation Status
 
 pynetdicom2 is a pure python package implementing the DICOM network protocol.
 This library is a fork/rewrite of the original pynetdicom that can be found here
