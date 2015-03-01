@@ -27,4 +27,4 @@ Roadmap
 .. |docs| image:: https://readthedocs.org/projects/pynetdicom2/badge/?version=latest
     :alt: Documentation Status
     :scale: 100%
-    :target: https://readthedocs.org/projects/pynetdicom2/?badge=latest
+    :target: http://pynetdicom2.readthedocs.org/en/latest/
