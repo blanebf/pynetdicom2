@@ -29,11 +29,13 @@ The rest sub-items for User Data Information Item can be found at
 :doc:`userdataitems`.
 """
 
+from __future__ import absolute_import
+
 import struct
 from cStringIO import StringIO
 
-import netdicom2.exceptions as exceptions
-import netdicom2.userdataitems as userdataitems
+from . import exceptions
+from . import userdataitems
 
 
 SUB_ITEM_TYPES = {

@@ -6,9 +6,6 @@
 
 
 import time
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class Timer(object):
@@ -18,11 +15,9 @@ class Timer(object):
         self._start_time = None
 
     def start(self):
-        logger.debug("Timer started")
         self._start_time = time.time()
 
     def stop(self):
-        logger.debug("Timer stopped")
         self._start_time = None
 
     def restart(self):
@@ -32,7 +27,6 @@ class Timer(object):
     def check(self):
         if self._start_time and \
                 (time.time() - self._start_time > self._max_seconds):
-            logger.warning("Timer expired")
             return False
         else:
             return True

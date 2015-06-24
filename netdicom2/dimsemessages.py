@@ -20,15 +20,17 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     message). With that said if you are using services from this library you
     should not worry about any kind of message validation.
 """
+from __future__ import absolute_import
+
 import struct
 
 from dicom.dataset import Dataset
 
-import netdicom2.dsutils as dsutils
-import netdicom2.pdu as pdu
-
 import dicom._dicom_dict as dicomdict
 import dicom.datadict
+
+from . import dsutils
+from . import pdu
 
 
 #  pydicom's dictionary misses command tags. Add them.

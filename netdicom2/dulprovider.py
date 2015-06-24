@@ -19,6 +19,8 @@ use higher level objects like sub-classes of
 :class:`~netdicom2.asceprovider.Association` or various services.
 """
 
+from __future__ import absolute_import
+
 import collections
 
 import threading
@@ -27,10 +29,10 @@ import select
 import Queue
 import struct
 
-import netdicom2.timer as timer
-import netdicom2.fsm as fsm
-import netdicom2.pdu as pdu
-import netdicom2.exceptions as exceptions
+from . import timer
+from . import fsm
+from . import pdu
+from . import exceptions
 
 
 def _recv_n(sock, n):

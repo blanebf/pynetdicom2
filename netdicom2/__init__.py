@@ -1,13 +1,14 @@
+from __future__ import absolute_import
+
 import os
 import threading
 
-import __version__
+from . import __version__
 
 __version_info__ = __version__.__version__.split('.')
 
-# some imports
-from netdicom2 import applicationentity
-from netdicom2 import sopclass
+from . import applicationentity
+from . import sopclass
 
 
 _tls = threading.local()

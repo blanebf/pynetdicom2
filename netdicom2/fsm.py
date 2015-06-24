@@ -9,9 +9,11 @@ Implementation of the OSI Upper Layer Services
 DICOM, Part 8, Section 7
 """
 
+from __future__ import absolute_import
+
 import socket
 
-import netdicom2.pdu as pdu
+from . import pdu
 
 # Finite State machine action definitions
 

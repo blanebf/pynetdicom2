@@ -45,15 +45,17 @@ arguments are provided by association and the rest are expected from service
 user.
 """
 
+from __future__ import absolute_import
+
 from dicom.filereader import read_preamble, _read_file_meta_info, read_file
 
 import dicom.UID
 import dicom.dataset
 import dicom.sequence
 
-import netdicom2.dsutils as dsutils
-import netdicom2.exceptions as exceptions
-import netdicom2.dimsemessages as dimsemessages
+from . import dsutils
+from . import exceptions
+from . import dimsemessages
 
 
 class Status(object):

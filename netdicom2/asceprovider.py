@@ -5,6 +5,7 @@
 #    available at http://pynetdicom.googlecode.com
 #
 
+from __future__ import absolute_import
 
 # This module provides association services
 import collections
@@ -15,13 +16,13 @@ import struct
 
 from dicom.UID import UID
 
-import netdicom2.exceptions as exceptions
-import netdicom2.dulprovider as dulprovider
-import netdicom2.dimsemessages as dimsemessages
-import netdicom2.dsutils as dsutils
+from . import exceptions
+from . import dulprovider
+from . import dimsemessages
+from . import dsutils
 
-import netdicom2.pdu as pdu
-import netdicom2.userdataitems as userdataitems
+from . import pdu
+from . import userdataitems
 
 PContextDef = collections.namedtuple(
     'PContextDef',
