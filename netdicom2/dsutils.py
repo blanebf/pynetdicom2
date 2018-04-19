@@ -6,37 +6,30 @@
 #
 
 import cStringIO
-import dicom
 
-if dicom.__version_info__ >= (0, 9, 8):
-    from dicom.filebase import DicomBytesIO
-else:
-    from dicom.filebase import DicomStringIO as DicomBytesIO
-
-from dicom.filereader import read_dataset
-from dicom.filewriter import write_dataset, write_data_element
+from . import _dicom
 
 
 def decode(rawstr, is_implicit_vr, is_little_endian):
     s = cStringIO.StringIO(rawstr)
-    return read_dataset(s, is_implicit_vr, is_little_endian)
+    return _dicom.read_dataset(s, is_implicit_vr, is_little_endian)
 
 
 def encode(ds, is_implicit_vr, is_little_endian):
-    f = DicomBytesIO()
+    f = _dicom.DicomBytesIO()
     f.is_implicit_VR = is_implicit_vr
     f.is_little_endian = is_little_endian
-    write_dataset(f, ds)
+    _dicom.write_dataset(f, ds)
     rawstr = f.parent.getvalue()
     f.close()
     return rawstr
 
 
 def encode_element(el, is_implicit_vr, is_little_endian):
-    f = DicomBytesIO()
+    f = _dicom.DicomBytesIO()
     f.is_implicit_VR = is_implicit_vr
     f.is_little_endian = is_little_endian
-    write_data_element(f, el)
+    _dicom.write_data_element(f, el)
     rawstr = f.parent.getvalue()
     f.close()
     return rawstr

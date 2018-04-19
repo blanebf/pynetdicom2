@@ -24,57 +24,59 @@ from __future__ import absolute_import
 
 import struct
 
-from dicom.dataset import Dataset
-
-import dicom._dicom_dict as dicomdict
-import dicom.datadict
-
 from . import dsutils
 from . import pdu
 
+try:
+    from pydicom.dataset import Dataset
+except ImportError:
+    from dicom.dataset import Dataset
 
-#  pydicom's dictionary misses command tags. Add them.
-dicomdict.DicomDictionary.update({
-    0x00000000: ('UL', '1', 'Command Group Length', '', 'CommandGroupLength'),
-    0x00000002: ('UI', '1', 'Affected SOP Class UID', '',
-                 'AffectedSOPClassUID'),
-    0x00000003: ('UI', '1', 'Requested SOP Class UID', '',
-                 'RequestedSOPClassUID'),
-    0x00000100: ('US', '1', 'Command Field', '', 'CommandField'),
-    0x00000110: ('US', '1', 'Message ID', '', 'MessageID'),
-    0x00000120: ('US', '1', 'Message ID Being Responded To', '',
-                 'MessageIDBeingRespondedTo'),
-    0x00000600: ('AE', '1', 'Move Destination', '', 'MoveDestination'),
-    0x00000700: ('US', '1', 'Priority', '', 'Priority'),
-    0x00000800: ('US', '1', 'DataSet Type', '', 'DataSetType'),
-    0x00000900: ('US', '1', 'Status', '', 'Status'),
-    0x00000901: ('AT', '1', 'Offending Element', '', 'OffendingElement'),
-    0x00000902: ('LO', '1', 'Error Comment', '', 'ErrorComment'),
-    0x00000903: ('US', '1', 'Error ID', '', 'ErrorID'),
-    0x00001000: ('UI', '1', 'Affected SOP Instance UID', '',
-                 'AffectedSOPInstanceUID'),
-    0x00001001: ('UI', '1', 'Requested SOP Instance UID', '',
-                 'RequestedSOPInstanceUID'),
-    0x00001002: ('US', '1', 'Event Type ID', '', 'EventTypeID'),
-    0x00001005: ('AT', '1', 'Attribute Identifier List', '',
-                 'AttributeIdentifierList'),
-    0x00001008: ('US', '1', 'Action Type ID', '', 'ActionTypeID'),
-    0x00001020: ('US', '1', 'Number Of Remaining Sub-operations', '',
-                 'NumberOfRemainingSubOperations'),
-    0x00001021: ('US', '1', 'Number Of Completed Sub-operations', '',
-                 'NumberOfCompletedSubOperations'),
-    0x00001022: ('US', '1', 'Number Of Failed Sub-operations', '',
-                 'NumberOfFailedSubOperations'),
-    0x00001023: ('US', '1', 'Number Of Warning Sub-operations', '',
-                 'NumberOfWarningSubOperations'),
-    0x00001030: ('AE', '1', 'Move Originator Application Entity Title', '',
-                 'MoveOriginatorApplicationEntityTitle'),
-    0x00001031: ('US', '1', 'Move Originator Message ID', '',
-                 'MoveOriginatorMessageID'),
-})
-dicom.datadict.keyword_dict = dict(
-    [(dicom.datadict.dictionary_keyword(tag), tag)
-     for tag in dicomdict.DicomDictionary])
+    import dicom._dicom_dict as dicomdict
+    import dicom.datadict
+
+    #  pydicom's dictionary misses command tags. Add them.
+    dicomdict.DicomDictionary.update({
+        0x00000000: ('UL', '1', 'Command Group Length', '', 'CommandGroupLength'),
+        0x00000002: ('UI', '1', 'Affected SOP Class UID', '',
+                     'AffectedSOPClassUID'),
+        0x00000003: ('UI', '1', 'Requested SOP Class UID', '',
+                     'RequestedSOPClassUID'),
+        0x00000100: ('US', '1', 'Command Field', '', 'CommandField'),
+        0x00000110: ('US', '1', 'Message ID', '', 'MessageID'),
+        0x00000120: ('US', '1', 'Message ID Being Responded To', '',
+                     'MessageIDBeingRespondedTo'),
+        0x00000600: ('AE', '1', 'Move Destination', '', 'MoveDestination'),
+        0x00000700: ('US', '1', 'Priority', '', 'Priority'),
+        0x00000800: ('US', '1', 'DataSet Type', '', 'CommandDataSetType'),
+        0x00000900: ('US', '1', 'Status', '', 'Status'),
+        0x00000901: ('AT', '1', 'Offending Element', '', 'OffendingElement'),
+        0x00000902: ('LO', '1', 'Error Comment', '', 'ErrorComment'),
+        0x00000903: ('US', '1', 'Error ID', '', 'ErrorID'),
+        0x00001000: ('UI', '1', 'Affected SOP Instance UID', '',
+                     'AffectedSOPInstanceUID'),
+        0x00001001: ('UI', '1', 'Requested SOP Instance UID', '',
+                     'RequestedSOPInstanceUID'),
+        0x00001002: ('US', '1', 'Event Type ID', '', 'EventTypeID'),
+        0x00001005: ('AT', '1', 'Attribute Identifier List', '',
+                     'AttributeIdentifierList'),
+        0x00001008: ('US', '1', 'Action Type ID', '', 'ActionTypeID'),
+        0x00001020: ('US', '1', 'Number Of Remaining Sub-operations', '',
+                     'NumberOfRemainingSuboperations'),
+        0x00001021: ('US', '1', 'Number Of Completed Sub-operations', '',
+                     'NumberOfCompletedSuboperations'),
+        0x00001022: ('US', '1', 'Number Of Failed Sub-operations', '',
+                     'NumberOfFailedSuboperations'),
+        0x00001023: ('US', '1', 'Number Of Warning Sub-operations', '',
+                     'NumberOfWarningSuboperations'),
+        0x00001030: ('AE', '1', 'Move Originator Application Entity Title', '',
+                     'MoveOriginatorApplicationEntityTitle'),
+        0x00001031: ('US', '1', 'Move Originator Message ID', '',
+                     'MoveOriginatorMessageID'),
+    })
+    dicom.datadict.keyword_dict = dict(
+        [(dicom.datadict.dictionary_keyword(tag), tag)
+         for tag in dicomdict.DicomDictionary])
 
 
 NO_DATASET = 0x0101
@@ -163,7 +165,7 @@ class DIMSEMessage(object):
         else:
             self.command_set = Dataset()
             self.command_set.CommandField = self.command_field
-            self.command_set.DataSetType = NO_DATASET
+            self.command_set.CommandDataSetType = NO_DATASET
             for field in self.command_fields:
                 setattr(self.command_set, field, '')
 
@@ -176,7 +178,7 @@ class DIMSEMessage(object):
     @data_set.setter
     def data_set(self, value):
         if value:
-            self.command_set.DataSetType = 0x0001
+            self.command_set.CommandDataSetType = 0x0001
         self._data_set = value
 
     def encode(self, pc_id, max_pdu_length):
@@ -280,10 +282,10 @@ class CGetRSPMessage(DIMSEResponseMessage):
     command_field = 0x8010
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
-                      'NumberOfRemainingSubOperations',
-                      'NumberOfCompletedSubOperations',
-                      'NumberOfFailedSubOperations',
-                      'NumberOfWarningSubOperations']
+                      'NumberOfRemainingSuboperations',
+                      'NumberOfCompletedSuboperations',
+                      'NumberOfFailedSuboperations',
+                      'NumberOfWarningSuboperations']
     num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
     num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
     num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
@@ -303,10 +305,10 @@ class CMoveRSPMessage(DIMSEResponseMessage):
     command_field = 0x8021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
-                      'NumberOfRemainingSubOperations',
-                      'NumberOfCompletedSubOperations',
-                      'NumberOfFailedSubOperations',
-                      'NumberOfWarningSubOperations']
+                      'NumberOfRemainingSuboperations',
+                      'NumberOfCompletedSuboperations',
+                      'NumberOfFailedSuboperations',
+                      'NumberOfWarningSuboperations']
     num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
     num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
     num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))

@@ -14,8 +14,7 @@ import time
 import SocketServer
 import struct
 
-from dicom.UID import UID
-
+from . import _dicom
 from . import exceptions
 from . import dulprovider
 from . import dimsemessages
@@ -266,7 +265,7 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
             for ts in proposed_ts:
                 if ts.name in self.ae.supported_ts:
                     rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
-                    ts_uid = UID(ts.name)
+                    ts_uid = _dicom.UID(ts.name)
                     self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop,
                                                       ts_uid)
                     self.accepted_contexts[pc_id] = PContextDef(
@@ -387,7 +386,7 @@ class AssociationRequester(Association):
         for ctx in accepted:
             pc_id = ctx.context_id
             sop_class = pcdl[ctx.context_id].sop_class
-            ts_uid = UID(ctx.ts_sub_item.name)
+            ts_uid = _dicom.UID(ctx.ts_sub_item.name)
             self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
             self.accepted_contexts[pc_id] = PContextDef(pc_id, sop_class,
                                                         ts_uid)

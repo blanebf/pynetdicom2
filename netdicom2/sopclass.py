@@ -47,12 +47,7 @@ user.
 
 from __future__ import absolute_import
 
-from dicom.filereader import read_preamble, _read_file_meta_info, read_file
-
-import dicom.UID
-import dicom.dataset
-import dicom.sequence
-
+from . import _dicom
 from . import dsutils
 from . import exceptions
 from . import dimsemessages
@@ -392,8 +387,8 @@ def storage_scu(asce, ctx, dataset, msg_id):
         # Got file name
         with open(dataset, 'rb') as ds:
             zero = ds.tell()
-            read_preamble(ds, False)
-            meta = _read_file_meta_info(ds)
+            _dicom.read_preamble(ds, False)
+            meta = _dicom.read_file_meta_info(ds)
             c_store.sop_class_uid = meta.MediaStorageSOPClassUID
             try:
                 instance_uid = meta.MediaStorageSOPInstanceUID
@@ -404,7 +399,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
                 # by a bunch of ****s
                 start = ds.tell()
                 ds.seek(zero)
-                ds_full = read_file(ds, stop_before_pixels=True)
+                ds_full = _dicom.read_file(ds, stop_before_pixels=True)
                 instance_uid = ds_full.SOPInstanceUID
                 ds.seek(start)
 
@@ -801,26 +796,26 @@ class StorageCommitment(MessageDispatcherSCP):
             report.affected_sop_instance_uid = instance_uid
             report.event_type_id = 2 if failure else 1
 
-            report_ds = dicom.dataset.Dataset()
+            report_ds = _dicom.Dataset()
             report_ds.TransactionUID = ds.TransactionUID
             if success:
                 seq = []
                 for sop_class_uid, sop_instance_uid in success:
-                    ref = dicom.dataset.Dataset()
+                    ref = _dicom.Dataset()
                     ref.ReferencedSOPClassUID = sop_class_uid
                     ref.ReferencedSOPInstanceUID = sop_instance_uid
                     seq.append(ref)
-                report_ds.ReferencedSOPSequence = dicom.sequence.Sequence(seq)
+                report_ds.ReferencedSOPSequence = _dicom.Sequence(seq)
 
             if failure:
                 seq = []
                 for sop_class_uid, sop_instance_uid, reason in failure:
-                    ref = dicom.dataset.Dataset()
+                    ref = _dicom.Dataset()
                     ref.ReferencedSOPClassUID = sop_class_uid
                     ref.ReferencedSOPInstanceUID = sop_instance_uid
                     ref.FailureReason = reason
                     seq.append(ref)
-                report_ds.FailedSOPSequence = dicom.sequence.Sequence(seq)
+                report_ds.FailedSOPSequence = _dicom.Sequence(seq)
 
             report.data_set = dsutils.encode(report_ds,
                                              ctx.supported_ts.is_implicit_VR,
@@ -840,16 +835,16 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
     rq.sop_class_uid = ctx.sop_class
     rq.requested_sop_instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
 
-    ds = dicom.dataset.Dataset()
+    ds = _dicom.Dataset()
     ds.TransactionUID = transaction_uid
     seq = []
     for sop_class_uid, sop_instance_uid in uids:
-        ref = dicom.dataset.Dataset()
+        ref = _dicom.Dataset()
         ref.ReferencedSOPClassUID = sop_class_uid
         ref.ReferencedSOPInstanceUID = sop_instance_uid
         seq.append(ref)
 
-    ds.ReferencedSOPSequence = dicom.sequence.Sequence(seq)
+    ds.ReferencedSOPSequence = _dicom.Sequence(seq)
 
     rq.data_set = dsutils.encode(ds, ctx.supported_ts.is_implicit_VR,
                                  ctx.supported_ts.is_little_endian)
