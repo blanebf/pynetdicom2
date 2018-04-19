@@ -2,10 +2,17 @@ __author__ = 'Blane'
 
 import unittest
 
-import dicom
-import dicom.UID
-import dicom.dataset
-import dicom.datadict
+try:
+    import pydicom as dicom
+    from pydicom import uid
+    from pydicom import dataset
+    from pydicom import datadict
+except ImportError:
+    # pre 1.0 pydicom
+    import dicom
+    from dicom import UID as uid
+    from dicom import dataset
+    from dicom import datadict
 
 import netdicom2.applicationentity as ae
 import netdicom2.sopclass as sc
@@ -36,7 +43,7 @@ class CFindServerAE(ae.AE):
 
     def on_receive_find(self, context, ds):
         self.test.assertEquals(ds.PatientName, self.test_name)
-        rsp = dicom.dataset.Dataset()
+        rsp = dataset.Dataset()
         rsp.PatientName = self.test_name
         return iter([(rsp, sc.SUCCESS)])
 
@@ -52,7 +59,7 @@ class CFindTestCase(unittest.TestCase):
                              username='admin', password='123')
             with ae1.request_association(remote_ae) as assoc:
                 service = assoc.get_scu(sc.PATIENT_ROOT_FIND_SOP_CLASS)
-                req = dicom.dataset.Dataset()
+                req = dataset.Dataset()
                 req.PatientName = test_name
                 for result, status in service(req, 1):
                     self.assertEquals(result.PatientName, test_name)
@@ -65,7 +72,7 @@ class CFindWrapperTestCase(unittest.TestCase):
         remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                          username='admin', password='123')
 
-        ds = dicom.dataset.Dataset()
+        ds = dataset.Dataset()
         ds.PatientName = test_name
 
         ae2 = CFindServerAE(test_name, self, 'AET2', 11112)\
@@ -95,7 +102,7 @@ class CStoreAE(ae.AE):
 
 class CStoreTestCase(unittest.TestCase):
     def test_c_store_positive(self):
-        rq = dicom.dataset.Dataset()
+        rq = dataset.Dataset()
         rq.PatientName = 'Patient^Name^Test'
         rq.PatientID = 'TestID'
         rq.StudyInstanceUID = '1.2.3.4.5'
@@ -117,7 +124,7 @@ class CStoreTestCase(unittest.TestCase):
         file_name = 'test_sr.dcm'
         rq = dicom.read_file(file_name)
 
-        ae1 = ae.ClientAE('AET1', [dicom.UID.ExplicitVRLittleEndian])\
+        ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian])\
             .add_scu(sc.storage_scu)
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
@@ -172,10 +179,10 @@ class StorageCommitmentTestCase(unittest.TestCase):
         self.event = threading.Event()
         self.remote_ae1 = dict(address='127.0.0.1', port=11113, aet='AET1')
         self.remote_ae2 = dict(address='127.0.0.1', port=11112, aet='AET2')
-        self.transaction = dicom.UID.generate_uid()
+        self.transaction = uid.generate_uid()
 
     def test_commitment_positive(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, dicom.UID.generate_uid())
+        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid())
                 for _ in xrange(5)]
 
         ae1 = CommitmentAE(self, self.transaction, uids, [], self.event,
@@ -199,7 +206,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
                     self.event.wait(20)
 
     def test_commitment_failure(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, dicom.UID.generate_uid()+str(i))
+        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i))
                 for i in xrange(10)]
 
         ae1 = CommitmentAE(self, self.transaction, uids[:5], uids[5:],

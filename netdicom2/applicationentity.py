@@ -15,17 +15,10 @@ import contextlib
 from itertools import izip, count
 from threading import Lock
 
-
 import SocketServer
 
-from dicom.UID import ExplicitVRLittleEndian, ImplicitVRLittleEndian, \
-    ExplicitVRBigEndian, UID
 
-from dicom.filewriter import _write_file_meta_info
-from dicom.filebase import DicomFileLike
-
-import dicom.dataset
-
+from . import _dicom
 from . import sopclass
 from . import asceprovider
 from . import exceptions
@@ -48,12 +41,12 @@ def write_meta(fp, command_set, ts):
     :param ts: dataset transfer syntax
     """
     fp.write(PREAMBLE)
-    meta = dicom.dataset.Dataset()
+    meta = _dicom.Dataset()
     meta.MediaStorageSOPClassUID = command_set.AffectedSOPClassUID
     meta.MediaStorageSOPInstanceUID = command_set.AffectedSOPInstanceUID
     meta.TransferSyntaxUID = ts
     meta.ImplementationClassUID = IMPLEMENTATION_UID
-    _write_file_meta_info(DicomFileLike(fp), meta)
+    _dicom.write_file_meta_info(_dicom.DicomFileLike(fp), meta)
 
 
 class AEBase(object):
@@ -91,8 +84,8 @@ class AEBase(object):
                          class clients.
 
     """
-    default_ts = [ExplicitVRLittleEndian, ImplicitVRLittleEndian,
-                  ExplicitVRBigEndian]
+    default_ts = [_dicom.ExplicitVRLittleEndian, _dicom.ImplicitVRLittleEndian,
+                  _dicom.ExplicitVRBigEndian]
     """
     Default list of supported transfer syntaxes.
     """
@@ -313,7 +306,7 @@ class AEBase(object):
     def _build_context_def_list(self, sop_classes, start, store_in_file):
         if store_in_file:
             self.store_in_file.update(sop_classes)
-        return {pc_id: asceprovider.PContextDef(pc_id, UID(sop_class),
+        return {pc_id: asceprovider.PContextDef(pc_id, _dicom.UID(sop_class),
                                                 self.supported_ts)
                 for sop_class, pc_id in izip(sop_classes,
                                              count(start, 2))}
