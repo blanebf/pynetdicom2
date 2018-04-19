@@ -24,6 +24,8 @@ The class hierarchy for exceptions is:
 
 """
 
+from __future__ import absolute_import, unicode_literals
+
 
 class NetDICOMError(Exception):
     """Base class for all library specific exceptions exception."""

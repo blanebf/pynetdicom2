@@ -44,7 +44,7 @@ def _recv_n(sock, n):
         read_length += len(tmp)
     if read_length != n:
         raise exceptions.NetDICOMError('Low level network error')
-    return ''.join(ret)
+    return b''.join(ret)
 
 
 PDU_TYPES = {
@@ -188,7 +188,7 @@ class DULServiceProvider(threading.Thread):
 
             # wait for remote connection to close
             try:
-                while self.dul_socket.recv(1) != '':
+                while self.dul_socket.recv(1) != b'':
                     continue
             except socket.error:
                 return False
@@ -241,7 +241,7 @@ class DULServiceProvider(threading.Thread):
             self.dul_socket = None
             return
 
-        if raw_pdu == '':
+        if raw_pdu == b'':
             # Remote port has been closed
             self.event.append('Evt17')
             self.dul_socket.close()
