@@ -5,7 +5,7 @@
 #    available at http://pynetdicom.googlecode.com
 #
 
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 # This module provides association services
 import collections
@@ -30,7 +30,7 @@ PContextDef = collections.namedtuple(
 )
 
 
-APPLICATION_CONTEXT_NAME = '1.2.840.10008.3.1.1.1'
+APPLICATION_CONTEXT_NAME = b'1.2.840.10008.3.1.1.1'
 
 
 def build_pres_context_def_list(context_def_list):
@@ -113,7 +113,7 @@ class Association(object):
                         if marker == 3:
                             command_set_received = True
                             command_set = dsutils.decode(
-                                ''.join(encoded_command_set),
+                                b''.join(encoded_command_set),
                                 True, True
                             )
 
@@ -154,7 +154,7 @@ class Association(object):
                 dataset.seek(start)
                 msg.data_set = dataset
             else:
-                msg.data_set = ''.join(encoded_data_set)
+                msg.data_set = b''.join(encoded_data_set)
         return msg, pc_id
 
     def kill(self):
