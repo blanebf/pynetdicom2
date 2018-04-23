@@ -47,6 +47,9 @@ user.
 
 from __future__ import absolute_import
 
+import six
+from six.moves import range
+
 from . import _dicom
 from . import dsutils
 from . import exceptions
@@ -70,7 +73,7 @@ class Status(object):
         """
         self.status_type = status_type
         self.description = description
-        self.code_range = code_range
+        self.code_range = list(code_range)
 
     def __int__(self):
         """Converts status to integer (takes status lowest value in range and
@@ -91,61 +94,61 @@ class Status(object):
 
 
 SUCCESS = Status('Success', 'Sub-operations Complete - No Failure or Warnings',
-                 xrange(0x0000, 0x0000 + 1))
+                 range(0x0000, 0x0000 + 1))
 
 PENDING = Status('Pending', 'Sub-operations are continuing',
-                 xrange(0xFF00, 0xFF00 + 1))
+                 range(0xFF00, 0xFF00 + 1))
 PENDING_WARNING = Status('Pending',
                          'Matches are continuing - Warning that one or more'
                          ' optional keys were not supported for existence '
                          'and/or matching for this identifier',
-                         xrange(0xFF01, 0xFF01 + 1))
+                         range(0xFF01, 0xFF01 + 1))
 
 CANCEL = Status('Cancel', 'Sub-operations terminated due to Cancel indication',
-                xrange(0xFE00, 0xFE00 + 1))
+                range(0xFE00, 0xFE00 + 1))
 MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST = Status('Cancel',
                                                    'Matching terminated due to '
                                                    'Cancel request',
-                                                   xrange(0xFE00, 0xFE00 + 1))
+                                                   range(0xFE00, 0xFE00 + 1))
 
 WARNING = Status('Warning',
                  'Sub-operations Complete - One or more Failures or Warnings',
-                 xrange(0xB000, 0xB000 + 1))
+                 range(0xB000, 0xB000 + 1))
 COERCION_OF_DATA_ELEMENTS = Status('Warning', 'Coercion of Data Elements',
-                                   xrange(0xB000, 0xB000 + 1))
+                                   range(0xB000, 0xB000 + 1))
 ELEMENT_DISCARDED = Status('Warning', 'Element Discarded',
-                           xrange(0xB006, 0xB006 + 1))
+                           range(0xB006, 0xB006 + 1))
 DATASET_DOES_NOT_MATCH_SOP_CLASS_WARNING = Status('Warning',
                                                   'Data Set does not match SOP'
                                                   ' Class',
-                                                  xrange(0xB007, 0xB007 + 1))
+                                                  range(0xB007, 0xB007 + 1))
 
 OUT_OF_RESOURCES = Status('Failure', 'Refused: Out of resources',
-                          xrange(0xA700, 0xA7FF + 1))
+                          range(0xA700, 0xA7FF + 1))
 DATASET_DOES_NOT_MATCH_SOP_CLASS_FAILURE = Status('Failure',
                                                   'Error: Data Set does not '
                                                   'match SOP Class',
-                                                  xrange(0xA900, 0xA9FF + 1))
+                                                  range(0xA900, 0xA9FF + 1))
 CANNOT_UNDERSTAND = Status('Failure', 'Error: Cannot understand',
-                           xrange(0xC000, 0xCFFF + 1))
+                           range(0xC000, 0xCFFF + 1))
 IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS = Status('Failure',
                                              'Identifier does not match '
                                              'SOP Class',
-                                             xrange(0xA900, 0xA900 + 1))
+                                             range(0xA900, 0xA900 + 1))
 UNABLE_TO_PROCESS = Status('Failure', 'Unable to process',
-                           xrange(0xC000, 0xCFFF + 1))
+                           range(0xC000, 0xCFFF + 1))
 OUT_OF_RESOURCES_NUMBER_OF_MATCHES = Status('Failure',
                                             'Refused: Out of resources - '
                                             'Unable to calcultate number '
                                             'of matches',
-                                            xrange(0xA701, 0xA701 + 1))
+                                            range(0xA701, 0xA701 + 1))
 OUT_OF_RESOURCES_UNABLE_TO_PERFORM = Status('Failure',
                                             'Refused: Out of resources - '
                                             'Unable to perform sub-operations',
-                                            xrange(0xA702, 0xA702 + 1))
+                                            range(0xA702, 0xA702 + 1))
 MOVE_DESTINATION_UNKNOWN = Status('Failure', 'Refused: Move destination '
                                              'unknown',
-                                  xrange(0xA801, 0xA801 + 1))
+                                  range(0xA801, 0xA801 + 1))
 
 STATUSES = [SUCCESS, PENDING, PENDING_WARNING, CANCEL,
             MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST,
@@ -229,7 +232,7 @@ def code_to_status(code):
             if code in status.code_range:
                 return status
         return Status('Failure', 'Unknown or unexpected status',
-                      xrange(code, code))
+                      range(code, code))
 
 
 def sop_classes(uids):
@@ -339,7 +342,7 @@ def verification_scp(asce, ctx, msg):
 
     rsp = dimsemessages.CEchoRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
-    rsp.status = status
+    rsp.status = int(status)
     asce.send(rsp, ctx.id)
 
 
@@ -383,7 +386,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     c_store.move_originator_aet = asce.ae.local_ae['aet']
     c_store.move_originator_message_id = msg_id
 
-    if isinstance(dataset, basestring):
+    if isinstance(dataset, six.string_types):
         # Got file name
         with open(dataset, 'rb') as ds:
             zero = ds.tell()

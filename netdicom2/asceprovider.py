@@ -11,8 +11,11 @@ from __future__ import absolute_import, unicode_literals
 import collections
 import functools
 import time
-import SocketServer
+
 import struct
+
+import six
+from six.moves import socketserver, range
 
 from . import _dicom
 from . import exceptions
@@ -29,7 +32,7 @@ PContextDef = collections.namedtuple(
 )
 
 
-APPLICATION_CONTEXT_NAME = b'1.2.840.10008.3.1.1.1'
+APPLICATION_CONTEXT_NAME = _dicom.UID('1.2.840.10008.3.1.1.1')
 
 
 def build_pres_context_def_list(context_def_list):
@@ -38,7 +41,7 @@ def build_pres_context_def_list(context_def_list):
             pc_id, pdu.AbstractSyntaxSubItem(ctx.sop_class),
             [pdu.TransferSyntaxSubItem(i) for i in ctx.supported_ts]
         )
-        for pc_id, ctx in context_def_list.iteritems()
+        for pc_id, ctx in six.iteritems(context_def_list)
     )
 
 
@@ -106,7 +109,7 @@ class Association(object):
                 for value_item in p_data.data_value_items:
                     # must be able to read P-DATA with several PDVs
                     pc_id = value_item.context_id
-                    marker = struct.unpack('b', value_item.data_value[0])[0]
+                    marker = six.indexbytes(value_item.data_value, 0)
                     if marker in (1, 3):
                         encoded_command_set.append(value_item.data_value[1:])
                         if marker == 3:
@@ -163,7 +166,7 @@ class Association(object):
         release and abort instead.
         :rtype : None
         """
-        for _ in xrange(1000):
+        for _ in range(1000):
             if self.dul.stop():
                 continue
             time.sleep(0.001)
@@ -191,7 +194,7 @@ class Association(object):
         return msg
 
 
-class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
+class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     """'Server-side' association implementation.
 
     Class is intended for handling incoming association requests.
@@ -206,9 +209,9 @@ class AssociationAcceptor(SocketServer.StreamRequestHandler, Association):
         Association.__init__(self, local_ae, request)
         self.is_killed = False
         self.sop_classes_as_scp = {}
-        self.remote_ae = ''
+        self.remote_ae = b''
 
-        SocketServer.StreamRequestHandler.__init__(self,
+        socketserver.StreamRequestHandler.__init__(self,
                                                    request,
                                                    client_address,
                                                    local_ae)

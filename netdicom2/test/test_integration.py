@@ -2,6 +2,8 @@ __author__ = 'Blane'
 
 import unittest
 
+from six.moves import range
+
 try:
     import pydicom as dicom
     from pydicom import uid
@@ -42,7 +44,7 @@ class CFindServerAE(ae.AE):
         self.test = test
 
     def on_receive_find(self, context, ds):
-        self.test.assertEquals(ds.PatientName, self.test_name)
+        self.test.assertEqual(ds.PatientName, self.test_name)
         rsp = dataset.Dataset()
         rsp.PatientName = self.test_name
         return iter([(rsp, sc.SUCCESS)])
@@ -62,8 +64,8 @@ class CFindTestCase(unittest.TestCase):
                 req = dataset.Dataset()
                 req.PatientName = test_name
                 for result, status in service(req, 1):
-                    self.assertEquals(result.PatientName, test_name)
-                    self.assertEquals(status, sc.SUCCESS)
+                    self.assertEqual(result.PatientName, test_name)
+                    self.assertEqual(status, sc.SUCCESS)
 
 
 class CFindWrapperTestCase(unittest.TestCase):
@@ -79,8 +81,8 @@ class CFindWrapperTestCase(unittest.TestCase):
             .add_scp(sc.qr_find_scp)
         with ae2:
             for result, status in c_find(remote_ae, 'AET1', ds):
-                self.assertEquals(result.PatientName, test_name)
-                self.assertEquals(status, sc.SUCCESS)
+                self.assertEqual(result.PatientName, test_name)
+                self.assertEqual(status, sc.SUCCESS)
 
 
 class CStoreAE(ae.AE):
@@ -91,12 +93,12 @@ class CStoreAE(ae.AE):
 
     def on_receive_store(self, context, ds):
         d = dicom.read_file(ds)
-        self.test.assertEquals(context.sop_class, self.rq.SOPClassUID)
-        self.test.assertEquals(d.PatientName, self.rq.PatientName)
-        self.test.assertEquals(d.StudyInstanceUID, self.rq.StudyInstanceUID)
-        self.test.assertEquals(d.SeriesInstanceUID, self.rq.SeriesInstanceUID)
-        self.test.assertEquals(d.SOPInstanceUID, self.rq.SOPInstanceUID)
-        self.test.assertEquals(d.SOPClassUID, self.rq.SOPClassUID)
+        self.test.assertEqual(context.sop_class, self.rq.SOPClassUID)
+        self.test.assertEqual(d.PatientName, self.rq.PatientName)
+        self.test.assertEqual(d.StudyInstanceUID, self.rq.StudyInstanceUID)
+        self.test.assertEqual(d.SeriesInstanceUID, self.rq.SeriesInstanceUID)
+        self.test.assertEqual(d.SOPInstanceUID, self.rq.SOPInstanceUID)
+        self.test.assertEqual(d.SOPClassUID, self.rq.SOPClassUID)
         return sc.SUCCESS
 
 
@@ -118,7 +120,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.BASIC_TEXT_SR_STORAGE)
 
                 status = service(rq, 1)
-                self.assertEquals(status, sc.SUCCESS)
+                self.assertEqual(status, sc.SUCCESS)
 
     def test_c_store_from_file(self):
         file_name = 'test_sr.dcm'
@@ -133,7 +135,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.COMPREHENSIVE_SR_STORAGE)
 
                 status = service(file_name, 1)
-                self.assertEquals(status, sc.SUCCESS)
+                self.assertEqual(status, sc.SUCCESS)
 
 
 import threading
@@ -164,13 +166,13 @@ class CommitmentAE(ae.AE):
         return self.remote_ae, success, failures
 
     def on_commitment_response(self, transaction_uid, success, failure):
-        self.test.assertEquals(self.transaction, transaction_uid)
-        self.test.assertEquals(self.success, list(success))
+        self.test.assertEqual(self.transaction, transaction_uid)
+        self.test.assertEqual(self.success, list(success))
         for i, failed in enumerate(failure):
             cls, inst, reason = failed
-            self.test.assertEquals(reason,
-                                   sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE)
-            self.test.assertEquals(self.failure[i], (cls, inst))
+            self.test.assertEqual(reason,
+                                  sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE)
+            self.test.assertEqual(self.failure[i], (cls, inst))
         self.event.set()
 
 
@@ -183,7 +185,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
 
     def test_commitment_positive(self):
         uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid())
-                for _ in xrange(5)]
+                for _ in range(5)]
 
         ae1 = CommitmentAE(self, self.transaction, uids, [], self.event,
                            self.remote_ae1,
@@ -202,12 +204,12 @@ class StorageCommitmentTestCase(unittest.TestCase):
                     service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                     status = service(self.transaction, uids, 1)
-                    self.assertEquals(status, sc.SUCCESS)
+                    self.assertEqual(status, sc.SUCCESS)
                     self.event.wait(20)
 
     def test_commitment_failure(self):
         uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i))
-                for i in xrange(10)]
+                for i in range(10)]
 
         ae1 = CommitmentAE(self, self.transaction, uids[:5], uids[5:],
                            self.event, self.remote_ae1,
@@ -226,5 +228,5 @@ class StorageCommitmentTestCase(unittest.TestCase):
                     service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                     status = service(self.transaction, uids, 1)
-                    self.assertEquals(status, sc.SUCCESS)
+                    self.assertEqual(status, sc.SUCCESS)
                     self.event.wait(20)

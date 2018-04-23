@@ -26,8 +26,10 @@ import collections
 import threading
 import socket
 import select
-import Queue
 import struct
+
+import six
+from six.moves import queue
 
 from . import timer
 from . import fsm
@@ -98,8 +100,8 @@ class DULServiceProvider(threading.Thread):
         self.primitive = None  # current pdu
         self.event = collections.deque()
 
-        self.to_service_user = Queue.Queue()
-        self.from_service_user = Queue.Queue()
+        self.to_service_user = queue.Queue()
+        self.from_service_user = queue.Queue()
 
         # Setup the timer and finite state machines
         self.timer = timer.Timer(10)
@@ -141,7 +143,7 @@ class DULServiceProvider(threading.Thread):
         """
         try:
             return self.to_service_user.get(timeout=timeout)
-        except Queue.Empty:
+        except queue.Empty:
             raise exceptions.TimeoutError()
 
     def stop(self):
@@ -221,7 +223,7 @@ class DULServiceProvider(threading.Thread):
             raise exceptions.PDUProcessingError(
                 'Unknown PDU {0} with type {1}'.format(self.primitive,
                                                        self.primitive.pdu_type))
-        except Queue.Empty:
+        except queue.Empty:
             return False
 
     def _check_timer(self):
@@ -259,7 +261,7 @@ class DULServiceProvider(threading.Thread):
             # Determine the type of PDU coming on remote port and set the event
             # accordingly
             try:
-                pdu_type, event = PDU_TYPES[struct.unpack('B', raw_pdu[0])[0]]
+                pdu_type, event = PDU_TYPES[six.indexbytes(raw_pdu, 0)]
                 self.primitive = pdu_type.decode(raw_pdu)
                 self.event.append(event)
             except KeyError:

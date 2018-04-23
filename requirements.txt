@@ -1,1 +1,2 @@
+six
 pydicom >= 0.9.7
