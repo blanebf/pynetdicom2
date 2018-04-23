@@ -32,10 +32,16 @@ The rest sub-items for User Data Information Item can be found at
 from __future__ import absolute_import
 
 import struct
-from cStringIO import StringIO
 
+from . import _dicom
 from . import exceptions
 from . import userdataitems
+
+import six
+if six.PY3:
+    from six import BytesIO as cStringIO
+else:
+    from six.moves import cStringIO
 
 
 SUB_ITEM_TYPES = {
@@ -52,7 +58,7 @@ SUB_ITEM_TYPES = {
 
 def next_type(stream):
     char = stream.read(1)
-    if char == '':
+    if char == b'':
         return None  # we are at the end of the file
     stream.seek(-1, 1)
     return struct.unpack('B', char)[0]
@@ -81,11 +87,13 @@ class AAssociatePDUBase(object):
         return 68 + sum((i.total_length() for i in self.variable_items))
 
     def encode(self):
+        called_ae_title = self.called_ae_title.encode()
+        calling_ae_title = self.calling_ae_title.encode()
         return self.header.pack(self.pdu_type, self.reserved1, self.pdu_length,
                                 self.protocol_version, self.reserved2,
-                                self.called_ae_title, self.calling_ae_title,
+                                called_ae_title, calling_ae_title,
                                 *self.reserved3) \
-            + ''.join([item.encode() for item in self.variable_items])
+            + b''.join([item.encode() for item in self.variable_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -110,13 +118,13 @@ class AAssociatePDUBase(object):
                     raise exceptions.PDUProcessingError('Invalid variable item')
                 item_type = next_type(stream)
 
-        stream = StringIO(rawstring)
+        stream = cStringIO(rawstring)
         values = cls.header.unpack(stream.read(74))
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
         reserved3 = values[7:]
-        called_ae_title = called_ae_title.strip('\0')
-        calling_ae_title = calling_ae_title.strip('\0')
+        called_ae_title = called_ae_title.strip(b'\0').decode()
+        calling_ae_title = calling_ae_title.strip(b'\0').decode()
         variable_items = list(iter_items())
         return cls(called_ae_title=called_ae_title,
                    calling_ae_title=calling_ae_title,
@@ -219,7 +227,7 @@ class AAssociateRjPDU(object):
                           A-ASSOCIATE-RJ PDU
         :return: decoded PDU
         """
-        stream = StringIO(rawstring)
+        stream = cStringIO(rawstring)
         _, reserved1, _, reserved2, result, source, \
             reason_diag = cls.format.unpack(stream.read(10))
         return cls(result=result, source=source, reason_diag=reason_diag,
@@ -266,8 +274,8 @@ class PDataTfPDU(object):
 
     def encode(self):
         return self.header.pack(self.pdu_type, self.reserved, self.pdu_length)\
-            + ''.join([item.encode()
-                       for item in self.data_value_items])
+            + b''.join([item.encode()
+                        for item in self.data_value_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -284,7 +292,7 @@ class PDataTfPDU(object):
                 length_read += item.total_length()
                 yield item
 
-        stream = StringIO(rawstring)
+        stream = cStringIO(rawstring)
         pdu_type, reserved, pdu_length = cls.header.unpack(stream.read(6))
         data_value_items = list(iter_items())
         return cls(data_value_items, reserved)
@@ -322,7 +330,7 @@ class AReleasePDUBase(object):
                           A-RELEASE-* PDU
         :return: decoded PDU
         """
-        stream = StringIO(rawstring)
+        stream = cStringIO(rawstring)
         _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))
         return cls(reserved1=reserved1, reserved2=reserved2)
 
@@ -403,7 +411,7 @@ class AAbortPDU(object):
                           the A-ABORT PDU
         :return: decoded PDU
         """
-        stream = StringIO(rawstring)
+        stream = cStringIO(rawstring)
         _, reserved1, _, reserved2, reserved3, abort_source, \
             reason_diag = cls.format.unpack(stream.read(10))
         return cls(reserved1=reserved1, reserved2=reserved2,
@@ -449,7 +457,7 @@ class ApplicationContextItem(object):
 
     def encode(self):
         return self.header.pack(self.item_type, self.reserved,
-                                self.item_length) + self.context_name
+                                self.item_length) + self.context_name.encode()
 
     @classmethod
     def decode(cls, stream):
@@ -459,7 +467,7 @@ class ApplicationContextItem(object):
         :return: decoded item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        context_name = stream.read(item_length)
+        context_name = stream.read(item_length).decode()
         return cls(reserved=reserved, context_name=context_name)
 
     def total_length(self):
@@ -506,7 +514,7 @@ class PresentationContextItemRQ(object):
                                 self.reserved2, self.reserved3,
                                 self.reserved4)\
             + self.abs_sub_item.encode() \
-            + ''.join([item.encode() for item in self.ts_sub_items])
+            + b''.join([item.encode() for item in self.ts_sub_items])
 
     @classmethod
     def decode(cls, stream):
@@ -564,11 +572,11 @@ class PresentationContextItemAC(object):
         return 4 + self.ts_sub_item.total_length()
 
     def encode(self):
-        return ''.join([self.header.pack(self.item_type, self.reserved1,
-                                         self.item_length, self.context_id,
-                                         self.reserved2, self.result_reason,
-                                         self.reserved3),
-                        self.ts_sub_item.encode()])
+        return b''.join([self.header.pack(self.item_type, self.reserved1,
+                                          self.item_length, self.context_id,
+                                          self.reserved2, self.result_reason,
+                                          self.reserved3),
+                         self.ts_sub_item.encode()])
 
     @classmethod
     def decode(cls, stream):
@@ -614,9 +622,9 @@ class AbstractSyntaxSubItem(object):
         return len(self.name)
 
     def encode(self):
-        return ''.join([self.header.pack(self.item_type, self.reserved,
-                                         self.item_length),
-                        self.name])
+        return b''.join([self.header.pack(self.item_type, self.reserved,
+                                          self.item_length),
+                         self.name.encode()])
 
     @classmethod
     def decode(cls, stream):
@@ -626,7 +634,7 @@ class AbstractSyntaxSubItem(object):
         :return: decoded abstract syntax sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        name = stream.read(item_length)
+        name = _dicom.UID(stream.read(item_length).decode())
         return cls(name=name, reserved=reserved)
 
     def total_length(self):
@@ -648,7 +656,7 @@ class TransferSyntaxSubItem(object):
 
     def __init__(self, name, reserved=0x00):
         self.reserved = reserved  # unsigned byte
-        self.name = name  # string
+        self.name = _dicom.UID(name)  # string
 
     def __repr__(self):
         return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(
@@ -659,9 +667,9 @@ class TransferSyntaxSubItem(object):
         return len(self.name)
 
     def encode(self):
-        return ''.join([self.header.pack(self.item_type, self.reserved,
-                                         self.item_length),
-                        self.name])
+        return b''.join([self.header.pack(self.item_type, self.reserved,
+                                          self.item_length),
+                         self.name.encode()])
 
     @classmethod
     def decode(cls, stream):
@@ -672,7 +680,7 @@ class TransferSyntaxSubItem(object):
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
         name = stream.read(item_length)
-        return cls(name=name, reserved=reserved)
+        return cls(name=name.decode(), reserved=reserved)
 
     def total_length(self):
         return 4 + self.item_length
@@ -710,7 +718,7 @@ class UserInformationItem(object):
     def encode(self):
         return self.header.pack(self.item_type, self.reserved,
                                 self.item_length) \
-            + ''.join([data.encode() for data in self.user_data])
+            + b''.join([data.encode() for data in self.user_data])
 
     @staticmethod
     def sub_items(stream):
@@ -760,9 +768,9 @@ class PresentationDataValueItem(object):
         return len(self.data_value) + 1
 
     def encode(self):
-        return ''.join([self.header.pack(self.item_length,
-                                         self.context_id),
-                        self.data_value])
+        return b''.join([self.header.pack(self.item_length,
+                                          self.context_id),
+                         self.data_value])
 
     @classmethod
     def decode(cls, stream):

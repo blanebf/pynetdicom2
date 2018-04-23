@@ -12,7 +12,7 @@ except ImportError:
     # pre 1.0 pydicom
     import dicom
 
-if dicom.__version_info__ >= (1, 0, 0):
+if dicom.__version_info__ >= ('1', '0', '0'):
     from pydicom import uid
     from pydicom.filewriter import write_file_meta_info as _write_file_meta
     from pydicom import filebase
@@ -39,8 +39,6 @@ else:
         from dicom.filebase import DicomBytesIO as _DicomBytesIO
     else:
         from dicom.filebase import DicomStringIO as _DicomBytesIO
-
-
 
 
 read_file = dicom.read_file

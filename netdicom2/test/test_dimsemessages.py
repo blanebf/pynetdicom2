@@ -378,8 +378,8 @@ class NEventReportRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.event_type_id, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.event_type_id, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NEventReportRSPMessage(MessageTesterBase):
@@ -390,9 +390,9 @@ class NEventReportRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.event_type_id, '')
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.event_type_id, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NGetRQMessage(MessageTesterBase):
@@ -403,9 +403,9 @@ class NGetRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.requested_sop_instance_uid, '')
-        self.assertEquals(self.msg.attribute_identifier_list, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.requested_sop_instance_uid, '')
+        self.assertEqual(self.msg.attribute_identifier_list, '')
 
 
 class NGetRSPMessage(MessageTesterBase):
@@ -416,8 +416,8 @@ class NGetRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NSetRQMessage(MessageTesterBase):
@@ -428,8 +428,8 @@ class NSetRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.requested_sop_instance_uid, '')
 
 
 class NSetRSPMessage(MessageTesterBase):
@@ -440,9 +440,9 @@ class NSetRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NActionRQMessage(MessageTesterBase):
@@ -453,9 +453,9 @@ class NActionRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.requested_sop_instance_uid, '')
-        self.assertEquals(self.msg.action_type_id, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.requested_sop_instance_uid, '')
+        self.assertEqual(self.msg.action_type_id, '')
 
 
 class NActionRSPMessage(MessageTesterBase):
@@ -466,10 +466,10 @@ class NActionRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
-        self.assertEquals(self.msg.action_type_id, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.action_type_id, '')
 
 
 class NCreateRQMessage(MessageTesterBase):
@@ -480,8 +480,8 @@ class NCreateRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NCreateRSPMessage(MessageTesterBase):
@@ -492,9 +492,9 @@ class NCreateRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')
 
 
 class NDeleteRQMessage(MessageTesterBase):
@@ -505,8 +505,8 @@ class NDeleteRQMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.requested_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.requested_sop_instance_uid, '')
 
 
 class NDeleteRSPMessage(MessageTesterBase):
@@ -517,6 +517,6 @@ class NDeleteRSPMessage(MessageTesterBase):
         self.assert_command_attributes(self.msg)
 
     def test_properties_default_values(self):
-        self.assertEquals(self.msg.sop_class_uid, '')
-        self.assertEquals(self.msg.status, '')
-        self.assertEquals(self.msg.affected_sop_instance_uid, '')
+        self.assertEqual(self.msg.sop_class_uid, '')
+        self.assertEqual(self.msg.status, '')
+        self.assertEqual(self.msg.affected_sop_instance_uid, '')

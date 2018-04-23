@@ -26,4 +26,4 @@ setup(name="pynetdicom2",
                    "Topic :: Scientific/Engineering :: Physics",
                    "Topic :: Software Development :: Libraries"],
       long_description=open('README.rst').read(),
-      install_requires=["pydicom >= 0.9.7"])
+      install_requires=["six", "pydicom >= 0.9.7"])

@@ -5,13 +5,16 @@
 #    available at http://pynetdicom.googlecode.com
 #
 
-import cStringIO
-
 from . import _dicom
+import six
+if six.PY3:
+    from six import BytesIO as cStringIO
+else:
+    from six.moves import cStringIO
 
 
 def decode(rawstr, is_implicit_vr, is_little_endian):
-    s = cStringIO.StringIO(rawstr)
+    s = cStringIO(rawstr)
     return _dicom.read_dataset(s, is_implicit_vr, is_little_endian)
 
 

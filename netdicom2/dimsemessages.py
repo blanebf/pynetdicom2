@@ -24,6 +24,8 @@ from __future__ import absolute_import
 
 import struct
 
+from six.moves import range
+
 from . import dsutils
 from . import pdu
 
@@ -93,7 +95,7 @@ def value_or_none(elem):
 def chunks(seq, size):
     l = len(seq)
     return ((seq[pos:pos + size], True if pos + size < l else False)
-            for pos in xrange(0, l, size))
+            for pos in range(0, l, size))
 
 
 def fragment(data_set, max_pdu_length, normal, last):
@@ -195,7 +197,7 @@ class DIMSEMessage(object):
 
         # fragment data set
         if self.data_set:
-            if isinstance(self.data_set, str):
+            if isinstance(self.data_set, bytes):
                 # got dataset as byte array
                 gen = fragment(self.data_set, max_pdu_length, 0, 2)
             else:
@@ -208,7 +210,7 @@ class DIMSEMessage(object):
 
     def set_length(self):
         it = (len(dsutils.encode_element(v, True, True))
-              for v in self.command_set.values()[1:])
+              for v in list(self.command_set.values())[1:])
         self.command_set[(0x0000, 0x0000)].value = sum(it)
 
     def __repr__(self):
