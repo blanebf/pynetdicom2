@@ -1,6 +1,12 @@
 # Copyright (c) 2014 Pavel 'Blane' Tuchin
 # This file is part of pynetdicom2, released under a modified MIT license.
 #    See the file license.txt included with this distribution.
+"""
+This module provides some useful constants for SOP Class UIDs and
+Transfer Syntax UIDs.
+Storage-related SOP Classes are grouped under STORAGE_SOP_CLASSES
+constant.
+"""
 __author__ = 'Blane'
 
 from . import _dicom
