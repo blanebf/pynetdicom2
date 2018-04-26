@@ -104,7 +104,7 @@ class AEBase(object):
         self.supported_scp = {}
         self.lock = Lock()
 
-    def add_scu(self, service):
+    def add_scu(self, service, sop_classes=None):
         """Adds service as SCU to the AE.
 
         Presentation context definition list is updated based on SOP Class UIDs
@@ -112,13 +112,15 @@ class AEBase(object):
         chained, so you can add multiple services in one statement.
 
         :param service: DICOM service
+        :param sop_classes overrides list of SOP Class UIDs provided by the service
         """
+        sop_classes = sop_classes or service.sop_classes
         self.supported_scu.update({
-            uid: service for uid in service.sop_classes
+            uid: service for uid in sop_classes
         })
         store_in_file = (hasattr(service, 'store_in_file') and
                          service.store_in_file)
-        self.update_context_def_list(service.sop_classes, store_in_file)
+        self.update_context_def_list(sop_classes, store_in_file)
         return self
 
     def update_context_def_list(self, sop_classes, store_in_file=False):

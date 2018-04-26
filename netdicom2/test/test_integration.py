@@ -112,7 +112,7 @@ class CStoreTestCase(unittest.TestCase):
         rq.SOPInstanceUID = '1.2.3.4.5.1.1'
         rq.SOPClassUID = sc.BASIC_TEXT_SR_STORAGE
 
-        ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu)
+        ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu, [sc.BASIC_TEXT_SR_STORAGE])
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
@@ -127,7 +127,7 @@ class CStoreTestCase(unittest.TestCase):
         rq = dicom.read_file(file_name)
 
         ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian])\
-            .add_scu(sc.storage_scu)
+            .add_scu(sc.storage_scu, [sc.COMPREHENSIVE_SR_STORAGE])
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
