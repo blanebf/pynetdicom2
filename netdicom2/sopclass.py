@@ -182,12 +182,12 @@ def sop_classes(uids):
     """Simple decorator that adds or extends ``sop_classes`` attribute
     with provided list of UIDs.
     """
-    def augemnt(service):
+    def augment(service):
         if not hasattr(service, 'sop_classes'):
             service.sop_classes = []
         service.sop_classes.extend(uids)
         return service
-    return augemnt
+    return augment
 
 
 def store_in_file(service):
