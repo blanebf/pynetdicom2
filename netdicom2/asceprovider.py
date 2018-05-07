@@ -12,8 +12,6 @@ import collections
 import functools
 import time
 
-import struct
-
 import six
 from six.moves import socketserver, range
 

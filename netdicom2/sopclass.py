@@ -48,134 +48,13 @@ user.
 from __future__ import absolute_import
 
 import six
-from six.moves import range
 
 from . import _dicom
 from . import dsutils
 from . import exceptions
 from . import dimsemessages
+from . import statuses
 from .uids import *
-
-
-class Status(object):
-    """Class represents message status.
-
-    This is a helper class that provides convenience methods for printing and
-    converting status codes.
-    """
-
-    def __init__(self, status_type, description, code_range):
-        """Initializes new Status instance based on type, description and
-        code range.
-
-        :param status_type: status type (Success, Pending, Warning, Failure)
-        :param description: status description
-        :param code_range: status code range
-        """
-        self.status_type = status_type
-        self.description = description
-        self.code_range = list(code_range)
-
-    def __int__(self):
-        """Converts status to integer (takes status lowest value in range and
-        returns it.
-
-        :return: lowest value in code range
-        """
-        return self.code_range[0]
-
-    def __repr__(self):
-        """Returns status string representation
-
-        :return: status string representation
-        """
-        return 'Status(status_type={self.status_type}, ' \
-               'description={self.description}, ' \
-               'code_range={self.code_range})'.format(self=self)
-
-
-SUCCESS = Status('Success', 'Sub-operations Complete - No Failure or Warnings',
-                 range(0x0000, 0x0000 + 1))
-
-PENDING = Status('Pending', 'Sub-operations are continuing',
-                 range(0xFF00, 0xFF00 + 1))
-PENDING_WARNING = Status('Pending',
-                         'Matches are continuing - Warning that one or more'
-                         ' optional keys were not supported for existence '
-                         'and/or matching for this identifier',
-                         range(0xFF01, 0xFF01 + 1))
-
-CANCEL = Status('Cancel', 'Sub-operations terminated due to Cancel indication',
-                range(0xFE00, 0xFE00 + 1))
-MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST = Status('Cancel',
-                                                   'Matching terminated due to '
-                                                   'Cancel request',
-                                                   range(0xFE00, 0xFE00 + 1))
-
-WARNING = Status('Warning',
-                 'Sub-operations Complete - One or more Failures or Warnings',
-                 range(0xB000, 0xB000 + 1))
-COERCION_OF_DATA_ELEMENTS = Status('Warning', 'Coercion of Data Elements',
-                                   range(0xB000, 0xB000 + 1))
-ELEMENT_DISCARDED = Status('Warning', 'Element Discarded',
-                           range(0xB006, 0xB006 + 1))
-DATASET_DOES_NOT_MATCH_SOP_CLASS_WARNING = Status('Warning',
-                                                  'Data Set does not match SOP'
-                                                  ' Class',
-                                                  range(0xB007, 0xB007 + 1))
-
-OUT_OF_RESOURCES = Status('Failure', 'Refused: Out of resources',
-                          range(0xA700, 0xA7FF + 1))
-DATASET_DOES_NOT_MATCH_SOP_CLASS_FAILURE = Status('Failure',
-                                                  'Error: Data Set does not '
-                                                  'match SOP Class',
-                                                  range(0xA900, 0xA9FF + 1))
-CANNOT_UNDERSTAND = Status('Failure', 'Error: Cannot understand',
-                           range(0xC000, 0xCFFF + 1))
-IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS = Status('Failure',
-                                             'Identifier does not match '
-                                             'SOP Class',
-                                             range(0xA900, 0xA900 + 1))
-UNABLE_TO_PROCESS = Status('Failure', 'Unable to process',
-                           range(0xC000, 0xCFFF + 1))
-OUT_OF_RESOURCES_NUMBER_OF_MATCHES = Status('Failure',
-                                            'Refused: Out of resources - '
-                                            'Unable to calcultate number '
-                                            'of matches',
-                                            range(0xA701, 0xA701 + 1))
-OUT_OF_RESOURCES_UNABLE_TO_PERFORM = Status('Failure',
-                                            'Refused: Out of resources - '
-                                            'Unable to perform sub-operations',
-                                            range(0xA702, 0xA702 + 1))
-MOVE_DESTINATION_UNKNOWN = Status('Failure', 'Refused: Move destination '
-                                             'unknown',
-                                  range(0xA801, 0xA801 + 1))
-
-STATUSES = [SUCCESS, PENDING, PENDING_WARNING, CANCEL,
-            MATCHING_TERMINATED_DUE_TO_CANCEL_REQUEST,
-            WARNING, COERCION_OF_DATA_ELEMENTS, ELEMENT_DISCARDED,
-            DATASET_DOES_NOT_MATCH_SOP_CLASS_WARNING, OUT_OF_RESOURCES,
-            DATASET_DOES_NOT_MATCH_SOP_CLASS_FAILURE, CANNOT_UNDERSTAND,
-            IDENTIFIER_DOES_NOT_MATCH_SOP_CLASS, UNABLE_TO_PROCESS,
-            OUT_OF_RESOURCES_NUMBER_OF_MATCHES,
-            OUT_OF_RESOURCES_UNABLE_TO_PERFORM, MOVE_DESTINATION_UNKNOWN]
-
-
-def code_to_status(code):
-        """Converts code to status.
-
-        If unexpected code is passed (code does not fall into any of the ranges
-        of the known statuses that are listed in this module) function
-        returns 'Failure' status object.
-
-        :param code: status code
-        :return: :class:`~netdicom2.sopclass.Status` object converted from code
-        """
-        for status in STATUSES:
-            if code in status.code_range:
-                return status
-        return Status('Failure', 'Unknown or unexpected status',
-                      range(code, code))
 
 
 def sop_classes(uids):
@@ -266,7 +145,7 @@ def verification_scu(asce, ctx, msg_id):
     asce.send(c_echo, ctx.id)
 
     response, msg_id = asce.receive()
-    return code_to_status(response.status)
+    return statuses.Status(response.status, dimsemessages.CEchoRSPMessage)
 
 
 @sop_classes([VERIFICATION_SOP_CLASS])
@@ -281,7 +160,7 @@ def verification_scp(asce, ctx, msg):
     try:
         status = asce.ae.on_receive_echo(ctx)
     except exceptions.EventHandlingError:
-        status = UNABLE_TO_PROCESS
+        status = statuses.PROCESSING_FAILURE
 
     rsp = dimsemessages.CEchoRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
@@ -341,7 +220,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
 
     # wait for c-store response
     response, _ = asce.receive()
-    return code_to_status(response.status)
+    return statuses.Status(response.status, dimsemessages.CStoreRSPMessage)
 
 
 @store_in_file
@@ -359,7 +238,7 @@ def storage_scp(asce, ctx, msg):
     try:
         status = asce.ae.on_receive_store(ctx, msg.data_set)
     except exceptions.EventHandlingError:
-        status = CANNOT_UNDERSTAND
+        status = statuses.C_STORE_CANNON_UNDERSTAND
     finally:
         if msg.data_set:
             msg.data_set.close()
@@ -405,9 +284,9 @@ def qr_find_scu(asce, ctx, ds, msg_id):
                                       ctx.supported_ts.is_little_endian)
         else:
             data_set = None
-        status = code_to_status(response.status)
+        status = statuses.Status(response.status, dimsemessages.CFindRSPMessage)
         yield data_set, status
-        if status.status_type != 'Pending':
+        if not status.is_pending:
             break
 
 
@@ -440,7 +319,7 @@ def qr_find_scp(asce, ctx, msg):
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
     rsp.sop_class_uid = msg.sop_class_uid
-    rsp.status = int(SUCCESS)
+    rsp.status = int(statuses.SUCCESS)
     asce.send(rsp, ctx.id)
 
 
@@ -484,7 +363,7 @@ def qr_get_scu(asce, ctx, ds, msg_id):
         # receive c-store
         msg, pc_id = asce.receive()
         if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
-            if code_to_status(msg.status).status_type == 'Pending':
+            if statuses.Status(msg.status, dimsemessages.CGetRSPMessage).is_pending:
                 pass  # pending. intermediate C-GET response
             else:
                 break  # last answer
@@ -501,7 +380,7 @@ def qr_get_scu(asce, ctx, ds, msg_id):
                 status = asce.ae.on_receive_store(ctx, msg.data_set)
                 yield ctx, msg.data_set if in_file else decode_ds(msg.data_set)
             except exceptions.EventHandlingError:
-                status = CANNOT_UNDERSTAND
+                status = statuses.C_GET_UNABLE_TO_PROCESS
             finally:
                 if in_file and msg.data_set:
                     msg.data_set.close()
@@ -539,8 +418,8 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
     while True:
         # wait for c-move responses
         response, _ = asce.receive()
-        status = code_to_status(response.status).status_type
-        if status != 'Pending':
+        status = statuses.Status(response.status, dimsemessages.CMoveRSPMessage)
+        if not status.is_pending:
             break
         yield status, response
 
@@ -566,13 +445,13 @@ def qr_move_scp(asce, ctx, msg):
         completed = 0
         for data_set in gen:
             # request an association with destination send C-STORE
-            obj = assoc.get_scu(data_set.SOPClassUID)
-            status = obj.scu(data_set, completed)
-            if status.type_ == 'Failed':
+            service = assoc.get_scu(data_set.SOPClassUID)
+            status = service(data_set, completed)
+            if status.is_failure:
                 failed += 1
-            if status.type_ == 'Warning':
+            if status.is_warning:
                 warning += 1
-            rsp.status = int(PENDING)
+            rsp.status = int(statuses.C_MOVE_PENDING)
             rsp.num_of_remaining_sub_ops = nop - completed
             rsp.num_of_completed_sub_ops = completed
             rsp.num_of_failed_sub_ops = failed
@@ -592,7 +471,7 @@ def _send_response(asce, ctx, msg, nop, failed, warning, completed):
     rsp.num_of_completed_sub_ops = completed
     rsp.num_of_failed_sub_ops = failed
     rsp.num_of_warning_sub_ops = warning
-    rsp.status = int(SUCCESS)
+    rsp.status = int(statuses.SUCCESS)
     asce.send(rsp, ctx.id)
 
 
@@ -615,9 +494,9 @@ def modality_work_list_scu(asce, ctx, ds, msg_id):
         d = dsutils.decode(response.data_set,
                            ctx.supported_ts.is_implicit_VR,
                            ctx.supported_ts.is_little_endian)
-        status = code_to_status(response.status).status_type
+        status = statuses.Status(response.status, dimsemessages.CFindRSPMessage)
         yield status, d
-        if status != 'Pending':
+        if not status.is_pending:
             break
 
 
@@ -644,7 +523,7 @@ def modality_work_list_scp(asce, ctx, msg):
     rsp = dimsemessages.CFindRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
     rsp.sop_class_uid = msg.sop_class_uid
-    rsp.status = int(SUCCESS)
+    rsp.status = int(statuses.SUCCESS)
     asce.send(rsp, ctx.id)
 
 
@@ -664,7 +543,7 @@ class StorageCommitment(MessageDispatcherSCP):
     def n_event_report(self, asce, ctx, msg):
         rsp = dimsemessages.NEventReportRSPMessage()
         rsp.sop_class_uid = ctx.sop_class
-        rsp.status = int(SUCCESS)
+        rsp.status = int(statuses.SUCCESS)
         rsp.event_type_id = msg.event_type_id
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
 
@@ -688,7 +567,7 @@ class StorageCommitment(MessageDispatcherSCP):
         try:
             asce.ae.on_commitment_response(transaction_uid, success, failure)
         except exceptions.EventHandlingError:
-            rsp.status = int(UNABLE_TO_PROCESS)
+            rsp.status = int(statuses.PROCESSING_FAILURE)
         else:
             asce.send(rsp, ctx.id)
 
@@ -708,10 +587,10 @@ class StorageCommitment(MessageDispatcherSCP):
                 asce.remote_ae, uids
             )
         except exceptions.EventHandlingError:
-            rsp.status = int(UNABLE_TO_PROCESS)
+            rsp.status = int(statuses.PROCESSING_FAILURE)
             asce.send(rsp, ctx.id)
         else:
-            rsp.status = int(SUCCESS)
+            rsp.status = int(statuses.SUCCESS)
             asce.send(rsp, ctx.id)
 
             report = dimsemessages.NEventReportRQMessage()
@@ -774,4 +653,4 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
     asce.send(rq, ctx.id)
 
     rsp, _ = asce.receive()
-    return code_to_status(rsp.status)
+    return statuses.Status(rsp.status, dimsemessages.NActionRSPMessage)

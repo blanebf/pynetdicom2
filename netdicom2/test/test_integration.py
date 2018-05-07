@@ -19,6 +19,8 @@ except ImportError:
 import netdicom2.applicationentity as ae
 import netdicom2.sopclass as sc
 
+from netdicom2 import statuses
+
 from netdicom2 import c_find
 
 
@@ -34,7 +36,7 @@ class CEchoTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.VERIFICATION_SOP_CLASS)
                 self.assertIsNotNone(service)
                 result = service(1)
-                self.assertEqual(result.status_type, 'Success')
+                self.assertTrue(result.is_success)
 
 
 class CFindServerAE(ae.AE):
@@ -47,7 +49,7 @@ class CFindServerAE(ae.AE):
         self.test.assertEqual(ds.PatientName, self.test_name)
         rsp = dataset.Dataset()
         rsp.PatientName = self.test_name
-        return iter([(rsp, sc.SUCCESS)])
+        return iter([(rsp, statuses.SUCCESS)])
 
 
 class CFindTestCase(unittest.TestCase):
@@ -65,7 +67,7 @@ class CFindTestCase(unittest.TestCase):
                 req.PatientName = test_name
                 for result, status in service(req, 1):
                     self.assertEqual(result.PatientName, test_name)
-                    self.assertEqual(status, sc.SUCCESS)
+                    self.assertEqual(status, statuses.SUCCESS)
 
 
 class CFindWrapperTestCase(unittest.TestCase):
@@ -82,7 +84,7 @@ class CFindWrapperTestCase(unittest.TestCase):
         with ae2:
             for result, status in c_find(remote_ae, 'AET1', ds):
                 self.assertEqual(result.PatientName, test_name)
-                self.assertEqual(status, sc.SUCCESS)
+                self.assertEqual(status, statuses.SUCCESS)
 
 
 class CStoreAE(ae.AE):
@@ -99,7 +101,7 @@ class CStoreAE(ae.AE):
         self.test.assertEqual(d.SeriesInstanceUID, self.rq.SeriesInstanceUID)
         self.test.assertEqual(d.SOPInstanceUID, self.rq.SOPInstanceUID)
         self.test.assertEqual(d.SOPClassUID, self.rq.SOPClassUID)
-        return sc.SUCCESS
+        return statuses.SUCCESS
 
 
 class CStoreTestCase(unittest.TestCase):
@@ -120,7 +122,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.BASIC_TEXT_SR_STORAGE)
 
                 status = service(rq, 1)
-                self.assertEqual(status, sc.SUCCESS)
+                self.assertEqual(status, statuses.SUCCESS)
 
     def test_c_store_from_file(self):
         file_name = 'test_sr.dcm'
@@ -135,7 +137,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.COMPREHENSIVE_SR_STORAGE)
 
                 status = service(file_name, 1)
-                self.assertEqual(status, sc.SUCCESS)
+                self.assertEqual(status, statuses.SUCCESS)
 
 
 import threading
@@ -204,7 +206,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
                     service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                     status = service(self.transaction, uids, 1)
-                    self.assertEqual(status, sc.SUCCESS)
+                    self.assertEqual(status, statuses.SUCCESS)
                     self.event.wait(20)
 
     def test_commitment_failure(self):
@@ -228,5 +230,5 @@ class StorageCommitmentTestCase(unittest.TestCase):
                     service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                     status = service(self.transaction, uids, 1)
-                    self.assertEqual(status, sc.SUCCESS)
+                    self.assertEqual(status, statuses.SUCCESS)
                     self.event.wait(20)
