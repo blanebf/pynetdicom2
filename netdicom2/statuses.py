@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # Copyright (c) 2014 Pavel 'Blane' Tuchin
 # This file is part of pynetdicom2, released under a modified MIT license.
 #    See the file license.txt included with this distribution.
@@ -20,7 +22,7 @@ commands and status types. The table is by no means cover the whole DICOM standa
 |                 |         +------+---------------------------------------------------------+-------------------------+
 |                 |         | 0211 | Unrecognized Operation                                  |                         |
 +-----------------+---------+------+---------------------------------------------------------+-------------------------+
-| C-STORE         | Failure | A7xx | Refused: Out of Resources                               | (0000,0902)             |
+| ``C-STORE``     | Failure | A7xx | Refused: Out of Resources                               | (0000,0902)             |
 |                 |         +------+---------------------------------------------------------+-------------------------+
 |                 |         | A9xx | Error: Data Set does not match SOP Class                | (0000,0901) (0000,0902) |
 |                 |         +------+---------------------------------------------------------+-------------------------+
