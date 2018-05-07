@@ -308,7 +308,7 @@ _general_status_dict = {}
 _status_dict = {}
 
 
-UNKONWN = s('Failure', 'Unknown Status')
+UNKNOWN = s('Failure', 'Unknown Status')
 
 
 def add_status(code, code_type, description, end=None, command=None):
@@ -332,35 +332,37 @@ class Status(int):
     This is a helper class that provides convenience methods for printing status codes.
     """
 
-    def __init__(self, value, command=None):
+    def __new__(cls, value, command=None):
         """Initializes new Status .
 
         :param value status code
         :param command: command for which status is created. Some codes depends on the
                         type of service.
         """
-        int.__init__(self, value)
+        obj = super(Status, cls).__new__(cls, value)
+        status = None
         if command:
-            status = _status_dict.get((command.command_field, value), UNKONWN)
-        else:
-            status = _general_status_dict.get(value, UNKONWN)
-        self.status_type = status.code_type
-        self.description = status.description
-        self.is_success = self.status_type == 'Success'
-        self.is_pending = self.status_type == 'Pending'
-        self.is_failure = self.status_type == 'Failure'
-        self.is_warning = self.status_type == 'Warning'
-        self.is_cancel = self.status_type == 'Cancel'
+            status = _status_dict.get((command.command_field, value))
+        if not status:
+            status = _general_status_dict.get(value, UNKNOWN)
+        obj.status_type = status.code_type
+        obj.description = status.description
+        obj.is_success = obj.status_type == 'Success'
+        obj.is_pending = obj.status_type == 'Pending'
+        obj.is_failure = obj.status_type == 'Failure'
+        obj.is_warning = obj.status_type == 'Warning'
+        obj.is_cancel = obj.status_type == 'Cancel'
+        return obj
 
     def __str__(self):
-        return '(self) {self.status_type}: self.description'.format(self=self)
+        return '(0x{value:0X}) {self.status_type}: {self.description}'.format(self=self, value=int(self))
 
     def __repr__(self):
         """Returns status string representation
 
         :return: status string representation
         """
-        return 'Status({self.value})'.format(self=self)
+        return 'Status(0x{self:0X})'.format(self=int(self))
 
 
 KNOWN_STATUSES = [
@@ -379,7 +381,7 @@ KNOWN_STATUSES = [
     (0x0113, 'Failure', 'No Such Event Type', None),
     (0x0114, 'Failure', 'No Such Argument', None),
     (0x0115, 'Failure', 'Invalid Argument Value', None),
-    (0x0116, 'Failure', 'Attribute Value Out Of Range'),
+    (0x0116, 'Failure', 'Attribute Value Out Of Range', None),
     (0x0117, 'Failure', 'Invalid Object Instance', None),
     (0x0118, 'Failure', 'No Such SOP Class', None),
     (0x0119, 'Failure', 'Class-Instance Conflict', None),
