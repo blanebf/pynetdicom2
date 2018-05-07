@@ -3,6 +3,10 @@
 #    See the file license.txt included with this distribution.
 
 """
+This module provides some useful status constants. You should be aware, that some status codes depends on a command
+or a service you are responding to. The following tables provides list of some well known status codes grouped by
+commands and status types. The table is by no means cover the whole DICOM standard status codes.
+
 +-----------------+---------+------+---------------------------------------------------------+-------------------------+
 | Service/Command | Status  | Code | Description                                             |  Related Attributes     |
 +=================+=========+======+=========================================================+=========================+
@@ -293,6 +297,18 @@
 |                 |         | 0124 | Refused: Not Authorized                                 |                         |
 +-----------------+---------+------+---------------------------------------------------------+-------------------------+
 
+New status codes can be created using ``statuses.Status`` class::
+
+    SUCCESS = Status(0x0000)
+
+``statuses.Status`` class also takes an optional argument ``command`` to create status depending on command.
+This class is a convenience wrapper around integer, that provides information on status type (Failure, Success, Warning
+or Pending) and status description. If status code is unknown to the library it assumes it's a failure with unspecified
+description.
+
+You can add new statuses by using ``statuses.add_status`` function. By using it you will be adding new known status code
+to a global library dictionary of status codes.
+
 """
 
 __author__ = 'Blane'
@@ -312,6 +328,14 @@ UNKNOWN = s('Failure', 'Unknown Status')
 
 
 def add_status(code, code_type, description, end=None, command=None):
+    """Adds new status code to the global library dictionary of known statuses
+
+    :param code: status code or starting value for a range of statuses if ``end`` is provided
+    :param code_type: code type (either Success, Warning, Pending, Cancel or Failure)
+    :param description: status description
+    :param end: optional argument that specifies end value for a range of statuses
+    :param command: DIMSE command, if this status is command/service specific
+    """
     status = s(code_type, description)
     if end is not None:
         code_range = range(code, end + 1)
@@ -449,23 +473,41 @@ def register_statuses():
 
 register_statuses()
 
+#: (0x0000) Success
 SUCCESS = Status(0x0000)
+#: (0x0110) Processing Failure
 PROCESSING_FAILURE = Status(0x0110)
 
+#: (0xC000) Error: Cannot understand (C-STORE)
 C_STORE_CANNON_UNDERSTAND = Status(0xC000, dimse.CStoreRSPMessage)
+#: (0xA700) Refused: Out of Resources (C-STORE)
 C_STORE_OUT_OF_RESOURCES = Status(0xA700, dimse.CStoreRSPMessage)
+#: (0xB006) Elements Discarded (C-STORE)
 C_STORE_ELEMENTS_DISCARDED = Status(0xB006, dimse.CStoreRSPMessage)
 
+#: (0xFF00) Matches are continuing - Current Match is supplied and any Optional Keys were supported in the same
+# manner as Required Keys. (C-FIND)
 C_FIND_PENDING = Status(0xFF00, dimse.CFindRSPMessage)
+#: (0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
+# supported for existence and/or matching for this Identifier. (C-FIND)
 C_FIND_PENDING_WARNING = Status(0xFF01, dimse.CFindRSPMessage)
+#: (0xC000) Failed: Unable to process (C-FIND)
 C_FIND_UNABLE_TO_PROCESS = Status(0xC000, dimse.CFindRSPMessage)
+#: (0xA700) Refused: Out of Resources (C-FIND)
 C_FIND_OUT_OF_RESOURCES = Status(0xA700, dimse.CFindRSPMessage)
 
+#: (0xFF00) Sub-operations are continuing (C-GET)
 C_GET_PENDING = Status(0xFF00, dimse.CGetRSPMessage)
+#: (0xB000) Sub-operations Complete - One or more Failures or Warnings (C-GET)
 C_GET_WARNING = Status(0xB000, dimse.CGetRSPMessage)
+#: (0xC000) Failed: Unable to process (C-GET)
 C_GET_UNABLE_TO_PROCESS = Status(0xC000, dimse.CGetRSPMessage)
 
+#: (0xFF00) Sub-operations are continuing (C-MOVE)
 C_MOVE_PENDING = Status(0xFF00, dimse.CMoveRSPMessage)
+#: (0xB000) Sub-operations Complete - One or more Failures or Warnings (C-MOVE)
 C_MOVE_WARNING = Status(0xB000, dimse.CMoveRSPMessage)
+#: (0xC000) Failed: Unable to process (C-MOVE)
 C_MOVE_UNABLE_TO_PROCESS = Status(0xC000, dimse.CMoveRSPMessage)
+#: (0xA801) Refused: Move Destination unknown
 C_MOVE_DESTINATION_UNKNOWN = Status(0xA801, dimse.CMoveRSPMessage)
