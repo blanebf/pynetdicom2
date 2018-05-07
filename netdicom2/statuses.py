@@ -22,7 +22,7 @@ commands and status types. The table is by no means cover the whole DICOM standa
 |                 |         +------+---------------------------------------------------------+-------------------------+
 |                 |         | 0211 | Unrecognized Operation                                  |                         |
 +-----------------+---------+------+---------------------------------------------------------+-------------------------+
-| ``C-STORE``     | Failure | A7xx | Refused: Out of Resources                               | (0000,0902)             |
+| C-STORE         | Failure | A7xx | Refused: Out of Resources                               | (0000,0902)             |
 |                 |         +------+---------------------------------------------------------+-------------------------+
 |                 |         | A9xx | Error: Data Set does not match SOP Class                | (0000,0901) (0000,0902) |
 |                 |         +------+---------------------------------------------------------+-------------------------+
@@ -45,7 +45,7 @@ commands and status types. The table is by no means cover the whole DICOM standa
 |                 |         | B007 | Data Set does not match SOP Class                       | (0000,0901) (0000,0902) |
 |                 |         +------+---------------------------------------------------------+-------------------------+
 |                 |         | B006 | Elements Discarded                                      | (0000,0901) (0000,0902) |
-\                 +---------+------+---------------------------------------------------------+-------------------------+
+|                 +---------+------+---------------------------------------------------------+-------------------------+
 |                 | Success | 0000 | Success                                                 |                         |
 +-----------------+---------+------+---------------------------------------------------------+-------------------------+
 | C-FIND          | Failure | A700 | Refused: Out of Resources                               | (0000,0902)             |
@@ -488,10 +488,10 @@ C_STORE_OUT_OF_RESOURCES = Status(0xA700, dimse.CStoreRSPMessage)
 C_STORE_ELEMENTS_DISCARDED = Status(0xB006, dimse.CStoreRSPMessage)
 
 #: (0xFF00) Matches are continuing - Current Match is supplied and any Optional Keys were supported in the same
-# manner as Required Keys. (C-FIND)
+#: manner as Required Keys. (C-FIND)
 C_FIND_PENDING = Status(0xFF00, dimse.CFindRSPMessage)
 #: (0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
-# supported for existence and/or matching for this Identifier. (C-FIND)
+#: supported for existence and/or matching for this Identifier. (C-FIND)
 C_FIND_PENDING_WARNING = Status(0xFF01, dimse.CFindRSPMessage)
 #: (0xC000) Failed: Unable to process (C-FIND)
 C_FIND_UNABLE_TO_PROCESS = Status(0xC000, dimse.CFindRSPMessage)
