@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from netdicom2.__version__ import __version__
+
 
 setup(name="pynetdicom2",
       packages=find_packages(),
       include_package_data=True,
-      version=__version__,
+      version="0.9.0",
       zip_safe=False,  # want users to be able to see included examples,tests
       description="Pure python implementation of the DICOM network protocol",
       author="Pavel 'Blane' Tuchin",
