@@ -16,12 +16,12 @@ except ImportError:
     from dicom import dataset
     from dicom import datadict
 
-import netdicom2.applicationentity as ae
-import netdicom2.sopclass as sc
+import pynetdicom2.applicationentity as ae
+import pynetdicom2.sopclass as sc
 
-from netdicom2 import statuses
+from pynetdicom2 import statuses
 
-from netdicom2 import c_find
+from pynetdicom2 import c_find
 
 
 class CEchoTestCase(unittest.TestCase):

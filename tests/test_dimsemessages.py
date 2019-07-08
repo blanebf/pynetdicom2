@@ -4,7 +4,7 @@
 __author__ = 'Blane'
 
 import unittest
-import netdicom2.dimsemessages
+import pynetdicom2.dimsemessages
 
 
 class MessageTesterBase(unittest.TestCase):
@@ -16,7 +16,7 @@ class MessageTesterBase(unittest.TestCase):
 
 class CEchoRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CEchoRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CEchoRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -38,7 +38,7 @@ class CEchoRQMessage(MessageTesterBase):
 
 class CEchoRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CEchoRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.CEchoRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -56,7 +56,7 @@ class CEchoRSPMessage(MessageTesterBase):
 
 class CStoreRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CStoreRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CStoreRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -79,7 +79,7 @@ class CStoreRQMessage(MessageTesterBase):
         self.msg.message_id = message_id
         self.assertEqual(self.msg.message_id, message_id)
 
-        priority = netdicom2.dimsemessages.PRIORITY_HIGH
+        priority = pynetdicom2.dimsemessages.PRIORITY_HIGH
         self.msg.priority = priority
         self.assertEqual(self.msg.priority, priority)
 
@@ -100,7 +100,7 @@ class CStoreRQMessage(MessageTesterBase):
 
 class CStoreRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CStoreRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.CStoreRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -134,7 +134,7 @@ class CStoreRSPMessage(MessageTesterBase):
 
 class CFindRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CFindRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CFindRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -155,14 +155,14 @@ class CFindRQMessage(MessageTesterBase):
         self.assertEqual(self.msg.message_id,
                          message_id)
 
-        priority = netdicom2.dimsemessages.PRIORITY_LOW
+        priority = pynetdicom2.dimsemessages.PRIORITY_LOW
         self.msg.priority = priority
         self.assertEqual(self.msg.priority, priority)
 
 
 class CFindRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CFindRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.CFindRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -190,7 +190,7 @@ class CFindRSPMessage(MessageTesterBase):
 
 class CGetRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CGetRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CGetRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -211,14 +211,14 @@ class CGetRQMessage(MessageTesterBase):
         self.assertEqual(self.msg.message_id,
                          message_id)
 
-        priority = netdicom2.dimsemessages.PRIORITY_LOW
+        priority = pynetdicom2.dimsemessages.PRIORITY_LOW
         self.msg.priority = priority
         self.assertEqual(self.msg.priority, priority)
 
 
 class CGetRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CGetRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.CGetRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -270,7 +270,7 @@ class CGetRSPMessage(MessageTesterBase):
 
 class CMoveRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CMoveRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CMoveRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -292,7 +292,7 @@ class CMoveRQMessage(MessageTesterBase):
         self.assertEqual(self.msg.message_id,
                          message_id)
 
-        priority = netdicom2.dimsemessages.PRIORITY_LOW
+        priority = pynetdicom2.dimsemessages.PRIORITY_LOW
         self.msg.priority = priority
         self.assertEqual(self.msg.priority, priority)
 
@@ -303,7 +303,7 @@ class CMoveRQMessage(MessageTesterBase):
 
 class CMoveRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CMoveRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.CMoveRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -355,7 +355,7 @@ class CMoveRSPMessage(MessageTesterBase):
 
 class CCancelRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.CCancelRQMessage()
+        self.msg = pynetdicom2.dimsemessages.CCancelRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -372,7 +372,7 @@ class CCancelRQMessage(MessageTesterBase):
 
 class NEventReportRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NEventReportRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NEventReportRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -384,7 +384,7 @@ class NEventReportRQMessage(MessageTesterBase):
 
 class NEventReportRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NEventReportRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NEventReportRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -397,7 +397,7 @@ class NEventReportRSPMessage(MessageTesterBase):
 
 class NGetRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NGetRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NGetRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -410,7 +410,7 @@ class NGetRQMessage(MessageTesterBase):
 
 class NGetRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NGetRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NGetRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -422,7 +422,7 @@ class NGetRSPMessage(MessageTesterBase):
 
 class NSetRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NSetRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NSetRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -434,7 +434,7 @@ class NSetRQMessage(MessageTesterBase):
 
 class NSetRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NSetRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NSetRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -447,7 +447,7 @@ class NSetRSPMessage(MessageTesterBase):
 
 class NActionRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NActionRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NActionRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -460,7 +460,7 @@ class NActionRQMessage(MessageTesterBase):
 
 class NActionRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NActionRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NActionRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -474,7 +474,7 @@ class NActionRSPMessage(MessageTesterBase):
 
 class NCreateRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NCreateRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NCreateRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -486,7 +486,7 @@ class NCreateRQMessage(MessageTesterBase):
 
 class NCreateRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NCreateRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NCreateRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -499,7 +499,7 @@ class NCreateRSPMessage(MessageTesterBase):
 
 class NDeleteRQMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NDeleteRQMessage()
+        self.msg = pynetdicom2.dimsemessages.NDeleteRQMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
@@ -511,7 +511,7 @@ class NDeleteRQMessage(MessageTesterBase):
 
 class NDeleteRSPMessage(MessageTesterBase):
     def setUp(self):
-        self.msg = netdicom2.dimsemessages.NDeleteRSPMessage()
+        self.msg = pynetdicom2.dimsemessages.NDeleteRSPMessage()
 
     def test_default_init(self):
         self.assert_command_attributes(self.msg)
