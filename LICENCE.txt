@@ -2,6 +2,7 @@ License file for pynetdicom, a pure-python library implementing the
 DICOM network protocol
 
 Copyright (c) 2012 Patrice Munger
+Copyright (c) 2014 Pavel 'Blane' Tuchin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
