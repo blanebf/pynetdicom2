@@ -1,5 +1,6 @@
 __author__ = 'Blane'
 
+import os
 import unittest
 
 from six.moves import range
@@ -22,6 +23,8 @@ import pynetdicom2.sopclass as sc
 from pynetdicom2 import statuses
 
 from pynetdicom2 import c_find
+
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 class CEchoTestCase(unittest.TestCase):
@@ -125,7 +128,7 @@ class CStoreTestCase(unittest.TestCase):
                 self.assertEqual(status, statuses.SUCCESS)
 
     def test_c_store_from_file(self):
-        file_name = 'test_sr.dcm'
+        file_name = os.path.join(BASE_PATH, 'test_sr.dcm')
         rq = dicom.read_file(file_name)
 
         ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian])\
