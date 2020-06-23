@@ -208,7 +208,7 @@ class AEBase(object):
         else:
             return tmp, start
 
-    def on_association_request(self, assoc):
+    def on_association_request(self, asce, assoc):
         """Extra processing of the association request.
 
         Default implementation of the method does nothing and thus accepts all
@@ -216,6 +216,7 @@ class AEBase(object):
         If association should be rejected user should override this method
         in a sub-class and raise `AssociationRejectedError` when appropriate
 
+        :param asce: association object itself
         :param assoc: association request parameters
         """
         pass
