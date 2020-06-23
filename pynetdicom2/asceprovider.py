@@ -304,7 +304,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     def _establish(self):
         try:
             assoc_req = self.dul.receive(self.ae.timeout)
-            self.ae.on_association_request(assoc_req)
+            self.ae.on_association_request(self, assoc_req)
         except exceptions.AssociationRejectedError as e:
             self.reject(e.result, e.source, e.diagnostic)
             raise
