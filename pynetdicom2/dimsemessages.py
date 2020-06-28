@@ -299,7 +299,7 @@ class CMoveRQMessage(DIMSERequestMessage):
     command_field = 0x0021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageID', 'Priority', 'MoveDestination']
-    move_destination = dimse_property((0x0000, 0x0700))
+    move_destination = dimse_property((0x0000, 0x0600))
 
 
 @status_mixin
