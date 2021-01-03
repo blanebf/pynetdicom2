@@ -132,7 +132,7 @@ class AEBase(object):
         :param store_in_file: indicates if incoming datasets for these SOP
                               Classes should be stored in file.
         """
-        start = max(self.context_def_list.keys()) if self.context_def_list \
+        start = max(self.context_def_list.keys()) + 2 if self.context_def_list \
             else 1
 
         self.context_def_list.update(

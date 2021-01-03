@@ -1,3 +1,6 @@
 *.pyc
 .idea
 .vscode
+.python-version
+dist
+pynetdicom2.egg-info
