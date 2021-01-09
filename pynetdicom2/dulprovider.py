@@ -31,6 +31,7 @@ import struct
 import six
 from six.moves import queue
 
+from . import dimsemessages
 from . import timer
 from . import fsm
 from . import pdu
@@ -50,23 +51,23 @@ def _recv_n(sock, n):
 
 
 PDU_TYPES = {
-    0x01: (pdu.AAssociateRqPDU, 'Evt6'),
-    0x02: (pdu.AAssociateAcPDU, 'Evt3'),
-    0x03: (pdu.AAssociateRjPDU, 'Evt4'),
-    0x04: (pdu.PDataTfPDU, 'Evt10'),
-    0x05: (pdu.AReleaseRqPDU, 'Evt12'),
-    0x06: (pdu.AReleaseRpPDU, 'Evt13'),
-    0x07: (pdu.AAbortPDU, 'Evt16')
+    0x01: (pdu.AAssociateRqPDU, fsm.Events.EVT_6),
+    0x02: (pdu.AAssociateAcPDU, fsm.Events.EVT_3),
+    0x03: (pdu.AAssociateRjPDU, fsm.Events.EVT_4),
+    0x04: (pdu.PDataTfPDU, fsm.Events.EVT_10),
+    0x05: (pdu.AReleaseRqPDU, fsm.Events.EVT_12),
+    0x06: (pdu.AReleaseRpPDU, fsm.Events.EVT_13),
+    0x07: (pdu.AAbortPDU, fsm.Events.EVT_16)
 }
 
 PDU_TO_EVENT = {
-    pdu.AAssociateRqPDU.pdu_type: 'Evt1',  # A-ASSOCIATE Request
-    pdu.AAssociateAcPDU.pdu_type: 'Evt7',  # A-ASSOCIATE Response (accept)
-    pdu.AAssociateRjPDU.pdu_type: 'Evt8',  # A-ASSOCIATE Response (reject)
-    pdu.AReleaseRqPDU.pdu_type: 'Evt11',   # A-Release Request
-    pdu.AReleaseRpPDU.pdu_type: 'Evt14',   # A-Release Response
-    pdu.AAbortPDU.pdu_type: 'Evt15',
-    pdu.PDataTfPDU.pdu_type: 'Evt9'
+    pdu.AAssociateRqPDU.pdu_type: fsm.Events.EVT_1,  # A-ASSOCIATE Request
+    pdu.AAssociateAcPDU.pdu_type: fsm.Events.EVT_7,  # A-ASSOCIATE Response (accept)
+    pdu.AAssociateRjPDU.pdu_type: fsm.Events.EVT_8,  # A-ASSOCIATE Response (reject)
+    pdu.AReleaseRqPDU.pdu_type: fsm.Events.EVT_11,   # A-Release Request
+    pdu.AReleaseRpPDU.pdu_type: fsm.Events.EVT_14,   # A-Release Response
+    pdu.AAbortPDU.pdu_type: fsm.Events.EVT_15,
+    pdu.PDataTfPDU.pdu_type: fsm.Events.EVT_9
 }
 
 
@@ -85,7 +86,7 @@ class DULServiceProvider(threading.Thread):
 
     """
 
-    def __init__(self, dul_socket=None):
+    def __init__(self, store_in_file, get_file_cb, dul_socket=None):
         """Initializes DUL service.
 
         If no socket is provided service will act as 'client' and will open
@@ -98,6 +99,7 @@ class DULServiceProvider(threading.Thread):
         super(DULServiceProvider, self).__init__()
 
         self.primitive = None  # current pdu
+        self.dimse_gen = None
         self.event = collections.deque()
 
         self.to_service_user = queue.Queue()
@@ -105,16 +107,26 @@ class DULServiceProvider(threading.Thread):
 
         # Setup the timer and finite state machines
         self.timer = timer.Timer(10)
-        self.state_machine = fsm.StateMachine(self)
+        self.state_machine = fsm.StateMachine(
+            self, self.timer, store_in_file, get_file_cb
+        )
         self._is_killed = threading.Event()
 
         if dul_socket:  # A client socket has been given. Generate an event 5
-            self.event.append('Evt5')
+            self.event.append(fsm.Events.EVT_5)
 
         self.dul_socket = dul_socket
 
         self.is_killed = False
         self.start()
+
+    @property
+    def accepted_contexts(self):
+        return self.state_machine.accepted_contexts
+
+    @accepted_contexts.setter
+    def accepted_contexts(self, value):
+        self.state_machine.accepted_contexts = value
 
     def send(self, primitive):
         """Puts PDU into outgoing queue.
@@ -155,7 +167,7 @@ class DULServiceProvider(threading.Thread):
         :return: ``True`` if service termination flag was successfully set
                  (current association state was 'idle'), ``False`` otherwise
         """
-        if self.state_machine.current_state == 'Sta1':
+        if self.state_machine.current_state == fsm.States.STA_1:
             self.is_killed = True
             return True
         else:
@@ -175,7 +187,7 @@ class DULServiceProvider(threading.Thread):
                     evt = self.event.popleft()
                 except IndexError:
                     continue
-                self.state_machine.action(evt, self)
+                self.state_machine.action(evt)
         except Exception:
             self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
             raise
@@ -183,7 +195,7 @@ class DULServiceProvider(threading.Thread):
             self._is_killed.set()
 
     def _check_network(self):
-        if self.state_machine.current_state == 'Sta13':
+        if self.state_machine.current_state == fsm.States.STA_13:
             # waiting for connection to close
             if self.dul_socket is None:
                 return False
@@ -197,14 +209,14 @@ class DULServiceProvider(threading.Thread):
 
             self.dul_socket.close()
             self.dul_socket = None
-            self.event.append('Evt17')
+            self.event.append(fsm.Events.EVT_17)
             return True
 
         if not self.dul_socket:
             return False
 
-        if self.state_machine.current_state == 'Sta4':
-            self.event.append('Evt2')
+        if self.state_machine.current_state == fsm.States.STA_4:
+            self.event.append(fsm.Events.EVT_2)
             return True
 
         # check if something comes in the client socket
@@ -216,7 +228,19 @@ class DULServiceProvider(threading.Thread):
 
     def _check_outgoing_pdu(self):
         try:
-            self.primitive = self.from_service_user.get(False, None)
+            if self.dimse_gen:
+                try:
+                    self.primitive = next(self.dimse_gen)
+                    self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
+                    return True
+                except StopIteration:
+                    self.dimse_gen = None
+            incoming = self.from_service_user.get(False, None)
+            if hasattr(incoming, 'pdu_type'):
+                self.primitive = incoming
+            else:
+                self.dimse_gen = incoming
+                self.primitive = next(self.dimse_gen)
             self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
             return True
         except KeyError:
@@ -228,7 +252,7 @@ class DULServiceProvider(threading.Thread):
 
     def _check_timer(self):
         if self.timer.check() is False:
-            self.event.append('Evt18')  # Timer expired
+            self.event.append(fsm.Events.EVT_18)  # Timer expired
             return True
         else:
             return False
@@ -238,14 +262,14 @@ class DULServiceProvider(threading.Thread):
         try:
             raw_pdu = self.dul_socket.recv(1)
         except socket.error:
-            self.event.append('Evt17')
+            self.event.append(fsm.Events.EVT_17)
             self.dul_socket.close()
             self.dul_socket = None
             return
 
         if raw_pdu == b'':
             # Remote port has been closed
-            self.event.append('Evt17')
+            self.event.append(fsm.Events.EVT_17)
             self.dul_socket.close()
             self.dul_socket = None
             return
@@ -265,4 +289,4 @@ class DULServiceProvider(threading.Thread):
                 self.primitive = pdu_type.decode(raw_pdu)
                 self.event.append(event)
             except KeyError:
-                self.event.append('Evt19')
+                self.event.append(fsm.Events.EVT_19)

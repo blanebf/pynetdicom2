@@ -203,14 +203,13 @@ class StorageCommitmentTestCase(unittest.TestCase):
                            'AET2', 11112)\
             .add_scp(sc.StorageCommitment())
 
-        with ae2:
-            with ae1:
-                with ae1.request_association(self.remote_ae2) as assoc:
-                    service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
+        with ae2, ae1:
+            with ae1.request_association(self.remote_ae2) as assoc:
+                service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
-                    status = service(self.transaction, uids, 1)
-                    self.assertEqual(status, statuses.SUCCESS)
-                    self.event.wait(20)
+                status = service(self.transaction, uids, 1)
+                self.assertEqual(status, statuses.SUCCESS)
+                self.event.wait(20)
 
     def test_commitment_failure(self):
         uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i))
@@ -227,11 +226,10 @@ class StorageCommitmentTestCase(unittest.TestCase):
                            'AET2', 11112)\
             .add_scp(sc.StorageCommitment())
 
-        with ae2:
-            with ae1:
-                with ae1.request_association(self.remote_ae2) as assoc:
-                    service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
+        with ae2, ae1:
+            with ae1.request_association(self.remote_ae2) as assoc:
+                service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
-                    status = service(self.transaction, uids, 1)
-                    self.assertEqual(status, statuses.SUCCESS)
-                    self.event.wait(20)
+                status = service(self.transaction, uids, 1)
+                self.assertEqual(status, statuses.SUCCESS)
+                self.event.wait(20)

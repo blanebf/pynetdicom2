@@ -199,14 +199,20 @@ class DIMSEMessage(object):
         if self.data_set:
             if isinstance(self.data_set, bytes):
                 # got dataset as byte array
+                is_file = False
                 gen = fragment(self.data_set, max_pdu_length, 0, 2)
             else:
                 # assume that dataset is in file-like object
+                is_file = True
                 gen = fragment_file(self.data_set, max_pdu_length, 0, 2)
-            for item, bit in gen:
-                value_item = pdu.PresentationDataValueItem(
-                    pc_id, struct.pack('b', bit) + item)
-                yield pdu.PDataTfPDU([value_item])
+            try:
+                for item, bit in gen:
+                    value_item = pdu.PresentationDataValueItem(
+                        pc_id, struct.pack('b', bit) + item)
+                    yield pdu.PDataTfPDU([value_item])
+            finally:
+                if is_file:
+                    self.data_set.close()
 
     def set_length(self):
         it = (len(dsutils.encode_element(v, True, True))
