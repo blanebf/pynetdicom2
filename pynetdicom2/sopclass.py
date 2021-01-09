@@ -187,27 +187,27 @@ def storage_scu(asce, ctx, dataset, msg_id):
 
     if isinstance(dataset, six.string_types):
         # Got file name
-        with open(dataset, 'rb') as ds:
-            zero = ds.tell()
-            _dicom.read_preamble(ds, False)
-            meta = _dicom.read_file_meta_info(ds)
-            c_store.sop_class_uid = meta.MediaStorageSOPClassUID
-            try:
-                instance_uid = meta.MediaStorageSOPInstanceUID
-            except AttributeError:
-                # Dataset was written by a bunch of a-holes (No SOP Instance UID
-                # in file meta).
-                # If it still fails, then dataset was written
-                # by a bunch of ****s
-                start = ds.tell()
-                ds.seek(zero)
-                ds_full = _dicom.read_file(ds, stop_before_pixels=True)
-                instance_uid = ds_full.SOPInstanceUID
-                ds.seek(start)
+        ds = open(dataset, 'rb')
+        zero = ds.tell()
+        _dicom.read_preamble(ds, False)
+        meta = _dicom.read_file_meta_info(ds)
+        c_store.sop_class_uid = meta.MediaStorageSOPClassUID
+        try:
+            instance_uid = meta.MediaStorageSOPInstanceUID
+        except AttributeError:
+            # Dataset was written by a bunch of a-holes (No SOP Instance UID
+            # in file meta).
+            # If it still fails, then dataset was written
+            # by a bunch of ****s
+            start = ds.tell()
+            ds.seek(zero)
+            ds_full = _dicom.read_file(ds, stop_before_pixels=True)
+            instance_uid = ds_full.SOPInstanceUID
+            ds.seek(start)
 
-            c_store.affected_sop_instance_uid = instance_uid
-            c_store.data_set = ds
-            asce.send(c_store, ctx.id)
+        c_store.affected_sop_instance_uid = instance_uid
+        c_store.data_set = ds
+        asce.send(c_store, ctx.id)
     else:
         # Assume it's dataset object
         c_store.sop_class_uid = dataset.SOPClassUID
@@ -259,7 +259,7 @@ FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS]
 def qr_find_scu(asce, ctx, ds, msg_id):
     """Query/Retrieve find service user role implementation.
 
-    SCU is implemented as generator that yields responses (dataset and status) 
+    SCU is implemented as generator that yields responses (dataset and status)
     from remote AE.
     If status changes from 'Pending' generator exits.
 

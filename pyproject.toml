@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pynetdicom2"
-version = "0.9.3"
+version = "0.9.4"
 description = "pynetdicom2 is a pure python package implementing the DICOM network protocol"
 authors = ["Pavel 'Blane' Tuchin <blane.public@gmail.com>"]
 

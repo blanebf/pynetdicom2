@@ -31,6 +31,7 @@ PContextDef = collections.namedtuple(
 
 
 APPLICATION_CONTEXT_NAME = _dicom.UID('1.2.840.10008.3.1.1.1')
+IMPLEMENTATION_UID = _dicom.UID('1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000')
 
 
 def build_pres_context_def_list(context_def_list):
@@ -57,15 +58,17 @@ class Association(object):
         :param local_ae: local AE title parameters
         :param dul_socket: socket for DUL provider or None if it's not needed
         """
-        self.dul = dulprovider.DULServiceProvider(dul_socket)
         self.ae = local_ae
+        self.dul = dulprovider.DULServiceProvider(
+            self.ae.store_in_file, self.ae.get_file, dul_socket
+        )
         self.association_established = False
         self.max_pdu_length = 16000
         self.accepted_contexts = {}
 
     def get_dul_message(self):
         dul_msg = self.dul.receive(self.ae.timeout)
-        if dul_msg.pdu_type == pdu.PDataTfPDU.pdu_type\
+        if isinstance(dul_msg, tuple) \
                 or dul_msg.pdu_type == pdu.AAssociateAcPDU.pdu_type:
             return dul_msg
         elif dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
@@ -81,81 +84,10 @@ class Association(object):
 
     def send(self, dimse_msg, pc_id):
         dimse_msg.set_length()
-        for p_data in dimse_msg.encode(pc_id, self.max_pdu_length):
-            self.dul.send(p_data)
+        self.dul.send(dimse_msg.encode(pc_id, self.max_pdu_length))
 
     def receive(self):
-        # TODO: Refactor this madness
-        encoded_command_set = []
-        encoded_data_set = []
-
-        command_set_received = False
-        data_set_received = False
-
-        receiving = True
-        dataset = None
-
-        pc_id = None
-        msg = None
-
-        start = 0
-
-        try:
-            while receiving:
-                p_data = self.get_dul_message()
-
-                for value_item in p_data.data_value_items:
-                    # must be able to read P-DATA with several PDVs
-                    pc_id = value_item.context_id
-                    marker = six.indexbytes(value_item.data_value, 0)
-                    if marker in (1, 3):
-                        encoded_command_set.append(value_item.data_value[1:])
-                        if marker == 3:
-                            command_set_received = True
-                            command_set = dsutils.decode(
-                                b''.join(encoded_command_set),
-                                True, True
-                            )
-
-                            msg = self._command_set_to_message(command_set)
-                            no_ds = command_set[(0x0000,
-                                                 0x0800)].value == 0x0101
-                            use_file = (msg.sop_class_uid in
-                                        self.ae.store_in_file)
-                            if not no_ds and use_file:
-                                ctx = self.accepted_contexts[pc_id]
-                                dataset, start = self.ae.get_file(ctx,
-                                                                  command_set)
-                                if encoded_data_set:
-                                    dataset.writelines(encoded_data_set)
-                            if no_ds or data_set_received:
-                                receiving = False  # response: no dataset
-                                break
-                    elif marker in (0, 2):
-                        if dataset:
-                            dataset.write(value_item.data_value[1:])
-                        else:
-                            encoded_data_set.append(value_item.data_value[1:])
-                        if marker == 2:
-                            data_set_received = True
-                            if command_set_received:
-                                receiving = False
-                                break
-                    else:
-                        raise exceptions.DIMSEProcessingError(
-                            'Incorrect first PDV byte')
-        except Exception:
-            if dataset:
-                dataset.close()
-            raise
-
-        if data_set_received:
-            if dataset:
-                dataset.seek(start)
-                msg.data_set = dataset
-            else:
-                msg.data_set = b''.join(encoded_data_set)
-        return msg, pc_id
+        return self.get_dul_message()
 
     def kill(self):
         """Stops internal DUL service provider.
@@ -278,6 +210,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
                     pdu.PresentationContextItemAC(
                         pc_id, 1, pdu.TransferSyntaxSubItem(''))
                 )
+        self.dul.accepted_contexts = self.accepted_contexts
 
         rsp.append(user_items)
         res = pdu.AAssociateAcPDU(
@@ -348,8 +281,9 @@ class AssociationRequester(Association):
         self.max_pdu_length = mp
 
         max_pdu_length_par = userdataitems.MaximumLengthSubItem(mp)
-        user_information = [max_pdu_length_par] + users_pdu \
-            if users_pdu else [max_pdu_length_par]
+        implementation_uid = userdataitems.ImplementationClassUIDSubItem(IMPLEMENTATION_UID)
+        user_information = [max_pdu_length_par, implementation_uid] + users_pdu \
+            if users_pdu else [max_pdu_length_par, implementation_uid]
         username = remote_ae.get('username')
         password = remote_ae.get('password')
         if username and password:
@@ -391,6 +325,7 @@ class AssociationRequester(Association):
             self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
             self.accepted_contexts[pc_id] = PContextDef(pc_id, sop_class,
                                                         ts_uid)
+        self.dul.accepted_contexts = self.accepted_contexts
         return response
 
     def request(self):
