@@ -17,13 +17,13 @@ has only two methods:
 In addition to PDUs, several items and sub-items classes can be found in this
 module. These classes are:
 
-        * :class:`~netdicom2.pdu.ApplicationContextItem`
-        * :class:`~netdicom2.pdu.PresentationContextItemRQ`
-        * :class:`~netdicom2.pdu.AbstractSyntaxSubItem`
-        * :class:`~netdicom2.pdu.TransferSyntaxSubItem`
-        * :class:`~netdicom2.pdu.UserInformationItem`
-        * :class:`~netdicom2.pdu.PresentationContextItemAC`
-        * :class:`~netdicom2.pdu.PresentationDataValueItem`
+        * :class:`~pynetdicom2.pdu.ApplicationContextItem`
+        * :class:`~pynetdicom2.pdu.PresentationContextItemRQ`
+        * :class:`~pynetdicom2.pdu.AbstractSyntaxSubItem`
+        * :class:`~pynetdicom2.pdu.TransferSyntaxSubItem`
+        * :class:`~pynetdicom2.pdu.UserInformationItem`
+        * :class:`~pynetdicom2.pdu.PresentationContextItemAC`
+        * :class:`~pynetdicom2.pdu.PresentationDataValueItem`
 
 The rest sub-items for User Data Information Item can be found at
 :doc:`userdataitems`.
@@ -33,11 +33,12 @@ from __future__ import absolute_import
 
 import struct
 
-from . import _dicom
+import six
+from pydicom import uid
+
 from . import exceptions
 from . import userdataitems
 
-import six
 if six.PY3:
     from six import BytesIO as cStringIO
 else:
@@ -175,7 +176,7 @@ class AAssociateRjPDU(object):
 
     You can look up possible values for fields in DICOM standard
     (referenced above) or in documentation for
-    :class:`~netdicom2.exceptions.AssociationRejectedError`
+    :class:`~pynetdicom2.exceptions.AssociationRejectedError`
 
     :param result: Result PDU field. (unsigned byte)
     :param source: Source PDU field (unsigned byte)
@@ -269,13 +270,11 @@ class PDataTfPDU(object):
 
     @property
     def pdu_length(self):
-        return sum((i.total_length()
-                    for i in self.data_value_items))
+        return sum((i.total_length() for i in self.data_value_items))
 
     def encode(self):
         return self.header.pack(self.pdu_type, self.reserved, self.pdu_length)\
-            + b''.join([item.encode()
-                        for item in self.data_value_items])
+            + b''.join([item.encode() for item in self.data_value_items])
 
     @classmethod
     def decode(cls, rawstring):
@@ -293,7 +292,7 @@ class PDataTfPDU(object):
                 yield item
 
         stream = cStringIO(rawstring)
-        pdu_type, reserved, pdu_length = cls.header.unpack(stream.read(6))
+        _, reserved, pdu_length = cls.header.unpack(stream.read(6))
         data_value_items = list(iter_items())
         return cls(data_value_items, reserved)
 
@@ -393,10 +392,10 @@ class AAbortPDU(object):
         self.reason_diag = reason_diag  # unsigned byte
 
     def __repr__(self):
-        return 'AAbortPDU(source={self.abort_source}, ' \
+        return 'AAbortPDU(source={self.source}, ' \
                'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
                'reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3 = reserved3})'.format(self=self)
+               'reserved3={self.reserved3})'.format(self=self)
 
     def encode(self):
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
@@ -527,7 +526,7 @@ class PresentationContextItemRQ(object):
             while next_type(stream) == 0x40:
                 yield TransferSyntaxSubItem.decode(stream)
 
-        _, reserved1, item_length, context_id, \
+        _, reserved1, _, context_id, \
             reserved2, reserved3, reserved4 = cls.header.unpack(stream.read(8))
         abs_sub_item = AbstractSyntaxSubItem.decode(stream)
         ts_sub_items = list(iter_items())
@@ -585,7 +584,7 @@ class PresentationContextItemAC(object):
         :param stream: raw data stream
         :return: decoded context item
         """
-        _, reserved1, item_length, context_id, reserved2, result_reason, \
+        _, reserved1, _, context_id, reserved2, result_reason, \
             reserved3 = cls.header.unpack(stream.read(8))
         ts_sub_item = TransferSyntaxSubItem.decode(stream)
         return cls(context_id=context_id, result_reason=result_reason,
@@ -634,7 +633,7 @@ class AbstractSyntaxSubItem(object):
         :return: decoded abstract syntax sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        name = _dicom.UID(stream.read(item_length).decode())
+        name = uid.UID(stream.read(item_length).decode())
         return cls(name=name, reserved=reserved)
 
     def total_length(self):
@@ -656,7 +655,7 @@ class TransferSyntaxSubItem(object):
 
     def __init__(self, name, reserved=0x00):
         self.reserved = reserved  # unsigned byte
-        self.name = _dicom.UID(name)  # string
+        self.name = uid.UID(name)  # string
 
     def __repr__(self):
         return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(
@@ -694,7 +693,7 @@ class UserInformationItem(object):
                      (0x00). Standard advises against testing this field value.
     :param user_data: list containing the following:
 
-                            * one :class:`~netdicom2.userdataitems.MaximumLengthSubItem`
+                            * one :class:`~pynetdicom2.userdataitems.MaximumLengthSubItem`
                             * zero or more raw strings encoding user data items
 
     """
@@ -742,7 +741,7 @@ class UserInformationItem(object):
         :param stream: raw data stream
         :return: decoded user information item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, _ = cls.header.unpack(stream.read(4))
         # read the rest of user info
         user_data = [sub_item for sub_item in cls.sub_items(stream)]
         return cls(user_data=user_data, reserved=reserved)

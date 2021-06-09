@@ -1,6 +1,6 @@
 DIMSE Messages
 ==============
 
-.. automodule:: netdicom2.dimsemessages
+.. automodule:: pynetdicom2.dimsemessages
 	:members:
 	:member-order: bysource

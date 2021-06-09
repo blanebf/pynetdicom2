@@ -8,10 +8,20 @@ to and from binary formats as specified in PS 3.7 of DICOM standard.
 """
 
 import struct
-from . import _dicom
+
+from pydicom import uid
 
 
 class MaximumLengthSubItem(object):
+    """Represents sub-item described in PS 3.8 D.1 Maximum Length Negotiation
+
+    Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
+
+    :ivar reserved: this reserved field shall be sent with a value 00H but not
+                    tested to this value when received.
+    :ivar item_length: item length, in the case of this item it's fixed to 0x0004
+    :ivar maximum_length_received: P-DATA-TF PDUs size limit
+    """
     item_type = 0x51
     item_format = struct.Struct('>B B H I')
 
@@ -86,7 +96,7 @@ class ImplementationClassUIDSubItem(object):
     @classmethod
     def decode(cls, stream):
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        implementation_class_uid = _dicom.UID(stream.read(item_length).decode())
+        implementation_class_uid = uid.UID(stream.read(item_length).decode())
         return cls(reserved=reserved,
                    implementation_class_uid=implementation_class_uid)
 
@@ -196,8 +206,8 @@ class ScpScuRoleSelectionSubItem(object):
 
     @classmethod
     def decode(cls, stream):
-        _, reserved, item_length, uid_length = cls.header.unpack(stream.read(6))
-        sop_class_uid = _dicom.UID(stream.read(uid_length).decode())
+        _, reserved, _, uid_length = cls.header.unpack(stream.read(6))
+        sop_class_uid = uid.UID(stream.read(uid_length).decode())
         scu_role, scp_role = struct.unpack('B B', stream.read(2))
         return cls(reserved=reserved, sop_class_uid=sop_class_uid,
                    scu_role=scu_role, scp_role=scp_role)
@@ -258,7 +268,7 @@ class SOPClassExtendedNegotiationSubItem(object):
         :return: new sub-item
         """
         _, reserved, item_length, uid_length = cls.header.unpack(stream.read(6))
-        sop_class_uid = _dicom.UID(stream.read(uid_length).decode())
+        sop_class_uid = uid.UID(stream.read(uid_length).decode())
         app_info_length = item_length - uid_length
         app_info = stream.read(app_info_length)
         return cls(reserved=reserved, sop_class_uid=sop_class_uid,
@@ -292,8 +302,16 @@ class UserIdentityNegotiationSubItem(object):
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
         self.positive_response_req = positive_response_req
-        self.primary_field = primary_field  # string
-        self.secondary_field = secondary_field  # string
+        self._primary_field = primary_field.encode('utf8')  # string
+        self._secondary_field = secondary_field.encode('utf8')  # string
+
+    @property
+    def primary_field(self):
+        return self._primary_field.decode('utf8')
+
+    @property
+    def secondary_field(self):
+        return self._secondary_field.decode('utf8')
 
     def __repr__(self):
         return 'UserIdentityNegotiationSubItem(' \
@@ -309,7 +327,7 @@ class UserIdentityNegotiationSubItem(object):
 
         :return: item length
         """
-        return 6 + len(self.primary_field) + len(self.secondary_field)
+        return 6 + len(self._primary_field) + len(self._secondary_field)
 
     @property
     def total_length(self):
@@ -324,15 +342,13 @@ class UserIdentityNegotiationSubItem(object):
 
         :return: binary representation of an item
         """
-        primary_field = self.primary_field.encode()
-        secondary_field = self.secondary_field.encode()
         return b''.join(
             [self.header.pack(self.item_type, self.reserved, self.item_length,
                               self.user_identity_type,
                               self.positive_response_req,
-                              len(primary_field)),
-             primary_field, struct.pack('>H', len(secondary_field)),
-             secondary_field])
+                              len(self._primary_field)),
+             self._primary_field, struct.pack('>H', len(self._secondary_field)),
+             self._secondary_field])
 
     @classmethod
     def decode(cls, stream):
@@ -341,13 +357,13 @@ class UserIdentityNegotiationSubItem(object):
         :param stream: binary stream that should be decoded
         :return: new sub-item
         """
-        _, reserved, item_length, user_identity_type, \
+        _, reserved, _, user_identity_type, \
             positive_response_req, \
             primary_field_len = cls.header.unpack(stream.read(cls.header.size))
-        primary_field = stream.read(primary_field_len).decode()
+        primary_field = stream.read(primary_field_len)
         secondary_field_len = struct.unpack('>H', stream.read(2))[0]
-        secondary_field = stream.read(secondary_field_len).decode()
-        return cls(primary_field, secondary_field, user_identity_type,
+        secondary_field = stream.read(secondary_field_len)
+        return cls(primary_field.decode('utf8'), secondary_field.decode('utf8'), user_identity_type,
                    positive_response_req, reserved)
 
 
@@ -410,8 +426,7 @@ class UserIdentityNegotiationSubItemAc(object):
         :param stream: binary stream that should be decoded
         :return: new sub-item
         """
-        _, reserved, item_length, \
-            response_len = cls.header.unpack(stream.read(cls.header.size))
+        _, reserved, _, response_len = cls.header.unpack(stream.read(cls.header.size))
         server_response = stream.read(response_len).decode()
         return cls(server_response, reserved)
 
@@ -443,9 +458,8 @@ class GenericUserDataSubItem(object):
         return 4 + self.item_length
 
     def encode(self):
-        return b''.join([self.header.pack(self.item_type, self.reserved,
-                                          self.item_length),
-                        self.user_data])
+        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
+                         self.user_data])
 
     @classmethod
     def decode(cls, stream):

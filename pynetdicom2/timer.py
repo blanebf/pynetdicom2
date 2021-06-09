@@ -25,8 +25,6 @@ class Timer(object):
         self.start()
 
     def check(self):
-        if self._start_time and \
-                (time.time() - self._start_time > self._max_seconds):
+        if self._start_time and (time.time() - self._start_time > self._max_seconds):
             return False
-        else:
-            return True
+        return True

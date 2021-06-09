@@ -24,15 +24,17 @@ class TestPDUEncoding(unittest.TestCase):
         self.compare_pdu(pdu, type(pdu).decode(pdu.encode()))
 
     def test_a_associate_rq_pdu(self):
-        pdu = pynetdicom2.pdu.AAssociateRqPDU(called_ae_title='aet1',
-                                            calling_ae_title='aet2',
-                                            variable_items=[])
+        pdu = pynetdicom2.pdu.AAssociateRqPDU(
+            called_ae_title='aet1',
+            calling_ae_title='aet2',
+            variable_items=[])
         self.decode_and_compare(pdu)
 
     def test_a_associate_ac_pdu(self):
-        pdu = pynetdicom2.pdu.AAssociateAcPDU(called_ae_title='aet1',
-                                            calling_ae_title='aet2',
-                                            variable_items=[])
+        pdu = pynetdicom2.pdu.AAssociateAcPDU(
+            called_ae_title='aet1',
+            calling_ae_title='aet2',
+            variable_items=[])
         self.decode_and_compare(pdu)
 
 
@@ -50,8 +52,9 @@ class TestSubItemEncoding(unittest.TestCase):
 
     def test_data_value_item(self):
         test_string = b'test data'
-        item = pynetdicom2.pdu.PresentationDataValueItem(context_id=3,
-                                                       data_value=test_string)
+        item = pynetdicom2.pdu.PresentationDataValueItem(
+            context_id=3,
+            data_value=test_string)
         self.decode_and_compare_sub_item(item)
 
     def test_generic_user_data_sub_item(self):
@@ -88,17 +91,17 @@ class TestSubItemEncoding(unittest.TestCase):
 
     def test_user_identity_negotiation(self):
         item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItem(
-            'user', 'password')
+            u'user', u'password')
         self.decode_and_compare_sub_item(item)
 
     def test_user_identity_negotiation_name_only(self):
         item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItem(
-            'user', user_identity_type=1)
+            u'user', user_identity_type=1)
         self.decode_and_compare_sub_item(item)
 
     def test_user_identity_negotiation_ac(self):
         item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItemAc(
-            'test_key')
+            u'test_key')
         self.decode_and_compare_sub_item(item)
 
 

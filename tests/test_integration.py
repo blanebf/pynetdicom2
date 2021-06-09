@@ -1,21 +1,14 @@
 __author__ = 'Blane'
 
 import os
+import threading
 import unittest
 
 from six.moves import range
 
-try:
-    import pydicom as dicom
-    from pydicom import uid
-    from pydicom import dataset
-    from pydicom import datadict
-except ImportError:
-    # pre 1.0 pydicom
-    import dicom
-    from dicom import UID as uid
-    from dicom import dataset
-    from dicom import datadict
+import pydicom
+from pydicom import uid
+from pydicom import dataset
 
 import pynetdicom2.applicationentity as ae
 import pynetdicom2.sopclass as sc
@@ -30,7 +23,7 @@ BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 class CEchoTestCase(unittest.TestCase):
     def test_c_echo_positive(self):
         ae1 = ae.ClientAE('AET1').add_scu(sc.verification_scu)
-        ae2 = ae.AE('AET2', 11112).add_scp(sc.verification_scp)
+        ae2 = ae.AE('AET2', 11112, bind_and_activate=False).add_scp(sc.verification_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                              username='admin', password='123')
@@ -44,7 +37,7 @@ class CEchoTestCase(unittest.TestCase):
 
 class CFindServerAE(ae.AE):
     def __init__(self, test_name, test, *args, **kwargs):
-        super(CFindServerAE, self).__init__(*args, **kwargs)
+        super(CFindServerAE, self).__init__(bind_and_activate=False, *args, **kwargs)
         self.test_name = test_name
         self.test = test
 
@@ -92,12 +85,12 @@ class CFindWrapperTestCase(unittest.TestCase):
 
 class CStoreAE(ae.AE):
     def __init__(self, test, rq, *args, **kwargs):
-        ae.AE.__init__(self, *args, **kwargs)
+        ae.AE.__init__(self, max_pdu_length=1024, bind_and_activate=False, *args, **kwargs)
         self.test = test
         self.rq = rq
 
     def on_receive_store(self, context, ds):
-        d = dicom.read_file(ds)
+        d = pydicom.dcmread(ds)
         self.test.assertEqual(context.sop_class, self.rq.SOPClassUID)
         self.test.assertEqual(d.PatientName, self.rq.PatientName)
         self.test.assertEqual(d.StudyInstanceUID, self.rq.StudyInstanceUID)
@@ -129,9 +122,9 @@ class CStoreTestCase(unittest.TestCase):
 
     def test_c_store_from_file(self):
         file_name = os.path.join(BASE_PATH, 'test_sr.dcm')
-        rq = dicom.read_file(file_name)
+        rq = pydicom.dcmread(file_name)
 
-        ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian])\
+        ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian],  max_pdu_length=1024)\
             .add_scu(sc.storage_scu, [sc.COMPREHENSIVE_SR_STORAGE])
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
@@ -141,9 +134,6 @@ class CStoreTestCase(unittest.TestCase):
 
                 status = service(file_name, 1)
                 self.assertEqual(status, statuses.SUCCESS)
-
-
-import threading
 
 
 class CommitmentAE(ae.AE):
@@ -158,14 +148,14 @@ class CommitmentAE(ae.AE):
         self.event = event
         self.remote_ae = remote_ae
 
-    def on_commitment_request(self, remote_ae, uids):
+    def on_commitment_request(self, _, uids):
         success = []
         failures = []
-        for uid in uids:
-            if uid in self.success:
-                success.append(uid)
+        for _uid in uids:
+            if _uid in self.success:
+                success.append(_uid)
             else:
-                cls, inst = uid
+                cls, inst = _uid
                 failures.append((cls, inst,
                                  sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE))
         return self.remote_ae, success, failures

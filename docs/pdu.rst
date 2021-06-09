@@ -1,6 +1,6 @@
 PDU Types
 =========
 
-.. automodule:: netdicom2.pdu
+.. automodule:: pynetdicom2.pdu
 	:members:
 	:member-order: bysource

@@ -1,6 +1,6 @@
 Application Entities
 ====================
 
-.. automodule:: netdicom2.applicationentity
+.. automodule:: pynetdicom2.applicationentity
 	:members:
 	:member-order: bysource

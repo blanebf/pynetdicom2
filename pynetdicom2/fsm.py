@@ -328,7 +328,7 @@ class StateMachine(object):
 
     def ae_2(self):
         """Send A_ASSOCIATE-RQ PDU."""
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_5
 
     def ae_3(self):
@@ -365,18 +365,18 @@ class StateMachine(object):
 
     def ae_7(self):
         """Send A-ASSOCIATE-AC PDU."""
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_6
 
     def ae_8(self):
         """Send A-ASSOCIATE-RJ PDU."""
         # not sure about this ...
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
     def dt_1(self):
         """Send P-DATA-TF PDU."""
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         self.primitive = None
         return States.STA_6
 
@@ -397,7 +397,7 @@ class StateMachine(object):
     def ar_1(self):
         """Send A-RELEASE-RQ PDU."""
         self.primitive = pdu.AReleaseRqPDU()
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_7
 
     def ar_2(self):
@@ -415,7 +415,7 @@ class StateMachine(object):
     def ar_4(self):
         """Issue A-RELEASE-RP PDU and start ARTIM timer."""
         self.primitive = pdu.AReleaseRpPDU()
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         self.timer.start()
         return States.STA_13
 
@@ -440,7 +440,7 @@ class StateMachine(object):
 
     def ar_7(self):
         """Issue P-DATA-TF PDU."""
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_8
 
     def ar_8(self):
@@ -448,13 +448,12 @@ class StateMachine(object):
         self.to_service_user.put(self.primitive)
         if self.provider.requestor == 1:
             return States.STA_9
-        else:
-            return States.STA_10
+        return States.STA_10
 
     def ar_9(self):
         """Send A-RELEASE-RP PDU."""
         self.primitive = pdu.AReleaseRpPDU()
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_11
 
     def ar_10(self):
@@ -466,7 +465,7 @@ class StateMachine(object):
         """Send A-ABORT PDU (service-user source) and start (or restart)
         ARTIM timer.
         """
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         self.timer.restart()
         return States.STA_13
 
@@ -509,14 +508,14 @@ class StateMachine(object):
 
     def aa_7(self):
         """Send A-ABORT PDU."""
-        self.dul_socket.send(self.primitive.encode())
+        self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
     def aa_8(self):
         """Send A-ABORT PDU, issue an A-P-ABORT indication and start ARTIM timer."""
         self.primitive = pdu.AAbortPDU(source=2, reason_diag=0)
         if self.dul_socket:
-            self.dul_socket.send(self.primitive.encode())
+            self.dul_socket.sendall(self.primitive.encode())
 
             # Issue A-P-ABORT indication
             self.to_service_user.put(self.primitive)

@@ -4,6 +4,7 @@
 # This file is part of pynetdicom2, released under a modified MIT license.
 #    See the file license.txt included with this distribution.
 
+# pylint: disable=line-too-long
 """
 This module provides some useful status constants. You should be aware, that some status codes depends on a command
 or a service you are responding to. The following tables provides list of some well known status codes grouped by
@@ -312,6 +313,7 @@ You can add new statuses by using ``statuses.add_status`` function. By using it 
 to a global library dictionary of status codes.
 
 """
+# pylint: enable=line-too-long
 
 __author__ = 'Blane'
 from collections import namedtuple
@@ -381,7 +383,9 @@ class Status(int):
         return obj
 
     def __str__(self):
-        return '(0x{value:0X}) {self.status_type}: {self.description}'.format(self=self, value=int(self))
+        return '(0x{value:0X}) {self.status_type}: {self.description}'.format(
+            self=self, value=int(self)
+        )
 
     def __repr__(self):
         """Returns status string representation
@@ -391,6 +395,7 @@ class Status(int):
         return 'Status(0x{self:0X})'.format(self=int(self))
 
 
+# pylint: disable=line-too-long
 KNOWN_STATUSES = [
     (0x0000, 'Success', '', None),
     (0x0105, 'Failure', 'No Such Attribute', None),
@@ -461,6 +466,7 @@ KNOWN_STATUSES = [
     (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CMoveRSPMessage),
     (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CMoveRSPMessage)
 ]
+# pylint: enable=line-too-long
 
 
 def register_statuses():
@@ -487,12 +493,17 @@ C_STORE_OUT_OF_RESOURCES = Status(0xA700, dimse.CStoreRSPMessage)
 #: (0xB006) Elements Discarded (C-STORE)
 C_STORE_ELEMENTS_DISCARDED = Status(0xB006, dimse.CStoreRSPMessage)
 
-#: (0xFF00) Matches are continuing - Current Match is supplied and any Optional Keys were supported in the same
-#: manner as Required Keys. (C-FIND)
 C_FIND_PENDING = Status(0xFF00, dimse.CFindRSPMessage)
-#: (0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
-#: supported for existence and/or matching for this Identifier. (C-FIND)
+"""
+(0xFF00) Matches are continuing - Current Match is supplied and any Optional
+Keys were supported in the same manner as Required Keys. (C-FIND)
+"""
 C_FIND_PENDING_WARNING = Status(0xFF01, dimse.CFindRSPMessage)
+"""
+(0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
+supported for existence and/or matching for this Identifier. (C-FIND)
+"""
+
 #: (0xC000) Failed: Unable to process (C-FIND)
 C_FIND_UNABLE_TO_PROCESS = Status(0xC000, dimse.CFindRSPMessage)
 #: (0xA700) Refused: Out of Resources (C-FIND)
