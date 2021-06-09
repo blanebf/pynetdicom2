@@ -1,6 +1,6 @@
 Service State Machine
 =====================
 
-.. automodule:: netdicom2.fsm
+.. automodule:: pynetdicom2.fsm
 	:members:
 	:member-order: bysource

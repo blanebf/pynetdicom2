@@ -48,13 +48,14 @@ user.
 from __future__ import absolute_import
 
 import six
+import pydicom
+from pydicom import filereader
 
-from . import _dicom
 from . import dsutils
 from . import exceptions
 from . import dimsemessages
 from . import statuses
-from .uids import *
+from .uids import *  # pylint: disable=wildcard-import,unused-wildcard-import
 
 
 def sop_classes(uids):
@@ -189,8 +190,8 @@ def storage_scu(asce, ctx, dataset, msg_id):
         # Got file name
         ds = open(dataset, 'rb')
         zero = ds.tell()
-        _dicom.read_preamble(ds, False)
-        meta = _dicom.read_file_meta_info(ds)
+        filereader.read_preamble(ds, False)
+        meta = filereader._read_file_meta_info(ds)  # pylint: disable=protected-access
         c_store.sop_class_uid = meta.MediaStorageSOPClassUID
         try:
             instance_uid = meta.MediaStorageSOPInstanceUID
@@ -201,7 +202,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
             # by a bunch of ****s
             start = ds.tell()
             ds.seek(zero)
-            ds_full = _dicom.read_file(ds, stop_before_pixels=True)
+            ds_full = pydicom.dcmread(ds, stop_before_pixels=True)
             instance_uid = ds_full.SOPInstanceUID
             ds.seek(start)
 
@@ -230,7 +231,7 @@ def storage_scp(asce, ctx, msg):
 
     Service simple passes file object from received message to
     ``on_receive_store`` method of the application entity.
-    If message handler raises :class:`~netdicom2.exceptions.EventHandlingError`
+    If message handler raises :class:`~pynetdicom2.exceptions.EventHandlingError`
     service response with ``CANNOT_UNDERSTAND`` code.
 
     :param msg: received message
@@ -598,26 +599,26 @@ class StorageCommitment(MessageDispatcherSCP):
             report.affected_sop_instance_uid = instance_uid
             report.event_type_id = 2 if failure else 1
 
-            report_ds = _dicom.Dataset()
+            report_ds = pydicom.Dataset()
             report_ds.TransactionUID = ds.TransactionUID
             if success:
                 seq = []
                 for sop_class_uid, sop_instance_uid in success:
-                    ref = _dicom.Dataset()
+                    ref = pydicom.Dataset()
                     ref.ReferencedSOPClassUID = sop_class_uid
                     ref.ReferencedSOPInstanceUID = sop_instance_uid
                     seq.append(ref)
-                report_ds.ReferencedSOPSequence = _dicom.Sequence(seq)
+                report_ds.ReferencedSOPSequence = pydicom.Sequence(seq)
 
             if failure:
                 seq = []
                 for sop_class_uid, sop_instance_uid, reason in failure:
-                    ref = _dicom.Dataset()
+                    ref = pydicom.Dataset()
                     ref.ReferencedSOPClassUID = sop_class_uid
                     ref.ReferencedSOPInstanceUID = sop_instance_uid
                     ref.FailureReason = reason
                     seq.append(ref)
-                report_ds.FailedSOPSequence = _dicom.Sequence(seq)
+                report_ds.FailedSOPSequence = pydicom.Sequence(seq)
 
             report.data_set = dsutils.encode(report_ds,
                                              ctx.supported_ts.is_implicit_VR,
@@ -637,16 +638,16 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
     rq.sop_class_uid = ctx.sop_class
     rq.requested_sop_instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
 
-    ds = _dicom.Dataset()
+    ds = pydicom.Dataset()
     ds.TransactionUID = transaction_uid
     seq = []
     for sop_class_uid, sop_instance_uid in uids:
-        ref = _dicom.Dataset()
+        ref = pydicom.Dataset()
         ref.ReferencedSOPClassUID = sop_class_uid
         ref.ReferencedSOPInstanceUID = sop_instance_uid
         seq.append(ref)
 
-    ds.ReferencedSOPSequence = _dicom.Sequence(seq)
+    ds.ReferencedSOPSequence = pydicom.Sequence(seq)
 
     rq.data_set = dsutils.encode(ds, ctx.supported_ts.is_implicit_VR,
                                  ctx.supported_ts.is_little_endian)

@@ -1,6 +1,6 @@
 Exceptions
 ==========
 
-.. automodule:: netdicom2.exceptions
+.. automodule:: pynetdicom2.exceptions
 	:members:
 	:member-order: bysource

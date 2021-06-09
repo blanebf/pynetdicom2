@@ -14,9 +14,9 @@ Underlying logic of the service is implemented via state machine that is
 described in DICOM standard.
 
 In most of the cases you would not need to access
-:class:`~netdicom2.dulprovider.DULServiceProvider` directly, but rather would
+:class:`~pynetdicom2.dulprovider.DULServiceProvider` directly, but rather would
 use higher level objects like sub-classes of
-:class:`~netdicom2.asceprovider.Association` or various services.
+:class:`~pynetdicom2.asceprovider.Association` or various services.
 """
 
 from __future__ import absolute_import
@@ -24,6 +24,7 @@ from __future__ import absolute_import
 import collections
 
 import threading
+from typing import FrozenSet  # pylint: disable=unused-import
 import socket
 import select
 import struct
@@ -31,23 +32,10 @@ import struct
 import six
 from six.moves import queue
 
-from . import dimsemessages
 from . import timer
 from . import fsm
 from . import pdu
 from . import exceptions
-
-
-def _recv_n(sock, n):
-    ret = []
-    read_length = 0
-    while read_length < n:
-        tmp = sock.recv(n - read_length)
-        ret.append(tmp)
-        read_length += len(tmp)
-    if read_length != n:
-        raise exceptions.NetDICOMError('Low level network error')
-    return b''.join(ret)
 
 
 PDU_TYPES = {
@@ -80,19 +68,36 @@ class DULServiceProvider(threading.Thread):
     Service can be initialized by providing open socket that service would
     use for sending and receiving PDUs. In case if socket is not provider
     service opens a client socket by itself when sending
-    :class:`~netdicom2.pdu.AAssociateRqPDU` instance.
+    :class:`~pynetdicom2.pdu.AAssociateRqPDU` instance.
 
     Underlying implementation relies on state machine that is defined in :doc:`fsm`
 
+    :ivar primitive: current PDU
+    :ivar dimse_gen: generator, used break current outgoing DIMSE message into P-DATA-TF PDUs
+    :ivar event: current event
+    :ivar max_pdu_length: maximum PDU length for incoming P-DATA-TF PDUs
+    :ivar to_service_user: outgoing data queue
+    :ivar from_service_user: incoming data queue
+    :ivar dul_socket: socket, that service uses
+    :ivar is_killed: DUL service termination flag
     """
 
-    def __init__(self, store_in_file, get_file_cb, dul_socket=None):
+    def __init__(
+            self,
+            store_in_file,  # type: FrozenSet[str]
+            get_file_cb,
+            dul_socket=None,  # type: socket.socket
+            max_pdu_length=65536  # type: int
+        ):
         """Initializes DUL service.
 
         If no socket is provided service will act as 'client' and will open
-        new client socket when sending :class:`~netdicom2.pdu.AAssociateRqPDU`
+        new client socket when sending :class:`~pynetdicom2.pdu.AAssociateRqPDU`
         instance.
 
+        :param store_in_file: set of SOP Class UIDs, for which incoming dataset should be stored
+                              in a file.
+        :param get_file_cb: callback for getting a file to store incoming dataset
         :param dul_socket: remote client socket that will be used to send and
                            receive PDUs.
         """
@@ -101,21 +106,21 @@ class DULServiceProvider(threading.Thread):
         self.primitive = None  # current pdu
         self.dimse_gen = None
         self.event = collections.deque()
+        self.max_pdu_length = max_pdu_length
 
         self.to_service_user = queue.Queue()
         self.from_service_user = queue.Queue()
 
         # Setup the timer and finite state machines
         self.timer = timer.Timer(10)
-        self.state_machine = fsm.StateMachine(
-            self, self.timer, store_in_file, get_file_cb
-        )
+        self.state_machine = fsm.StateMachine(self, self.timer, store_in_file, get_file_cb)
         self._is_killed = threading.Event()
 
         if dul_socket:  # A client socket has been given. Generate an event 5
             self.event.append(fsm.Events.EVT_5)
 
         self.dul_socket = dul_socket
+        self.raw_pdu = b''
 
         self.is_killed = False
         self.start()
@@ -145,18 +150,18 @@ class DULServiceProvider(threading.Thread):
         """Tries to get PDU from incoming queue.
 
         If timeout is exceeded method
-        rises :class:`~netdicom2.exceptions.TimeoutError` exception.
+        rises :class:`~pynetdicom2.exceptions.DCMTimeoutError` exception.
 
         :param timeout: the amount of seconds method waits for PDU to appear
                         in incoming queue
         :return: PDU instance. Possible PDU types are described
                  in :doc:`pdu`
-        :raise exceptions.TimeoutError: If specified timeout is exceeded
+        :raise exceptions.DCMTimeoutError: If specified timeout is exceeded
         """
         try:
             return self.to_service_user.get(timeout=timeout)
         except queue.Empty:
-            raise exceptions.TimeoutError()
+            raise exceptions.DCMTimeoutError()
 
     def stop(self):
         """Tries to stop service for idle association.
@@ -170,8 +175,7 @@ class DULServiceProvider(threading.Thread):
         if self.state_machine.current_state == fsm.States.STA_1:
             self.is_killed = True
             return True
-        else:
-            return False
+        return False
 
     def kill(self):
         """Sets termination flag for event loop and waits for thread to exit."""
@@ -181,8 +185,7 @@ class DULServiceProvider(threading.Thread):
     def run(self):
         try:
             while not self.is_killed:
-                self._check_network() or self._check_outgoing_pdu() or\
-                    self._check_timer()
+                self._check_network() or self._check_outgoing_pdu() or self._check_timer()
                 try:
                     evt = self.event.popleft()
                 except IndexError:
@@ -196,21 +199,7 @@ class DULServiceProvider(threading.Thread):
 
     def _check_network(self):
         if self.state_machine.current_state == fsm.States.STA_13:
-            # waiting for connection to close
-            if self.dul_socket is None:
-                return False
-
-            # wait for remote connection to close
-            try:
-                while self.dul_socket.recv(1) != b'':
-                    continue
-            except socket.error:
-                return False
-
-            self.dul_socket.close()
-            self.dul_socket = None
-            self.event.append(fsm.Events.EVT_17)
-            return True
+            return self._close()
 
         if not self.dul_socket:
             return False
@@ -221,10 +210,8 @@ class DULServiceProvider(threading.Thread):
 
         # check if something comes in the client socket
         if select.select([self.dul_socket], [], [], 0.05)[0]:
-            self._check_incoming_pdu()
-            return True
-        else:
-            return False
+            return self._check_incoming_pdu()
+        return False
 
     def _check_outgoing_pdu(self):
         try:
@@ -245,8 +232,8 @@ class DULServiceProvider(threading.Thread):
             return True
         except KeyError:
             raise exceptions.PDUProcessingError(
-                'Unknown PDU {0} with type {1}'.format(self.primitive,
-                                                       self.primitive.pdu_type))
+                'Unknown PDU {0} with type {1}'.format(self.primitive, self.primitive.pdu_type)
+            )
         except queue.Empty:
             return False
 
@@ -254,39 +241,63 @@ class DULServiceProvider(threading.Thread):
         if self.timer.check() is False:
             self.event.append(fsm.Events.EVT_18)  # Timer expired
             return True
-        else:
-            return False
+        return False
 
     def _check_incoming_pdu(self):
+        # type: () -> bool
         # There is something to read
         try:
-            raw_pdu = self.dul_socket.recv(1)
+            data = self.dul_socket.recv(self.max_pdu_length)
         except socket.error:
             self.event.append(fsm.Events.EVT_17)
             self.dul_socket.close()
             self.dul_socket = None
-            return
+            return True
 
-        if raw_pdu == b'':
+        if not data:
             # Remote port has been closed
             self.event.append(fsm.Events.EVT_17)
             self.dul_socket.close()
             self.dul_socket = None
-            return
-        else:
-            res = _recv_n(self.dul_socket, 1)
-            raw_pdu += res
-            length = _recv_n(self.dul_socket, 4)
-            raw_pdu += length
-            length = struct.unpack('>L', length)
-            tmp = _recv_n(self.dul_socket, length[0])
-            raw_pdu += tmp
+            return True
 
-            # Determine the type of PDU coming on remote port and set the event
-            # accordingly
-            try:
-                pdu_type, event = PDU_TYPES[six.indexbytes(raw_pdu, 0)]
-                self.primitive = pdu_type.decode(raw_pdu)
-                self.event.append(event)
-            except KeyError:
-                self.event.append(fsm.Events.EVT_19)
+        self.raw_pdu += data
+
+        if len(self.raw_pdu) < 6:
+            return False
+
+        length = self.raw_pdu[2:6]
+        length = struct.unpack('>L', length)[0]
+        full_length = length + 6
+        if len(self.raw_pdu) < full_length:
+            return False
+
+        raw_pdu = self.raw_pdu[:full_length]
+        self.raw_pdu = self.raw_pdu[full_length:]
+
+        # Determine the type of PDU coming on remote port and set the event accordingly
+        try:
+            pdu_type, event = PDU_TYPES[six.indexbytes(raw_pdu, 0)]
+            self.primitive = pdu_type.decode(raw_pdu)
+            self.event.append(event)
+            return False
+        except KeyError:
+            self.event.append(fsm.Events.EVT_19)
+            return True
+
+    def _close(self):
+        # waiting for connection to close
+        if self.dul_socket is None:
+            return False
+
+        # wait for remote connection to close
+        try:
+            while self.dul_socket.recv(1) != b'':
+                continue
+        except socket.error:
+            return False
+
+        self.dul_socket.close()
+        self.dul_socket = None
+        self.event.append(fsm.Events.EVT_17)
+        return True

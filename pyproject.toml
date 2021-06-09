@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pynetdicom2"
-version = "0.9.4"
+version = "0.9.5"
 description = "pynetdicom2 is a pure python package implementing the DICOM network protocol"
 authors = ["Pavel 'Blane' Tuchin <blane.public@gmail.com>"]
 
@@ -34,6 +34,7 @@ pydicom = [
     {version = "<=1.9", python = "^2.7"},
     {version = "^2.0", python = "^3.4"}
 ]
+typing = {version = "3.10.0.0", python = "^2.7"}
 
 [tool.poetry.dev-dependencies]
 

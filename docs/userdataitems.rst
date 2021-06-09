@@ -1,6 +1,6 @@
 User Data Sub-items
 ===================
 
-.. automodule:: netdicom2.userdataitems
+.. automodule:: pynetdicom2.userdataitems
 	:members:
 	:member-order: bysource

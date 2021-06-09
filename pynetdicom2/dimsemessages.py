@@ -25,61 +25,10 @@ from __future__ import absolute_import
 import struct
 
 from six.moves import range
+from pydicom.dataset import Dataset
 
 from . import dsutils
 from . import pdu
-
-try:
-    from pydicom.dataset import Dataset
-except ImportError:
-    from dicom.dataset import Dataset
-
-    import dicom._dicom_dict as dicomdict
-    import dicom.datadict
-
-    #  pydicom's dictionary misses command tags. Add them.
-    dicomdict.DicomDictionary.update({
-        0x00000000: ('UL', '1', 'Command Group Length', '', 'CommandGroupLength'),
-        0x00000002: ('UI', '1', 'Affected SOP Class UID', '',
-                     'AffectedSOPClassUID'),
-        0x00000003: ('UI', '1', 'Requested SOP Class UID', '',
-                     'RequestedSOPClassUID'),
-        0x00000100: ('US', '1', 'Command Field', '', 'CommandField'),
-        0x00000110: ('US', '1', 'Message ID', '', 'MessageID'),
-        0x00000120: ('US', '1', 'Message ID Being Responded To', '',
-                     'MessageIDBeingRespondedTo'),
-        0x00000600: ('AE', '1', 'Move Destination', '', 'MoveDestination'),
-        0x00000700: ('US', '1', 'Priority', '', 'Priority'),
-        0x00000800: ('US', '1', 'DataSet Type', '', 'CommandDataSetType'),
-        0x00000900: ('US', '1', 'Status', '', 'Status'),
-        0x00000901: ('AT', '1', 'Offending Element', '', 'OffendingElement'),
-        0x00000902: ('LO', '1', 'Error Comment', '', 'ErrorComment'),
-        0x00000903: ('US', '1', 'Error ID', '', 'ErrorID'),
-        0x00001000: ('UI', '1', 'Affected SOP Instance UID', '',
-                     'AffectedSOPInstanceUID'),
-        0x00001001: ('UI', '1', 'Requested SOP Instance UID', '',
-                     'RequestedSOPInstanceUID'),
-        0x00001002: ('US', '1', 'Event Type ID', '', 'EventTypeID'),
-        0x00001005: ('AT', '1', 'Attribute Identifier List', '',
-                     'AttributeIdentifierList'),
-        0x00001008: ('US', '1', 'Action Type ID', '', 'ActionTypeID'),
-        0x00001020: ('US', '1', 'Number Of Remaining Sub-operations', '',
-                     'NumberOfRemainingSuboperations'),
-        0x00001021: ('US', '1', 'Number Of Completed Sub-operations', '',
-                     'NumberOfCompletedSuboperations'),
-        0x00001022: ('US', '1', 'Number Of Failed Sub-operations', '',
-                     'NumberOfFailedSuboperations'),
-        0x00001023: ('US', '1', 'Number Of Warning Sub-operations', '',
-                     'NumberOfWarningSuboperations'),
-        0x00001030: ('AE', '1', 'Move Originator Application Entity Title', '',
-                     'MoveOriginatorApplicationEntityTitle'),
-        0x00001031: ('US', '1', 'Move Originator Message ID', '',
-                     'MoveOriginatorMessageID'),
-    })
-    dicom.datadict.keyword_dict = dict(
-        [(dicom.datadict.dictionary_keyword(tag), tag)
-         for tag in dicomdict.DicomDictionary])
-
 
 NO_DATASET = 0x0101
 
@@ -94,7 +43,7 @@ def value_or_none(elem):
 
 def chunks(seq, size):
     l = len(seq)
-    return ((seq[pos:pos + size], True if pos + size < l else False)
+    return ((seq[pos:pos + size], (pos + size < l))
             for pos in range(0, l, size))
 
 
@@ -130,8 +79,8 @@ def dimse_property(tag):
                     setter)
 
 
-def status_mixin(dimse_class):
-    """Helper decorator that defines common `status` property in provided
+class StatusMixin(object):
+    """Helper mixin that defines common `status` property in provided
     DIMSE message class.
 
     This property is usually found in response messages.
@@ -139,12 +88,11 @@ def status_mixin(dimse_class):
     :param dimse_class: DIMSE message class
     :return: DIMSE message class with defined `status` property
     """
-    dimse_class.status = dimse_property((0x0000, 0x0900))
-    return dimse_class
+    status = dimse_property((0x0000, 0x0900))
 
 
-def priority_mixin(dimse_class):
-    """Helper decorator that defines common `priority` property in provided
+class PriorityMixin(object):
+    """Helper mixin that defines common `priority` property in provided
     DIMSE message class.
 
     This property is usually found in request messages
@@ -152,8 +100,7 @@ def priority_mixin(dimse_class):
     :param dimse_class: DIMSE message class
     :return: DIMSE message class with defined `priority` property
     """
-    dimse_class.priority = dimse_property((0x0000, 0x0700))
-    return dimse_class
+    priority = dimse_property((0x0000, 0x0700))
 
 
 class DIMSEMessage(object):
@@ -236,15 +183,13 @@ class CEchoRQMessage(DIMSERequestMessage):
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID']
 
 
-@status_mixin
-class CEchoRSPMessage(DIMSEResponseMessage):
+class CEchoRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8030
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status']
 
 
-@priority_mixin
-class CStoreRQMessage(DIMSERequestMessage):
+class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
     command_field = 0x0001
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageID', 'Priority', 'AffectedSOPInstanceUID',
@@ -255,8 +200,7 @@ class CStoreRQMessage(DIMSERequestMessage):
     move_originator_message_id = dimse_property((0x0000, 0x1031))
 
 
-@status_mixin
-class CStoreRSPMessage(DIMSEResponseMessage):
+class CStoreRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8001
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -264,29 +208,25 @@ class CStoreRSPMessage(DIMSEResponseMessage):
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
-@priority_mixin
-class CFindRQMessage(DIMSERequestMessage):
+class CFindRQMessage(DIMSERequestMessage, PriorityMixin):
     command_field = 0x0020
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
                       'Priority']
 
 
-@status_mixin
-class CFindRSPMessage(DIMSEResponseMessage):
+class CFindRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8020
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status']
 
 
-@priority_mixin
-class CGetRQMessage(DIMSERequestMessage):
+class CGetRQMessage(DIMSERequestMessage, PriorityMixin):
     command_field = 0x0010
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
                       'Priority']
 
 
-@status_mixin
-class CGetRSPMessage(DIMSEResponseMessage):
+class CGetRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8010
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -300,16 +240,14 @@ class CGetRSPMessage(DIMSEResponseMessage):
     num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
 
 
-@priority_mixin
-class CMoveRQMessage(DIMSERequestMessage):
+class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
     command_field = 0x0021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageID', 'Priority', 'MoveDestination']
     move_destination = dimse_property((0x0000, 0x0600))
 
 
-@status_mixin
-class CMoveRSPMessage(DIMSEResponseMessage):
+class CMoveRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8021
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -336,8 +274,7 @@ class NEventReportRQMessage(DIMSERequestMessage):
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
-@status_mixin
-class NEventReportRSPMessage(DIMSEResponseMessage):
+class NEventReportRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8100
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo',
@@ -355,8 +292,7 @@ class NGetRQMessage(DIMSERequestMessage):
     attribute_identifier_list = dimse_property((0x0000, 0x1005))
 
 
-@status_mixin
-class NGetRSPMessage(DIMSEResponseMessage):
+class NGetRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8110
     command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo',
                       'Status', 'AffectedSOPInstanceUID']
@@ -372,8 +308,7 @@ class NSetRQMessage(DIMSERequestMessage):
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
 
 
-@status_mixin
-class NSetRSPMessage(DIMSEResponseMessage):
+class NSetRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8120
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -393,8 +328,7 @@ class NActionRQMessage(DIMSERequestMessage):
     action_type_id = dimse_property((0x0000, 0x1008))
 
 
-@status_mixin
-class NActionRSPMessage(DIMSEResponseMessage):
+class NActionRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8130
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -414,8 +348,7 @@ class NCreateRQMessage(DIMSERequestMessage):
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
 
 
-@status_mixin
-class NCreateRSPMessage(DIMSEResponseMessage):
+class NCreateRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8140
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',
@@ -434,8 +367,7 @@ class NDeleteRQMessage(DIMSERequestMessage):
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
 
 
-@status_mixin
-class NDeleteRSPMessage(DIMSEResponseMessage):
+class NDeleteRSPMessage(DIMSEResponseMessage, StatusMixin):
     command_field = 0x8150
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
                       'MessageIDBeingRespondedTo', 'Status',

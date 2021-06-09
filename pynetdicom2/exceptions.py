@@ -30,18 +30,10 @@ from __future__ import absolute_import, unicode_literals
 class NetDICOMError(Exception):
     """Base class for all library specific exceptions exception."""
 
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(NetDICOMError, self).__init__(*args, **kwargs)
-
 
 class ClassNotSupportedError(NetDICOMError):
     """Raised when requested SOP Class is not supported by
     application entity."""
-
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(ClassNotSupportedError, self).__init__(*args, **kwargs)
 
 
 class PDUProcessingError(NetDICOMError):
@@ -49,10 +41,6 @@ class PDUProcessingError(NetDICOMError):
 
     Can be raised, for example, when PDU failed to decode from data.
     """
-
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(PDUProcessingError, self).__init__(*args, **kwargs)
 
 
 class DIMSEProcessingError(NetDICOMError):
@@ -62,10 +50,6 @@ class DIMSEProcessingError(NetDICOMError):
     fragments.
     """
 
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(DIMSEProcessingError, self).__init__(*args, **kwargs)
-
 
 class AssociationError(NetDICOMError):
     """Base association error.
@@ -73,10 +57,6 @@ class AssociationError(NetDICOMError):
     This error shall not be raised directly, instead its more specialized
     sub-classes are raised in appropriate situations.
     """
-
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(AssociationError, self).__init__(*args, **kwargs)
 
 
 class AssociationRejectedError(AssociationError):
@@ -150,10 +130,6 @@ class AssociationRejectedError(AssociationError):
 class AssociationReleasedError(AssociationError):
     """Raised when remote application entity has released active association."""
 
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(AssociationReleasedError, self).__init__(*args, **kwargs)
-
 
 class AssociationAbortedError(AssociationError):
     """Raised when remote application entity has aborted association.
@@ -169,9 +145,8 @@ class AssociationAbortedError(AssociationError):
         self.reason_diag = reason_diag
 
 
-class TimeoutError(NetDICOMError):
+class DCMTimeoutError(NetDICOMError):
     """Raised if timeout occurred when expected PDU from DUL."""
-    pass
 
 
 class EventHandlingError(NetDICOMError):
@@ -183,7 +158,3 @@ class EventHandlingError(NetDICOMError):
     exception and would act accordingly. If event handler would raise any
     other exception (not a sub-class of this one), service class won't handle
     it."""
-
-    def __init__(self, *args, **kwargs):
-        """Overrides base exception initialization."""
-        super(EventHandlingError, self).__init__(*args, **kwargs)

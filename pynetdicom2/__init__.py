@@ -19,9 +19,9 @@ def _new_msg_id():
     if msg_id is None:
         _tls.msg_id = 1
         return _tls.msg_id
-    else:
-        _tls.msg_id += 1
-        return _tls.msg_id
+
+    _tls.msg_id += 1
+    return _tls.msg_id
 
 
 def c_find(remote_ae, local_aet, ds, root=sopclass.PATIENT_ROOT_FIND_SOP_CLASS):
