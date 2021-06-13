@@ -15,7 +15,7 @@ import platform
 import copy
 import contextlib
 
-from six.moves import socketserver, zip
+from six.moves import socketserver, zip  # type: ignore
 from pydicom import Dataset
 from pydicom import filebase
 from pydicom.filewriter import write_file_meta_info
@@ -407,5 +407,5 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
                 raise
         threading.Thread(target=self.serve_forever).start()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.quit()

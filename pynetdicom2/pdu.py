@@ -120,7 +120,7 @@ class AAssociatePDUBase(object):
                 item_type = next_type(stream)
 
         stream = cStringIO(rawstring)
-        values = cls.header.unpack(stream.read(74))
+        values = cls.header.unpack(stream.read(74))  # type: ignore
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
         reserved3 = values[7:]
@@ -230,7 +230,7 @@ class AAssociateRjPDU(object):
         """
         stream = cStringIO(rawstring)
         _, reserved1, _, reserved2, result, source, \
-            reason_diag = cls.format.unpack(stream.read(10))
+            reason_diag = cls.format.unpack(stream.read(10))  # type: ignore
         return cls(result=result, source=source, reason_diag=reason_diag,
                    reserved1=reserved1, reserved2=reserved2)
 
@@ -292,7 +292,7 @@ class PDataTfPDU(object):
                 yield item
 
         stream = cStringIO(rawstring)
-        _, reserved, pdu_length = cls.header.unpack(stream.read(6))
+        _, reserved, pdu_length = cls.header.unpack(stream.read(6))  # type: ignore
         data_value_items = list(iter_items())
         return cls(data_value_items, reserved)
 
@@ -330,7 +330,7 @@ class AReleasePDUBase(object):
         :return: decoded PDU
         """
         stream = cStringIO(rawstring)
-        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))
+        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))  # type: ignore
         return cls(reserved1=reserved1, reserved2=reserved2)
 
     @staticmethod
@@ -412,7 +412,7 @@ class AAbortPDU(object):
         """
         stream = cStringIO(rawstring)
         _, reserved1, _, reserved2, reserved3, abort_source, \
-            reason_diag = cls.format.unpack(stream.read(10))
+            reason_diag = cls.format.unpack(stream.read(10))  # type: ignore
         return cls(reserved1=reserved1, reserved2=reserved2,
                    reserved3=reserved3, source=abort_source,
                    reason_diag=reason_diag)

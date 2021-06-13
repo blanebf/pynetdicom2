@@ -14,7 +14,7 @@ from itertools import chain
 import time
 
 import six
-from six.moves import socketserver, range
+from six.moves import socketserver, range  # type: ignore
 from pydicom import uid
 
 from . import exceptions
