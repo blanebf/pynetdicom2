@@ -27,6 +27,7 @@ class MaximumLengthSubItem(object):
 
     def __init__(self, maximum_length_received, reserved=0x00,
                  item_length=0x0004):
+        # type: (int,int,int) -> None
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.maximum_length_received = maximum_length_received  # unsigned int
@@ -72,6 +73,7 @@ class ImplementationClassUIDSubItem(object):
     header = struct.Struct('>B B H')
 
     def __init__(self, implementation_class_uid, reserved=0x00):
+        # type: (uid.UID,int) -> None
         self.reserved = reserved  # unsigned byte
         self.implementation_class_uid = implementation_class_uid  # string
 
@@ -106,6 +108,7 @@ class ImplementationVersionNameSubItem(object):
     header = struct.Struct('> B B H')
 
     def __init__(self, implementation_version_name, reserved=0x00):
+        # type: (str,int) -> None
         self.reserved = reserved  # unsigned byte
         self.implementation_version_name = implementation_version_name  # string
 
@@ -142,6 +145,7 @@ class AsynchronousOperationsWindowSubItem(object):
 
     def __init__(self, max_num_ops_invoked, max_num_ops_performed,
                  reserved=0x00, item_length=0x0004):
+        # type: (int,int,int,int) -> None
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.max_num_ops_invoked = max_num_ops_invoked  # unsigned short
@@ -176,8 +180,8 @@ class ScpScuRoleSelectionSubItem(object):
     item_type = 0x54
     header = struct.Struct('>B B H H')
 
-    def __init__(self, sop_class_uid, scu_role,
-                 scp_role, reserved=0x00):
+    def __init__(self, sop_class_uid, scu_role, scp_role, reserved=0x00):
+        # type: (uid.UID,int,int,int) -> None
         self.reserved = reserved  # unsigned byte 0x00
         self.sop_class_uid = sop_class_uid  # string
         self.scu_role = scu_role  # unsigned byte
@@ -219,15 +223,16 @@ class SOPClassExtendedNegotiationSubItem(object):
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
 
-    :param sop_class_uid: service's SOP Class UID
-    :param app_info: application information specific to Service Class
-    :param reserved: reserved field, defaults to 0x00. In most cases you
-                     should not change it's value or check it
+    :ivar sop_class_uid: service's SOP Class UID
+    :ivar app_info: application information specific to Service Class
+    :ivar reserved: reserved field, defaults to 0x00. In most cases you
+                    should not change it's value or check it
     """
     item_type = 0x56
     header = struct.Struct('>B B H H')
 
     def __init__(self, sop_class_uid, app_info, reserved=0x00):
+        # type: (uid.UID,bytes,int) -> None
         """Initializes new sub item instance"""
         self.reserved = reserved
         self.sop_class_uid = sop_class_uid
@@ -282,22 +287,23 @@ class UserIdentityNegotiationSubItem(object):
     Passes user identification information based on login (and password) or
     kerberos service ticket
 
-    :param primary_field: user name or kerberos ticket depending on
-                          value of `user_identity_type`
-    :param secondary_field: password. Used only if `user_identity_type` has
+    :ivar primary_field: user name or kerberos ticket depending on
+                         value of `user_identity_type`
+    :ivar secondary_field: password. Used only if `user_identity_type` has
                            value of 2
-    :param user_identity_type: type of user identification. Defaults to 2
-                               which is username/password identification
-    :param positive_response_req: 0 - no response requested,
-                                  1 - positive response requested
-    :param reserved: reserved field, defaults to 0x00. In most cases you
-                     should not change it's value or check it
+    :ivar user_identity_type: type of user identification. Defaults to 2
+                              which is username/password identification
+    :ivar positive_response_req: 0 - no response requested,
+                                 1 - positive response requested
+    :ivar reserved: reserved field, defaults to 0x00. In most cases you
+                    should not change it's value or check it
     """
     item_type = 0x58
     header = struct.Struct('>B B H B B H')
 
     def __init__(self, primary_field, secondary_field='', user_identity_type=2,
                  positive_response_req=0, reserved=0x00):
+        # type: (str,str,int,int,int) -> None
         """Initializes new sub item instance"""
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
@@ -374,15 +380,16 @@ class UserIdentityNegotiationSubItemAc(object):
     Server response (accept) user identification sub-item. This item is
     expected only if `positive_response_req` was set to 1 in request sub-item.
 
-    :param server_response: kerberos service ticket or SAML response,
-                            depending on requested user identification type
-    :param reserved: reserved field, defaults to 0x00. In most cases you
-                     should not change it's value or check it
+    :ivar server_response: kerberos service ticket or SAML response,
+                           depending on requested user identification type
+    :ivar reserved: reserved field, defaults to 0x00. In most cases you
+                    should not change it's value or check it
     """
     item_type = 0x59
     header = struct.Struct('>B B H H')
 
     def __init__(self, server_response, reserved=0x00):
+        # type: (str,int) -> None
         """Initializes new response sub-item"""
         self.reserved = reserved  # byte
         self.server_response = server_response  # string
@@ -440,6 +447,7 @@ class GenericUserDataSubItem(object):
     header = struct.Struct('>B B H')
 
     def __init__(self, item_type, user_data, reserved=0x00):
+        # type: (int,bytes,int) -> None
         self.item_type = item_type  # unsigned byte
         self.reserved = reserved  # unsigned byte
         self.user_data = user_data  # raw string

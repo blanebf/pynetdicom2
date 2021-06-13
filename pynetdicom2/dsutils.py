@@ -11,29 +11,29 @@ import six
 if six.PY3:
     from six import BytesIO as cStringIO
 else:
-    from six.moves import cStringIO
+    from six.moves import cStringIO  # type: ignore
 
 
 def decode(rawstr, is_implicit_vr, is_little_endian):
-    s = cStringIO(rawstr)
-    return filereader.read_dataset(s, is_implicit_vr, is_little_endian)
+    fp = cStringIO(rawstr)
+    return filereader.read_dataset(fp, is_implicit_vr, is_little_endian)
 
 
 def encode(ds, is_implicit_vr, is_little_endian):
-    f = filebase.DicomBytesIO()
-    f.is_implicit_VR = is_implicit_vr
-    f.is_little_endian = is_little_endian
-    filewriter.write_dataset(f, ds)
-    rawstr = f.parent.getvalue()
-    f.close()
+    fp = filebase.DicomBytesIO()
+    fp.is_implicit_VR = is_implicit_vr
+    fp.is_little_endian = is_little_endian
+    filewriter.write_dataset(fp, ds)
+    rawstr = fp.parent.getvalue()
+    fp.close()
     return rawstr
 
 
 def encode_element(el, is_implicit_vr, is_little_endian):
-    f = filebase.DicomBytesIO()
-    f.is_implicit_VR = is_implicit_vr
-    f.is_little_endian = is_little_endian
-    filewriter.write_data_element(f, el)
-    rawstr = f.parent.getvalue()
-    f.close()
+    fp = filebase.DicomBytesIO()
+    fp.is_implicit_VR = is_implicit_vr
+    fp.is_little_endian = is_little_endian
+    filewriter.write_data_element(fp, el)
+    rawstr = fp.parent.getvalue()
+    fp.close()
     return rawstr

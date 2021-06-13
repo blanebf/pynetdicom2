@@ -24,7 +24,7 @@ from __future__ import absolute_import
 
 import struct
 
-from six.moves import range
+from six.moves import range  # type: ignore
 from pydicom.dataset import Dataset
 
 from . import dsutils
@@ -84,9 +84,6 @@ class StatusMixin(object):
     DIMSE message class.
 
     This property is usually found in response messages.
-
-    :param dimse_class: DIMSE message class
-    :return: DIMSE message class with defined `status` property
     """
     status = dimse_property((0x0000, 0x0900))
 
@@ -96,9 +93,6 @@ class PriorityMixin(object):
     DIMSE message class.
 
     This property is usually found in request messages
-
-    :param dimse_class: DIMSE message class
-    :return: DIMSE message class with defined `priority` property
     """
     priority = dimse_property((0x0000, 0x0700))
 
@@ -159,7 +153,7 @@ class DIMSEMessage(object):
                     yield pdu.PDataTfPDU([value_item])
             finally:
                 if is_file:
-                    self.data_set.close()
+                    self.data_set.close()  # type: ignore
 
     def set_length(self):
         it = (len(dsutils.encode_element(v, True, True))
