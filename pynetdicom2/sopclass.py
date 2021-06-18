@@ -552,15 +552,13 @@ class StorageCommitment(MessageDispatcherSCP):
                             ctx.supported_ts.is_little_endian)
         transaction_uid = ds.TransactionUID
         if hasattr(ds, 'ReferencedSOPSequence'):
-            success = ((item.ReferencedSOPClassUID,
-                        item.ReferencedSOPInstanceUID)
+            success = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
                        for item in ds.ReferencedSOPSequence)
         else:
             success = []
 
         if hasattr(ds, 'FailedSOPSequence'):
-            failure = ((item.ReferencedSOPClassUID,
-                        item.ReferencedSOPInstanceUID,
+            failure = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID,
                         item.FailureReason)
                        for item in ds.FailedSOPSequence)
         else:
@@ -632,11 +630,11 @@ class StorageCommitment(MessageDispatcherSCP):
 
 @sop_classes([STORAGE_COMMITMENT_SOP_CLASS])
 def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
-    rq = dimsemessages.NActionRQMessage()
-    rq.message_id = msg_id
-    rq.action_type_id = 1
-    rq.sop_class_uid = ctx.sop_class
-    rq.requested_sop_instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
+    request = dimsemessages.NActionRQMessage()
+    request.message_id = msg_id
+    request.action_type_id = 1
+    request.sop_class_uid = ctx.sop_class
+    request.requested_sop_instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
 
     ds = pydicom.Dataset()
     ds.TransactionUID = transaction_uid
@@ -649,9 +647,10 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
 
     ds.ReferencedSOPSequence = pydicom.Sequence(seq)
 
-    rq.data_set = dsutils.encode(ds, ctx.supported_ts.is_implicit_VR,
-                                 ctx.supported_ts.is_little_endian)
-    asce.send(rq, ctx.id)
+    request.data_set = dsutils.encode(
+        ds, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+    )
+    asce.send(request, ctx.id)
 
     rsp, _ = asce.receive()
     return statuses.Status(rsp.status, dimsemessages.NActionRSPMessage)

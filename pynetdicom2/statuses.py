@@ -320,12 +320,12 @@ from collections import namedtuple
 
 from . import dimsemessages as dimse
 
-s = namedtuple('status', ['code_type', 'description'])
+s = namedtuple('status', ['code_type', 'description'])  # pylint: disable=invalid-name
 
 
-_general_status_dict = {}
+_general_status_dict = {}  # pylint: disable=invalid-name
 
-_status_dict = {}
+_status_dict = {}  # pylint: disable=invalid-name
 
 
 UNKNOWN = s('Failure', 'Unknown Status')

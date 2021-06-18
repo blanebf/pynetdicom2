@@ -13,6 +13,7 @@ from __future__ import absolute_import
 
 import socket
 
+from typing import Dict, Tuple, Callable
 import six
 
 from . import dimsemessages
@@ -20,10 +21,11 @@ from . import dsutils
 from . import exceptions
 from . import pdu
 
-# Finite State Machine
 
 # TODO Make into enum after dropping Py2 support
-class States(object):
+class States(object):  # pylint: disable=too-few-public-methods
+    """Services states enumeration."""
+
     # No association
     STA_1 = 0
     """Idle"""
@@ -56,10 +58,7 @@ class States(object):
     """Awaiting local A-RELEASE response primitive (from local user)"""
 
     STA_9 = 8
-    """
-    Release collision requestor side; awaiting A-RELEASE response
-    (from local user)
-    """
+    """Release collision requestor side; awaiting A-RELEASE response (from local user)"""
 
     STA_10 = 9
     """Release collision acceptor side; awaiting A-RELEASE-RP PDU"""
@@ -68,20 +67,16 @@ class States(object):
     """Release collision requestor side; awaiting A-RELEASE-RP PDU"""
 
     STA_12 = 11
-    """
-    Release collision acceptor side; awaiting A-RELEASE response primitive
-    (from local user)
-    """
+    """Release collision acceptor side; awaiting A-RELEASE response primitive (from local user)"""
 
     STA_13 = 12
-    """
-    Awaiting Transport Connection Close Indication
-    (Association no longer exists)
-    """
+    """Awaiting Transport Connection Close Indication (Association no longer exists)"""
 
 
 # TODO Make into enum after dropping Py2 support
-class Events(object):
+class Events(object):  # pylint: disable=too-few-public-methods
+    """Events enumeration."""
+
     EVT_1 = 0
     """A-ASSOCIATE request (local user)"""
 
@@ -140,7 +135,20 @@ class Events(object):
     """Unrecognized/invalid PDU"""
 
 
-class StateMachine(object):
+class StateMachine(object):  # pylint: disable=too-many-public-methods
+    """Service State Machine implementation.
+
+    :ivar current_state: current state
+    :ivar provider: DUL provider
+    :ivar timer:
+    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
+                         a file, rather than in-memory
+    :ivar get_file_cb: callback for getting a file object for storage
+    :ivar accepted_contexts: accepted presentation contexts in current association
+    :ivar dimse_decoder: decoder for incoming P-DATA-TF PDUs, used to re-create incoming DIMSE
+                         message
+    :ivar transition_table: state machine transition table
+    """
     def __init__(self, provider, timer, store_in_file, get_file_cb):
         self.current_state = States.STA_1
         self.provider = provider
@@ -293,10 +301,11 @@ class StateMachine(object):
             (Events.EVT_19, States.STA_11): self.aa_8,
             (Events.EVT_19, States.STA_12): self.aa_8,
             (Events.EVT_19, States.STA_13): self.aa_7
-        }
+        }  # type: Dict[Tuple[int,int],Callable[[],int]]
 
     @property
     def primitive(self):
+        """Current PDU."""
         return self.provider.primitive
 
     @primitive.setter
@@ -305,6 +314,8 @@ class StateMachine(object):
 
     @property
     def dul_socket(self):
+        # type: () -> socket.socket
+        """TCP Socket"""
         return self.provider.dul_socket
 
     @dul_socket.setter
@@ -313,10 +324,12 @@ class StateMachine(object):
 
     @property
     def to_service_user(self):
+        """Outgoing PDU/DIMSE message queue"""
         return self.provider.to_service_user
 
     def action(self, event):
-        """ Execute the action triggered by event """
+        # (int) -> None
+        """Execute the action triggered by event"""
         action = self.transition_table[(event, self.current_state)]
         self.current_state = action()
 
@@ -354,8 +367,8 @@ class StateMachine(object):
     def ae_6(self):
         """Check A-ASSOCIATE-RQ.
 
-        Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider
-        - Issue A-ASSOCIATE indication primitive
+        Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider - issue
+        A-ASSOCIATE indication primitive.
         """
         self.timer.stop()
         # Accept
@@ -480,10 +493,15 @@ class StateMachine(object):
         """Issue A-ABORT or A-P-ABORT indication and close transport connection.
 
         If (service-user initiated abort):
-        - Issue A-ABORT indication and close transport connection.
-            Otherwise (service-provider initiated abort):
-        - Issue A-P-ABORT indication and close transport connection.
-            This action is triggered by the reception of an A-ABORT PDU."""
+
+            * Issue A-ABORT indication and close transport connection.
+
+        Otherwise (service-provider initiated abort):
+
+            * Issue A-P-ABORT indication and close transport connection.
+
+        This action is triggered by the reception of an A-ABORT PDU.
+        """
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
         self.dul_socket = None
@@ -524,7 +542,29 @@ class StateMachine(object):
 
 
 class DIMSEDecoder(object):
+    """DIMSE Message decoder.
+
+    Decodes incoming P-DATA-TF PDUs into DIMSE message instance.
+
+    :ivar accepted_contexts: accepted presentation contexts in current association
+    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
+                         a file, rather than in-memory
+    :ivar get_file_cb: callback for getting a file object for storage
+    :ivar receiving: `True` if :class:`~pynetdicom2.fsm.DIMSEDecoder` instnace has not received all
+                     P-DATA-TF PDUs for the current DIMSE message
+    :ivar command_set_received: `True` if Command Set for DIMSE message is received
+    :ivar data_set_received: `True` if Dataset  for DIMSE message is received
+    :ivar pc_id: Presentation Context ID
+    :ivar msg: decoded DIMSE message
+    """
     def __init__(self, accepted_contexts, store_in_file, get_file_cb):
+        """Initializes DIMSEDecoder instance
+
+        :param accepted_contexts: accepted presentation contexts in current association
+        :param store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
+                              a file, rather than in-memory
+        :param get_file_cb: callback for getting a file object for storage
+        """
         self.accepted_contexts = accepted_contexts
         self.store_in_file = store_in_file
         self.get_file_cb = get_file_cb
@@ -543,6 +583,11 @@ class DIMSEDecoder(object):
         self._start = 0
 
     def process(self, p_data):
+        """Processes new incoming P-DATA-TF PDU
+
+        :param p_data: incoming P-DATA-TF PDU
+        :raises exceptions.DIMSEProcessingError: raised if unknown PDV type is encountered
+        """
         try:
             for value_item in p_data.data_value_items:
                 # must be able to read P-DATA with several PDVs
@@ -579,9 +624,7 @@ class DIMSEDecoder(object):
                             self.receiving = False
                             break
                 else:
-                    raise exceptions.DIMSEProcessingError(
-                        'Incorrect first PDV byte'
-                    )
+                    raise exceptions.DIMSEProcessingError('Incorrect first PDV byte')
         except Exception:
             if self._dataset_fp:
                 self._dataset_fp.close()
