@@ -30,7 +30,7 @@ import select
 import struct
 
 import six
-from six.moves import queue
+from six.moves import queue  # type: ignore
 
 from . import timer
 from . import fsm
@@ -127,6 +127,7 @@ class DULServiceProvider(threading.Thread):
 
     @property
     def accepted_contexts(self):
+        """Accepted presentation contexts in the current association"""
         return self.state_machine.accepted_contexts
 
     @accepted_contexts.setter
@@ -139,10 +140,9 @@ class DULServiceProvider(threading.Thread):
         .. note::
 
             PDU is not immediately written into the socket, but rather put into
-            queue that is processed by service event loop.
+            queue that is processed by the service event loop.
 
-        :param primitive: outgoing PDU. Possible PDU types are described
-                          in :doc:`pdu`
+        :param primitive: outgoing PDU. Possible PDU types are described in :doc:`pdu`
         """
         self.from_service_user.put(primitive)
 
@@ -152,10 +152,10 @@ class DULServiceProvider(threading.Thread):
         If timeout is exceeded method
         rises :class:`~pynetdicom2.exceptions.DCMTimeoutError` exception.
 
-        :param timeout: the amount of seconds method waits for PDU to appear
-                        in incoming queue
-        :return: PDU instance. Possible PDU types are described
-                 in :doc:`pdu`
+        :param timeout: the amount of seconds method waits for PDU to appear in incoming queue
+        :return: PDU instance or a tuple containing DIMSE Message and Presentation Context ID.
+                 Possible PDU types are described in :doc:`pdu`. Possible DIMSE messages are
+                 described in :doc:`dimsemessages`.
         :raise exceptions.DCMTimeoutError: If specified timeout is exceeded
         """
         try:

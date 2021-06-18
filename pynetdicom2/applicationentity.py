@@ -113,7 +113,7 @@ class AEBase(object):
         chained, so you can add multiple services in one statement.
 
         :param service: DICOM service
-        :param sop_classes overrides list of SOP Class UIDs provided by the service
+        :param sop_classes: overrides list of SOP Class UIDs provided by the service
         """
         sop_classes = sop_classes or service.sop_classes
         self.supported_scu.update({
@@ -233,7 +233,7 @@ class AEBase(object):
     def on_receive_echo(self, context):  # pylint: disable=unused-argument,no-self-use
         """Default handling of C-ECHO command. Always returns SUCCESS code
 
-        User should override this method in sub-class to provide custom
+        User should override this method in a sub-class to provide custom
         handling of the command.
 
         :param context: presentation context (contains ID, SOP Class UID and
@@ -246,7 +246,7 @@ class AEBase(object):
         """Default handling of C-STORE command. Always returns
         ELEMENT_DISCARDED code.
 
-        User should override this method in sub-class to provide custom handling
+        User should override this method in a sub-class to provide custom handling
         of the command
 
         :param context: presentation context (contains ID, SOP Class UID and
@@ -286,8 +286,7 @@ class AEBase(object):
             * iterable or None for successfully stored SOP Instance UIDs
             * iterable or None for failed SOP Instance UIDs
 
-        Default implementation is not provided. Method raises
-        `exceptions.EventHandlingError`
+        Default implementation is not provided. Method raises `exceptions.EventHandlingError`
 
         :param remote_ae: remote AE title
         :param uids: iterable of tuples (SOP Class UID, SOP Instance UID)

@@ -4,3 +4,4 @@
 .python-version
 dist
 pynetdicom2.egg-info
+docs/_build
