@@ -373,19 +373,23 @@ class Status(int):
             status = _status_dict.get((command.command_field, value))
         if not status:
             status = _general_status_dict.get(value, UNKNOWN)
-        obj.status_type = status.code_type
-        obj.description = status.description
-        obj.is_success = obj.status_type == 'Success'
-        obj.is_pending = obj.status_type == 'Pending'
-        obj.is_failure = obj.status_type == 'Failure'
-        obj.is_warning = obj.status_type == 'Warning'
-        obj.is_cancel = obj.status_type == 'Cancel'
+        obj.status_type = status.code_type  # type: ignore
+        obj.description = status.description  # type: ignore
+        # pylint: disable=no-member
+        obj.is_success = obj.status_type == 'Success'  # type: ignore
+        obj.is_pending = obj.status_type == 'Pending'  # type: ignore
+        obj.is_failure = obj.status_type == 'Failure'  # type: ignore
+        obj.is_warning = obj.status_type == 'Warning'  # type: ignore
+        obj.is_cancel = obj.status_type == 'Cancel'  # type: ignore
+        # pylint: enable=no-member
         return obj
 
     def __str__(self):
+        # pylint: disable=missing-format-attribute
         return '(0x{value:0X}) {self.status_type}: {self.description}'.format(
             self=self, value=int(self)
         )
+        # pylint: enable=missing-format-attribute
 
     def __repr__(self):
         """Returns status string representation
@@ -470,6 +474,7 @@ KNOWN_STATUSES = [
 
 
 def register_statuses():
+    """Registers known statuses in the global library dictionary"""
     for status in KNOWN_STATUSES:
         code, code_type, desc, command = status
         if isinstance(code, tuple):

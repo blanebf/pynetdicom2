@@ -29,11 +29,11 @@ def encode(ds, is_implicit_vr, is_little_endian):
     return rawstr
 
 
-def encode_element(el, is_implicit_vr, is_little_endian):
+def encode_element(elem, is_implicit_vr, is_little_endian):
     fp = filebase.DicomBytesIO()
     fp.is_implicit_VR = is_implicit_vr
     fp.is_little_endian = is_little_endian
-    filewriter.write_data_element(fp, el)
+    filewriter.write_data_element(fp, elem)
     rawstr = fp.parent.getvalue()
     fp.close()
     return rawstr
