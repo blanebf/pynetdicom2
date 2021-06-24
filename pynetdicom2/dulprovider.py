@@ -185,7 +185,7 @@ class DULServiceProvider(threading.Thread):
     def run(self):
         try:
             while not self.is_killed:
-                self._check_network() or self._check_outgoing_pdu() or self._check_timer()
+                self._check_network() or self._check_outgoing_pdu() or self._check_timer()  # pylint: disable=expression-not-assigned
                 try:
                     evt = self.event.popleft()
                 except IndexError:
@@ -210,8 +210,10 @@ class DULServiceProvider(threading.Thread):
 
         # check if something comes in the client socket
         if select.select([self.dul_socket], [], [], 0.05)[0]:
-            return self._check_incoming_pdu()
-        return False
+            if self._check_incoming_pdu():
+                return True
+
+        return self._process_incoming()
 
     def _check_outgoing_pdu(self):
         try:
@@ -262,7 +264,9 @@ class DULServiceProvider(threading.Thread):
             return True
 
         self.raw_pdu += data
+        return False
 
+    def _process_incoming(self):
         if len(self.raw_pdu) < 6:
             return False
 
@@ -280,10 +284,9 @@ class DULServiceProvider(threading.Thread):
             pdu_type, event = PDU_TYPES[six.indexbytes(raw_pdu, 0)]
             self.primitive = pdu_type.decode(raw_pdu)
             self.event.append(event)
-            return False
         except KeyError:
             self.event.append(fsm.Events.EVT_19)
-            return True
+        return True
 
     def _close(self):
         # waiting for connection to close
