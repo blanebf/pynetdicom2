@@ -406,5 +406,5 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
                 raise
         threading.Thread(target=self.serve_forever).start()
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):  # pylint: disable=arguments-differ
         self.quit()

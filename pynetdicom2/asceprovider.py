@@ -90,7 +90,6 @@ class Association(object):
 
         In most cases you won't need to use this method directly. Refer to
         release and abort instead.
-        :rtype : None
         """
         for _ in range(1000):
             if self.dul.stop():
