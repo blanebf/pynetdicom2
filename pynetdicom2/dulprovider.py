@@ -25,6 +25,7 @@ import collections
 
 import threading
 from typing import FrozenSet  # pylint: disable=unused-import
+import time
 import socket
 import select
 import struct
@@ -32,7 +33,6 @@ import struct
 import six
 from six.moves import queue  # type: ignore
 
-from . import timer
 from . import fsm
 from . import pdu
 from . import exceptions
@@ -112,7 +112,7 @@ class DULServiceProvider(threading.Thread):
         self.from_service_user = queue.Queue()
 
         # Setup the timer and finite state machines
-        self.timer = timer.Timer(10)
+        self.timer = Timer(10)
         self.state_machine = fsm.StateMachine(self, self.timer, store_in_file, get_file_cb)
         self._is_killed = threading.Event()
 
@@ -303,4 +303,33 @@ class DULServiceProvider(threading.Thread):
         self.dul_socket.close()
         self.dul_socket = None
         self.event.append(fsm.Events.EVT_17)
+        return True
+
+
+class Timer(object):
+    """A small helper timer class"""
+
+    def __init__(self, max_seconds):
+        # type: (int) -> None
+        self._max_seconds = max_seconds
+        self._start_time = None
+
+    def start(self):
+        """Sets a timer"""
+        self._start_time = time.time()
+
+    def stop(self):
+        """Stops a timer"""
+        self._start_time = None
+
+    def restart(self):
+        """Restarts a timer"""
+        self.stop()
+        self.start()
+
+    def check(self):
+        # type: () -> bool
+        """Checks if timer has expired"""
+        if self._start_time and (time.time() - self._start_time > self._max_seconds):
+            return False
         return True

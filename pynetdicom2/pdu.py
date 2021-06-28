@@ -39,10 +39,12 @@ from pydicom import uid
 from . import exceptions
 from . import userdataitems
 
+# pylint: disable=ungrouped-imports
 if six.PY3:
     from six import BytesIO as cStringIO
 else:
-    from six.moves import cStringIO
+    from six.moves import cStringIO  # type: ignore
+# pylint: enable=ungrouped-imports
 
 
 SUB_ITEM_TYPES = {
@@ -57,7 +59,7 @@ SUB_ITEM_TYPES = {
 }
 
 
-def next_type(stream):
+def _next_type(stream):
     char = stream.read(1)
     if char == b'':
         return None  # we are at the end of the file
@@ -66,6 +68,16 @@ def next_type(stream):
 
 
 class AAssociatePDUBase(object):
+    """Base class for A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs
+
+    :ivar called_ae_title: called AE Title (remote AET)
+    :ivar calling_ae_title: calling AE Title (local AET)
+    :ivar variable_items: list of various variable items
+    :ivar protocol_version: protocol version, should be 1
+    :ivar reserved1: reserved field, defaults 0
+    :ivar reserved2: reserved field, defaults 0
+    :ivar reserved3: reserved field, defaults eight 0
+    """
     pdu_type = None
     header = struct.Struct('>B B I H H 16s 16s 8I')
 
@@ -85,9 +97,19 @@ class AAssociatePDUBase(object):
 
     @property
     def pdu_length(self):
+        """PDU length without the header
+
+        :return: PDU length
+        :rtype: int
+        """
         return 68 + sum((i.total_length() for i in self.variable_items))
 
     def encode(self):
+        """Encodes PDU into bytes
+
+        :return: encoded PDU
+        :rtype: bytes
+        """
         called_ae_title = self.called_ae_title.encode()
         calling_ae_title = self.calling_ae_title.encode()
         return self.header.pack(self.pdu_type, self.reserved1, self.pdu_length,
@@ -97,15 +119,14 @@ class AAssociatePDUBase(object):
             + b''.join([item.encode() for item in self.variable_items])
 
     @classmethod
-    def decode(cls, rawstring):
+    def decode(cls, raw_bytes):
         """Factory method. Decodes A-ASSOCIATE-RQ PDU instance from raw string.
 
-        :param rawstring: rawstring containing binary representation of the
-        A-ASSOCIATE-RQ PDU
-        :return decoded PDU
+        :param raw_bytes: bytes containing binary representation of the A-ASSOCIATE-RQ PDU
+        :return: decoded PDU
         """
         def iter_items():
-            item_type = next_type(stream)
+            item_type = _next_type(stream)
             while item_type:
                 if item_type == 0x10:
                     yield ApplicationContextItem.decode(stream)
@@ -117,9 +138,9 @@ class AAssociatePDUBase(object):
                     yield UserInformationItem.decode(stream)
                 else:
                     raise exceptions.PDUProcessingError('Invalid variable item')
-                item_type = next_type(stream)
+                item_type = _next_type(stream)
 
-        stream = cStringIO(rawstring)
+        stream = cStringIO(raw_bytes)
         values = cls.header.unpack(stream.read(74))  # type: ignore
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
@@ -134,6 +155,11 @@ class AAssociatePDUBase(object):
                    reserved2=reserved2, reserved3=reserved3)
 
     def total_length(self):
+        """Returns total PDU length including the header
+
+        :return: total PDU length
+        :rtype: int
+        """
         return 6 + self.pdu_length
 
 
@@ -178,11 +204,11 @@ class AAssociateRjPDU(object):
     (referenced above) or in documentation for
     :class:`~pynetdicom2.exceptions.AssociationRejectedError`
 
-    :param result: Result PDU field. (unsigned byte)
-    :param source: Source PDU field (unsigned byte)
-    :param reason_diag: Reason/Diag. PDU field (unsigned byte)
-    :param reserved1: Reserved field, defaults to 0 (unsigned byte)
-    :param reserved2: Reserved field, defaults to 0 (unsigned byte)
+    :ivar result: Result PDU field. (unsigned byte)
+    :ivar source: Source PDU field (unsigned byte)
+    :ivar reason_diag: Reason/Diag. PDU field (unsigned byte)
+    :ivar reserved1: Reserved field, defaults to 0 (unsigned byte)
+    :ivar reserved2: Reserved field, defaults to 0 (unsigned byte)
     """
 
     pdu_type = 0x03
@@ -247,8 +273,10 @@ class AAssociateRjPDU(object):
 
 
 class PDataTfPDU(object):
-    """
-    This class represents the P-DATA-TF PDU (as described in PS 3.8 9.3.5).
+    """This class represents the P-DATA-TF PDU (as described in PS 3.8 9.3.5).
+
+    :ivar reserved: reserved field, defaults 0
+    :ivar data_value_items: list of one of more PresentationDataValueItem
     """
 
     pdu_type = 0x04
@@ -270,11 +298,21 @@ class PDataTfPDU(object):
 
     @property
     def pdu_length(self):
+        """PDU length without the header
+
+        :return: PDU length
+        :rtype: int
+        """
         return sum((i.total_length() for i in self.data_value_items))
 
     def encode(self):
+        """Encodes PDataTfPDU into bytes
+
+        :return: encoded PDU
+        :rtype: bytes
+        """
         return self.header.pack(self.pdu_type, self.reserved, self.pdu_length)\
-            + b''.join([item.encode() for item in self.data_value_items])
+            + b''.join(item.encode() for item in self.data_value_items)
 
     @classmethod
     def decode(cls, rawstring):
@@ -297,11 +335,20 @@ class PDataTfPDU(object):
         return cls(data_value_items, reserved)
 
     def total_length(self):
+        """Returns total PDU length including the header
+
+        :return: total PDU length
+        :rtype: int
+        """
         return 6 + self.pdu_length
 
 
 class AReleasePDUBase(object):
-    """Base class for the A-RELEASE-* PDUs."""
+    """Base class for the A-RELEASE-* PDUs.
+
+    :ivar reserved1: reserved field, defaults 0
+    :ivar reserved2: reserved field, defaults 0
+    """
 
     pdu_type = None
     pdu_length = 4
@@ -314,12 +361,15 @@ class AReleasePDUBase(object):
         self.reserved2 = reserved2  # unsigned int
 
     def __repr__(self):
-        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
-            self.reserved1, self.reserved2)
+        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
 
     def encode(self):
-        return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
-                                self.reserved2)
+        """Encodes PDU into bytes
+
+        :return: encoded PDU
+        :rtype: bytes
+        """
+        return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length, self.reserved2)
 
     @classmethod
     def decode(cls, rawstring):
@@ -346,34 +396,46 @@ class AReleasePDUBase(object):
 
 
 class AReleaseRqPDU(AReleasePDUBase):
-    """
-    This class represents the A-RELEASE-RQ PDU as described in PS 3.8 9.3.6
-    """
+    """This class represents the A-RELEASE-RQ PDU as described in PS 3.8 9.3.6"""
 
     pdu_type = 0x05
     """PDU Type"""
 
     def __repr__(self):
-        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(
-            self.reserved1, self.reserved2)
+        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
 
 
 class AReleaseRpPDU(AReleasePDUBase):
-    """
-    This class represents the A-RELEASE-RP PDU as described in PS 3.8 9.3.7
-    """
+    """This class represents the A-RELEASE-RP PDU as described in PS 3.8 9.3.7"""
 
     pdu_type = 0x06
     """PDU Type"""
 
     def __repr__(self):
-        return 'AReleaseRpPDU(reserved1={0}, reserved2={1})'.format(
-            self.reserved1, self.reserved2)
+        return 'AReleaseRpPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
 
 
 class AAbortPDU(object):
-    """
-    This class represents the A-ABORT PDU as described in PS 3.8 9.3.8
+    """This class represents the A-ABORT PDU as described in PS 3.8 9.3.8
+
+    :ivar reserved1: reserved field, defaults 0
+    :ivar reserved2: reserved field, defaults 0
+    :ivar reserved3: reserved field, defaults 0
+    :ivar reserved3: reserved field, defaults 0
+    :ivar source: abort source:
+
+                        * 0 - DICOM UL service-user (initiated abort)
+                        * 1 - reserved
+                        * 2 - DICOM UL service-provider (initiated abort)
+    :ivar reason_diag: Reason/Diag. value:
+
+                        * 0 - reason-not-specified
+                        * 1 - unrecognized-PDU
+                        * 2 - unexpected-PDU
+                        * 3 - reserved
+                        * 4 - unrecognized-PDU parameter
+                        * 5 - unexpected-PDU parameter
+                        * 6 - invalid-PDU-parameter value
     """
     pdu_type = 0x07
     """PDU Type"""
@@ -398,6 +460,11 @@ class AAbortPDU(object):
                'reserved3={self.reserved3})'.format(self=self)
 
     def encode(self):
+        """Encodes AAbortPDU into bytes
+
+        :return: encoded PDU
+        :rtype: bytes
+        """
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length,
                                 self.reserved2, self.reserved3, self.source,
                                 self.reason_diag)
@@ -433,8 +500,10 @@ class AAbortPDU(object):
 
 
 class ApplicationContextItem(object):
-    """
-    Application Context Item (PS 3.8 9.3.2.1)
+    """Application Context Item (PS 3.8 9.3.2.1)
+
+    :ivar reserved: reserved field, defaults 0
+    :ivar context_name: application context name (OID)
     """
 
     item_type = 0x10
@@ -452,9 +521,19 @@ class ApplicationContextItem(object):
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return len(self.context_name)
 
     def encode(self):
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
         return self.header.pack(self.item_type, self.reserved,
                                 self.item_length) + self.context_name.encode()
 
@@ -470,12 +549,24 @@ class ApplicationContextItem(object):
         return cls(reserved=reserved, context_name=context_name)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class PresentationContextItemRQ(object):
-    """
-    Presentation Context Item (request) PS 3.8 9.3.2.2
+    """Presentation Context Item (request) PS 3.8 9.3.2.2
+
+    :ivar context_id: presentation context ID
+    :ivar abs_sub_item: Abstract Syntax sub-item
+    :ivar ts_sub_items: list of Transfer Syntax sub-items
+    :ivar reserved1: reserved field, defaults 0
+    :ivar reserved2: reserved field, defaults 0
+    :ivar reserved3: reserved field, defaults 0
+    :ivar reserved4: reserved field, defaults 0
     """
 
     item_type = 0x20
@@ -504,10 +595,20 @@ class PresentationContextItemRQ(object):
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return 4 + (self.abs_sub_item.total_length() +
                     sum(i.total_length() for i in self.ts_sub_items))
 
     def encode(self):
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
         return self.header.pack(self.item_type, self.reserved1,
                                 self.item_length, self.context_id,
                                 self.reserved2, self.reserved3,
@@ -523,7 +624,7 @@ class PresentationContextItemRQ(object):
         :return: decoded context item
         """
         def iter_items():
-            while next_type(stream) == 0x40:
+            while _next_type(stream) == 0x40:
                 yield TransferSyntaxSubItem.decode(stream)
 
         _, reserved1, _, context_id, \
@@ -536,12 +637,30 @@ class PresentationContextItemRQ(object):
                    reserved3=reserved3, reserved4=reserved4)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class PresentationContextItemAC(object):
-    """
-    Presentation Context Item (response) PS 3.8 9.3.3.2
+    """Presentation Context Item (response) PS 3.8 9.3.3.2
+
+    :ivar context_id:
+    :ivar result_reason: result/reason, can be one of the following:
+
+                                * 0 - acceptance
+                                * 1 - user-rejection
+                                * 2 - no-reason (provider rejection)
+                                * 3 - abstract-syntax-not-supported (provider rejection)
+                                * 4 - transfer-syntaxes-not-supported (provider rejection)
+
+    :ivar ts_sub_item: list of Transfer Syntax sub-items
+    :ivar reserved1: reserved field, defaults 0
+    :ivar reserved2: reserved field, defaults 0
+    :ivar reserved3: reserved field, defaults 0
     """
 
     item_type = 0x21
@@ -568,9 +687,19 @@ class PresentationContextItemAC(object):
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return 4 + self.ts_sub_item.total_length()
 
     def encode(self):
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
         return b''.join([self.header.pack(self.item_type, self.reserved1,
                                           self.item_length, self.context_id,
                                           self.reserved2, self.result_reason,
@@ -592,16 +721,20 @@ class PresentationContextItemAC(object):
                    reserved2=reserved2, reserved3=reserved3)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class AbstractSyntaxSubItem(object):
-    """
-    Abstract Syntax Sub-Item (PS 3.8 9.3.2.2.1)
+    """Abstract Syntax Sub-Item (PS 3.8 9.3.2.2.1)
 
-    :param name: Abstract Syntax name (UID) as byte string
-    :param reserved: reserved field. In most cases value should be default
-                     (0x00). Standard advises against testing this field value.
+    :ivar name: Abstract Syntax name (UID) as byte string
+    :ivar reserved: reserved field. In most cases value should be default
+                    (0x00). Standard advises against testing this field value.
     """
     item_type = 0x30
     """Item type"""
@@ -613,16 +746,24 @@ class AbstractSyntaxSubItem(object):
         self.name = name  # string
 
     def __repr__(self):
-        return 'AbstractSyntaxSubItem(name="{0}", reserved={1})'.format(
-            self.name, self.reserved)
+        return 'AbstractSyntaxSubItem(name="{0}", reserved={1})'.format(self.name, self.reserved)
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return len(self.name)
 
     def encode(self):
-        return b''.join([self.header.pack(self.item_type, self.reserved,
-                                          self.item_length),
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
+        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
                          self.name.encode()])
 
     @classmethod
@@ -637,16 +778,20 @@ class AbstractSyntaxSubItem(object):
         return cls(name=name, reserved=reserved)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class TransferSyntaxSubItem(object):
-    """
-    Transfer Syntax Sub-Item (PS 3.8 9.3.2.2.2)
+    """Transfer Syntax Sub-Item (PS 3.8 9.3.2.2.2)
 
-    :param name: Transfer Syntax name (UID) as byte string
-    :param reserved: reserved field. In most cases value should be default
-                     (0x00). Standard advises against testing this field value.
+    :ivar name: Transfer Syntax name (UID) as byte string
+    :ivar reserved: reserved field. In most cases value should be default
+                    (0x00). Standard advises against testing this field value.
     """
     item_type = 0x40
     """Item type"""
@@ -658,16 +803,24 @@ class TransferSyntaxSubItem(object):
         self.name = uid.UID(name)  # string
 
     def __repr__(self):
-        return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(
-            self.name, self.reserved)
+        return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(self.name, self.reserved)
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return len(self.name)
 
     def encode(self):
-        return b''.join([self.header.pack(self.item_type, self.reserved,
-                                          self.item_length),
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
+        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
                          self.name.encode()])
 
     @classmethod
@@ -682,19 +835,24 @@ class TransferSyntaxSubItem(object):
         return cls(name=name.decode(), reserved=reserved)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class UserInformationItem(object):
-    """
-    User Information Item (PS 3.8 9.3.2.3)
+    """User Information Item (PS 3.8 9.3.2.3)
 
-    :param reserved: reserved field. In most cases value should be default
-                     (0x00). Standard advises against testing this field value.
-    :param user_data: list containing the following:
+    :ivar reserved: reserved field. In most cases value should be default
+                    (0x00). Standard advises against testing this field value.
+    :ivar user_data: list containing the following:
 
                             * one :class:`~pynetdicom2.userdataitems.MaximumLengthSubItem`
-                            * zero or more raw strings encoding user data items
+                            * zero or more User Information sub-items from
+                              :doc:`userdataitems`
 
     """
     item_type = 0x50
@@ -702,8 +860,6 @@ class UserInformationItem(object):
 
     def __init__(self, user_data, reserved=0x00):
         self.reserved = reserved  # unsigned byte
-
-        #  user_data is a
         self.user_data = user_data
 
     def __repr__(self):
@@ -712,27 +868,39 @@ class UserInformationItem(object):
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return sum(i.total_length for i in self.user_data)
 
     def encode(self):
-        return self.header.pack(self.item_type, self.reserved,
-                                self.item_length) \
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
+        return self.header.pack(self.item_type, self.reserved, self.item_length) \
             + b''.join([data.encode() for data in self.user_data])
 
     @staticmethod
     def sub_items(stream):
-        item_type = next_type(stream)
+        """Reads User Information sub-items from a data stream
+
+        :param stream: raw data stream
+        :type stream: IO[bytes]
+        :raises exceptions.PDUProcessingError: [description]
+        :yield: User Information sub-item
+        """
+        item_type = _next_type(stream)
         while item_type:
             try:
-                factory = SUB_ITEM_TYPES.get(
-                    item_type,
-                    userdataitems.GenericUserDataSubItem
-                )
+                factory = SUB_ITEM_TYPES.get(item_type, userdataitems.GenericUserDataSubItem)
                 yield factory.decode(stream)
-                item_type = next_type(stream)
+                item_type = _next_type(stream)
             except KeyError:
-                raise exceptions.PDUProcessingError(
-                    'Invalid sub-item', "0x%X" % item_type)
+                raise exceptions.PDUProcessingError('Invalid sub-item', "0x%X" % item_type)
 
     @classmethod
     def decode(cls, stream):
@@ -747,29 +915,47 @@ class UserInformationItem(object):
         return cls(user_data=user_data, reserved=reserved)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
 
 
 class PresentationDataValueItem(object):
+    """Presentation Data Value Item (PS 3.8 9.3.5.1)
+
+    :ivar context_id: presentation context ID
+    :ivar data_value: item value (bytes)
+    """
     header = struct.Struct('>I B')
 
     def __init__(self, context_id, data_value):
+        # type: (int,bytes) -> None
         self.context_id = context_id  # unsigned byte
-        self.data_value = data_value  # string
+        self.data_value = data_value  # bytes
 
     def __repr__(self):
         return 'PresentationDataValueItem(context_id={0}, ' \
-               'data_value)="{1}"'.format(
-                   self.context_id, self.data_value)
+               'data_value)="{1}"'.format(self.context_id, self.data_value)
 
     @property
     def item_length(self):
+        """Item length, excluding the header
+
+        :return: item length
+        :rtype: int
+        """
         return len(self.data_value) + 1
 
     def encode(self):
-        return b''.join([self.header.pack(self.item_length,
-                                          self.context_id),
-                         self.data_value])
+        """Encodes item into bytes
+
+        :return: encoded item
+        :rtype: bytes
+        """
+        return b''.join([self.header.pack(self.item_length, self.context_id), self.data_value])
 
     @classmethod
     def decode(cls, stream):
@@ -786,4 +972,9 @@ class PresentationDataValueItem(object):
         return cls(context_id, data_value)
 
     def total_length(self):
+        """Total item length, including the header
+
+        :return: total item length
+        :rtype: int
+        """
         return 4 + self.item_length
