@@ -541,7 +541,7 @@ class StateMachine(object):  # pylint: disable=too-many-public-methods
         return States.STA_13
 
 
-class DIMSEDecoder(object):
+class DIMSEDecoder(object):  # pylint: disable=too-few-public-methods
     """DIMSE Message decoder.
 
     Decodes incoming P-DATA-TF PDUs into DIMSE message instance.
