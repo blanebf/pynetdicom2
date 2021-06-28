@@ -236,7 +236,7 @@ class CEchoRQMessage(DIMSERequestMessage):
 
     command_field = 0x0030
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
     The value of this field shall be set to 0030H for the C-ECHO-RQ Message.
     """
 
@@ -251,7 +251,7 @@ class CEchoRSPMessage(DIMSEResponseMessage, StatusMixin):
 
     command_field = 0x8030
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
     The value of this field shall be set to 8030H for the C-ECHO-RSP Message.
     """
 
@@ -267,7 +267,7 @@ class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0001
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
     The value of this field shall be set to 0001H for the C-STORE-RQ Message.
     """
 
@@ -301,7 +301,7 @@ class CStoreRSPMessage(DIMSEResponseMessage, StatusMixin):
 
     command_field = 0x8001
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 8001H for the C-STORE-RSP Message.
     """
 
@@ -323,7 +323,7 @@ class CFindRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0020
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 0020H for the C-FIND-RQ Message.
     """
 
@@ -339,7 +339,7 @@ class CFindRSPMessage(DIMSEResponseMessage, StatusMixin):
 
     command_field = 0x8020
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 8020H for the C-FIND-RSP Message.
     """
 
@@ -355,7 +355,7 @@ class CGetRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0010
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 0010H for the C-GET-RQ Message.
     """
 
@@ -371,7 +371,7 @@ class CGetRSPMessage(DIMSEResponseMessage, StatusMixin):
 
     command_field = 0x8010
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 0010H for the C-GET-RQ Message.
     """
 
@@ -413,7 +413,7 @@ class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0021
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 0021H for the C-MOVE-RQ Message.
     """
 
@@ -435,7 +435,7 @@ class CMoveRSPMessage(DIMSEResponseMessage, StatusMixin):
 
     command_field = 0x8021
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 8021H for the C-MOVE-RSP Message.
     """
 
@@ -480,7 +480,7 @@ class CCancelRQMessage(DIMSEResponseMessage):
     """
     command_field = 0x0FFF
     """
-    This field distinguishes the DIMSE‑C operation conveyed by this Message. The value of this
+    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
     field shall be set to 0FFFH for the C-CANCEL-MOVE-RQ Message.
     """
 
