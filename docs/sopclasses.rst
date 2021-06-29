@@ -1,5 +1,5 @@
-Service SOP Classes
-===================
+Service SOP Classes (sopclass)
+==============================
 
 .. automodule:: pynetdicom2.sopclass
 	:members:

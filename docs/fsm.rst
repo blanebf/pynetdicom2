@@ -1,5 +1,5 @@
-Service State Machine
-=====================
+Service State Machine (fsm)
+===========================
 
 .. automodule:: pynetdicom2.fsm
 	:members:

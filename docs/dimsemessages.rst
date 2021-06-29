@@ -1,5 +1,5 @@
-DIMSE Messages
-==============
+DIMSE Messages (dimsemessages)
+==============================
 
 .. automodule:: pynetdicom2.dimsemessages
 	:members:

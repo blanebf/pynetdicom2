@@ -1,5 +1,5 @@
-DUL Service Provider
-====================
+DUL Service Provider (dulprovider)
+==================================
 
 .. automodule:: pynetdicom2.dulprovider
 	:members:

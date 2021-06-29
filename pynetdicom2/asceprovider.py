@@ -4,6 +4,21 @@
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
 #
+"""
+Module contains two key classes for working with DICOM associations:
+
+    * :class:`~pynetdicom2.asceprovider.AssociationAcceptor` for handling incoming association
+      requests.
+    * :class:`~pynetdicom2.asceprovider.AssociationRequester` for requesting association.
+
+In most cases you won't have to create AssociationAcceptor or AssociationRequester directly, but
+rather they will be created for you by either :class:`~pynetdicom2.applicationentity.ClientAE`
+or :class:`~pynetdicom2.applicationentity.AE`. Please, refer to documentation on those classes
+on how to request new association or how incoming association are handled.
+
+Each association class is not only responsible for initial establishment, but also for all
+association life-cycle until it's either released or aborted.
+"""
 
 from __future__ import absolute_import, unicode_literals
 
@@ -34,6 +49,12 @@ IMPLEMENTATION_UID = uid.UID('1.2.826.0.1.3680043.8.498.1.1.15510544521810281180
 
 
 def build_pres_context_def_list(context_def_list):
+    """Builds a list of Presntation Context Items
+
+    :param context_def_list: list of tuples (presentation context ID and PContextDef)
+    :type context_def_list: Tuple[int,PContextDef]
+    :return: generator that yields :class:`pynetdicom2.pdu.PresentationContextItemRQ` instances
+    """
     return (
         pdu.PresentationContextItemRQ(
             pc_id, pdu.AbstractSyntaxSubItem(ctx.sop_class),
@@ -265,7 +286,7 @@ class AssociationRequester(Association):
                               empty, until association is established.
     """
 
-    def __init__(self, local_ae, max_pdu_length, remote_ae=None):
+    def __init__(self, local_ae, max_pdu_length, remote_ae):
         super(AssociationRequester, self).__init__(local_ae, None, max_pdu_length)
         self.context_def_list = local_ae.copy_context_def_list()
         self.remote_ae = remote_ae

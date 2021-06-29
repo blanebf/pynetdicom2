@@ -1,5 +1,5 @@
-User Data Sub-items
-===================
+User Data Sub-items (userdataitems)
+===================================
 
 .. automodule:: pynetdicom2.userdataitems
 	:members:
