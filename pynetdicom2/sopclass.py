@@ -76,7 +76,7 @@ def store_in_file(service):
     return service
 
 
-class MessageDispatcher(object):
+class MessageDispatcher(object):  # pylint: disable=too-few-public-methods
     """Base class for message dispatcher service.
 
     Class provides method for selecting method based on incoming message type.
@@ -188,7 +188,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
 
     if isinstance(dataset, six.string_types):
         # Got file name
-        ds = open(dataset, 'rb')
+        ds = open(dataset, 'rb')  # pylint: disable=consider-using-with
         zero = ds.tell()
         filereader.read_preamble(ds, False)
         meta = filereader._read_file_meta_info(ds)  # pylint: disable=protected-access
@@ -264,8 +264,9 @@ def qr_find_scu(asce, ctx, ds, msg_id):
     from remote AE.
     If status changes from 'Pending' generator exits.
 
-    :param ds: dataset that is passed to remote AE with C-FIND command
+    :param ds: dataset that is passed to the remote AE with C-FIND command
     :param msg_id: message identifier
+    :yield: response dataset, response status
     """
     c_find = dimsemessages.CFindRQMessage()
     c_find.message_id = msg_id
@@ -405,6 +406,7 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
     :param ds: dataset that contains request parameters.
     :param dest_ae: C-MOVE destination
     :param msg_id: message ID.
+    :yield: status and response message
     """
     c_move = dimsemessages.CMoveRQMessage()
     c_move.message_id = msg_id
@@ -420,13 +422,24 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
         # wait for c-move responses
         response, _ = asce.receive()
         status = statuses.Status(response.status, dimsemessages.CMoveRSPMessage)
+        yield status, response
         if not status.is_pending:
             break
-        yield status, response
 
 
 @sop_classes(MOVE_SOP_CLASSES)
 def qr_move_scp(asce, ctx, msg):
+    """Query/Retrieve C-MOVE service implementation.
+
+    Service call `on_receive_move` on AE instance with current presentation context,
+    message dataset and move destination. In response service expects a tuple of
+    remote AE parameters (address, port, etc), number of operation and a generator
+    that would yield datasets to store.
+
+    :param asce: active association
+    :param ctx: presentation context
+    :param msg: received C-MOVE message
+    """
     ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
                         ctx.supported_ts.is_little_endian)
 
@@ -434,8 +447,7 @@ def qr_move_scp(asce, ctx, msg):
     rsp = dimsemessages.CMoveRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
     rsp.sop_class_uid = msg.sop_class_uid
-    remote_ae, nop, gen = asce.ae.on_receive_move(ctx, ds,
-                                                  msg.move_destination)
+    remote_ae, nop, gen = asce.ae.on_receive_move(ctx, ds, msg.move_destination)
     if not nop:
         # nothing to move
         _send_response(asce, ctx, msg, 0, 0, 0, 0)
@@ -478,60 +490,41 @@ def _send_response(asce, ctx, msg, nop, failed, warning, completed):
 
 @sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scu(asce, ctx, ds, msg_id):
-    # build C-FIND primitive
-    c_find = dimsemessages.CFindRQMessage()
-    c_find.message_id = msg_id
-    c_find.sop_class_uid = ctx.sop_class
-    c_find.priority = dimsemessages.PRIORITY_MEDIUM
-    c_find.data_set = dsutils.encode(ds,
-                                     ctx.supported_ts.is_implicit_VR,
-                                     ctx.supported_ts.is_little_endian)
+    """Modality WorkList service implementation (SCU).
 
-    # send c-find request
-    asce.send(c_find, ctx.id)
-    while 1:
-        # wait for c-find responses
-        response, _ = asce.receive()
-        d = dsutils.decode(response.data_set,
-                           ctx.supported_ts.is_implicit_VR,
-                           ctx.supported_ts.is_little_endian)
-        status = statuses.Status(response.status, dimsemessages.CFindRSPMessage)
-        yield status, d
-        if not status.is_pending:
-            break
+    Pretty much the same as Query/Retrieve C-FIND
+
+    :param asce: active association
+    :param ctx: presentation context
+    :param ds: dataset that is passed to the remote AE with C-FIND command
+    :param msg_id: message ID
+    :yield: response dataset, response status
+    """
+    for status, data_set in qr_find_scu(asce, ctx, ds, msg_id):
+        yield status, data_set
 
 
 @sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scp(asce, ctx, msg):
-    ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
-                        ctx.supported_ts.is_little_endian)
+    """Modality WorkList service implementation (SCP).
 
-    # make response
-    rsp = dimsemessages.CFindRSPMessage()
-    rsp.message_id_being_responded_to = msg.message_id
-    rsp.sop_class_uid = msg.sop_class_uid
+    Pretty much the same as Query/Retrieve C-FIND
 
-    gen = asce.ae.on_receive_find(ctx, ds)
-    for identifier_ds, status in gen:
-        rsp.status = int(status)
-        rsp.data_set = dsutils.encode(identifier_ds,
-                                      ctx.supported_ts.is_implicit_VR,
-                                      ctx.supported_ts.is_little_endian)
-        # send response
-        asce.send(rsp, ctx.id)
-
-    # send final response
-    rsp = dimsemessages.CFindRSPMessage()
-    rsp.message_id_being_responded_to = msg.message_id
-    rsp.sop_class_uid = msg.sop_class_uid
-    rsp.status = int(statuses.SUCCESS)
-    asce.send(rsp, ctx.id)
+    :param asce: active association
+    :param ctx: presentation context
+    :param msg: incoming C-FIND message
+    """
+    qr_find_scp(asce, ctx, msg)
 
 
 STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS = '1.2.840.10008.1.20.1.1'
 
 
 class StorageCommitment(MessageDispatcherSCP):
+    """Storage Commitment service implementation.
+
+    Handles incoming N-ACTION-RQ and N-EVENT-REPORT-RQ messages.
+    """
     sop_classes = [STORAGE_COMMITMENT_SOP_CLASS]
 
     PROCESSING_FAILURE = 0x0110
@@ -541,7 +534,18 @@ class StorageCommitment(MessageDispatcherSCP):
     CLASS_OR_INSTANCE_CONFLICT = 0x0119
     DUPLICATE_TRANSACTION_UID = 0x0131
 
-    def n_event_report(self, asce, ctx, msg):
+    @staticmethod
+    def n_event_report(asce, ctx, msg):
+        """N-EVENT-REPORT message handler
+
+        On incoming N-EVENT-REPORT-RQ message service calls `on_commitment_response` on the AE
+        instance with provided transaction UID, list of instances stored successfully
+        and list of instances that failed to store.
+
+        :param asce: active association
+        :param ctx: presentation context
+        :param msg: incoming N-EVENT-REPORT message
+        """
         rsp = dimsemessages.NEventReportRSPMessage()
         rsp.sop_class_uid = ctx.sop_class
         rsp.status = int(statuses.SUCCESS)
@@ -570,7 +574,21 @@ class StorageCommitment(MessageDispatcherSCP):
         else:
             asce.send(rsp, ctx.id)
 
-    def n_action(self, asce, ctx, msg):
+    @staticmethod
+    def n_action(asce, ctx, msg):
+        """N-ACTION message handler.
+
+        On incoming N-ACTION message service call `on_commitment_request` on the AE instance
+        and expect to get remote AE connection parameters, and two lists of tuples. Each tuple
+        in a list should contain SOP Class UID and SOP Instance UID for each requested instances
+        in the incoming N-ACTION message.
+
+        Service would build an N-EVENT-REPORT-RQ message and send it over the new association.
+
+        :param asce: active association
+        :param ctx: presentation context
+        :param msg: incoming N-ACTION message
+        """
         instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
         rsp = dimsemessages.NActionRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
@@ -582,9 +600,7 @@ class StorageCommitment(MessageDispatcherSCP):
         uids = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
                 for item in ds.ReferencedSOPSequence)
         try:
-            remote_ae, success, failure = asce.ae.on_commitment_request(
-                asce.remote_ae, uids
-            )
+            remote_ae, success, failure = asce.ae.on_commitment_request(asce.remote_ae, uids)
         except exceptions.EventHandlingError:
             rsp.status = int(statuses.PROCESSING_FAILURE)
             asce.send(rsp, ctx.id)
@@ -624,12 +640,21 @@ class StorageCommitment(MessageDispatcherSCP):
 
             with asce.ae.request_association(remote_ae) as assoc:
                 assoc.send(report, ctx.id)
-                assoc.receive()  # Get response. Current implementation ignores
-                                 # it
+                assoc.receive()  # Get response. Current implementation ignores it
 
 
 @sop_classes([STORAGE_COMMITMENT_SOP_CLASS])
 def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
+    """Storage Commitment service implementation (SCU)
+
+    :param asce: active association
+    :param ctx: presentation context
+    :param transaction_uid: transaction UID
+    :param uids: tuple of SOP Class UID and SOP Instance UID
+    :param msg_id: message ID
+    :return: N-ACTION response status
+    :rtype: statuses.Status
+    """
     request = dimsemessages.NActionRQMessage()
     request.message_id = msg_id
     request.action_type_id = 1

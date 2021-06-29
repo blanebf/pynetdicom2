@@ -1,5 +1,5 @@
-Exceptions
-==========
+Exceptions (exceptions)
+=======================
 
 .. automodule:: pynetdicom2.exceptions
 	:members:

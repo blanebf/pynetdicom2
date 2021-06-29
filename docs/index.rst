@@ -14,6 +14,7 @@ Contents:
    intro
    tutorial
    applicationentity
+   asceprovider
    sopclasses
    dimsemessages
    dulprovider
@@ -32,4 +33,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-

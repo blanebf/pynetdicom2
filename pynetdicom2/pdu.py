@@ -911,7 +911,7 @@ class UserInformationItem(object):
         """
         _, reserved, _ = cls.header.unpack(stream.read(4))
         # read the rest of user info
-        user_data = [sub_item for sub_item in cls.sub_items(stream)]
+        user_data = list(cls.sub_items(stream))
         return cls(user_data=user_data, reserved=reserved)
 
     def total_length(self):

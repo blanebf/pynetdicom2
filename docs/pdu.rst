@@ -1,5 +1,5 @@
-PDU Types
-=========
+PDU Types (pdu)
+===============
 
 .. automodule:: pynetdicom2.pdu
 	:members:

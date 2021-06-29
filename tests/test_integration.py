@@ -4,7 +4,7 @@ import os
 import threading
 import unittest
 
-from six.moves import range
+from six.moves import range  # type: ignore
 
 import pydicom
 from pydicom import uid
@@ -63,7 +63,7 @@ class CFindTestCase(unittest.TestCase):
                 req.PatientName = test_name
                 for result, status in service(req, 1):
                     self.assertEqual(result.PatientName, test_name)
-                    self.assertEqual(status, statuses.SUCCESS)
+                    self.assertTrue(status.is_success)
 
 
 class CFindWrapperTestCase(unittest.TestCase):
@@ -80,7 +80,7 @@ class CFindWrapperTestCase(unittest.TestCase):
         with ae2:
             for result, status in c_find(remote_ae, 'AET1', ds):
                 self.assertEqual(result.PatientName, test_name)
-                self.assertEqual(status, statuses.SUCCESS)
+                self.assertTrue(status.is_success)
 
 
 class CStoreAE(ae.AE):
@@ -118,7 +118,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.BASIC_TEXT_SR_STORAGE)
 
                 status = service(rq, 1)
-                self.assertEqual(status, statuses.SUCCESS)
+                self.assertTrue(status.is_success)
 
     def test_c_store_from_file(self):
         file_name = os.path.join(BASE_PATH, 'test_sr.dcm')
@@ -133,7 +133,7 @@ class CStoreTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.COMPREHENSIVE_SR_STORAGE)
 
                 status = service(file_name, 1)
-                self.assertEqual(status, statuses.SUCCESS)
+                self.assertTrue(status.is_success)
 
 
 class CommitmentAE(ae.AE):
@@ -156,8 +156,7 @@ class CommitmentAE(ae.AE):
                 success.append(_uid)
             else:
                 cls, inst = _uid
-                failures.append((cls, inst,
-                                 sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE))
+                failures.append((cls, inst, sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE))
         return self.remote_ae, success, failures
 
     def on_commitment_response(self, transaction_uid, success, failure):
@@ -165,8 +164,7 @@ class CommitmentAE(ae.AE):
         self.test.assertEqual(self.success, list(success))
         for i, failed in enumerate(failure):
             cls, inst, reason = failed
-            self.test.assertEqual(reason,
-                                  sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE)
+            self.test.assertEqual(reason, sc.StorageCommitment.NO_SUCH_OBJECT_INSTANCE)
             self.test.assertEqual(self.failure[i], (cls, inst))
         self.event.set()
 
@@ -179,8 +177,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
         self.transaction = uid.generate_uid()
 
     def test_commitment_positive(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid())
-                for _ in range(5)]
+        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()) for _ in range(5)]
 
         ae1 = CommitmentAE(self, self.transaction, uids, [], self.event,
                            self.remote_ae1,
@@ -198,12 +195,11 @@ class StorageCommitmentTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                 status = service(self.transaction, uids, 1)
-                self.assertEqual(status, statuses.SUCCESS)
+                self.assertTrue(status.is_success)
                 self.event.wait(20)
 
     def test_commitment_failure(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i))
-                for i in range(10)]
+        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i)) for i in range(10)]
 
         ae1 = CommitmentAE(self, self.transaction, uids[:5], uids[5:],
                            self.event, self.remote_ae1,
@@ -221,5 +217,5 @@ class StorageCommitmentTestCase(unittest.TestCase):
                 service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
 
                 status = service(self.transaction, uids, 1)
-                self.assertEqual(status, statuses.SUCCESS)
+                self.assertTrue(status.is_success)
                 self.event.wait(20)

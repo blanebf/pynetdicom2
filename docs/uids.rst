@@ -1,5 +1,5 @@
-UIDS: SOP Class UIDs and Transfer Syntax
-========================================
+UIDS: SOP Class UIDs and Transfer Syntax (uids)
+===============================================
 
 .. automodule:: pynetdicom2.uids
 	:members:

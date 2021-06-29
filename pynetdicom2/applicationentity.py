@@ -3,6 +3,22 @@
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
+"""
+This module provides two main classes for working with Application Entities. You can think of
+Application Entities as nodes in a DICOM communication, that provide or use a list of services
+(hence SCPs and SCU).
+
+Classes in this module are your starting points when working with this library.
+
+If only you require working as SCU (sending verification or making a find request, for example),
+you should use :class:`~pynetdicom2.applicationentity.ClientAE`.
+
+In case you would require services in SCP roles, you should go with
+:class:`~pynetdicom2.applicationentity.AE`.
+
+Please refer to base class for each of them (:class:`~pynetdicom2.applicationentity.AEBase`) for
+more detailed information on common principles and options when working with Application Entities.
+"""
 
 from __future__ import absolute_import, unicode_literals
 
@@ -168,9 +184,7 @@ class AEBase(object):
         """
         assoc = None
         try:
-            assoc = asceprovider.AssociationRequester(
-                self, max_pdu_length=self.max_pdu_length, remote_ae=remote_ae
-            )
+            assoc = asceprovider.AssociationRequester(self, self.max_pdu_length, remote_ae)
             assoc.request()
             yield assoc
             if assoc.association_established:
@@ -192,7 +206,7 @@ class AEBase(object):
         `self.store_in_file` set. Method itself does not own the file object.
         So it's service implementation responsibility to close the file after
         it's done when handling received message.
-        Default implementation is based on temporary file. User may choose
+        Default implementation is based on a temporary file. User may choose
         to override this method to provide a permanent storage for dataset.
 
         :param context: presentation context
@@ -200,7 +214,7 @@ class AEBase(object):
         :return: file where association can store received dataset and file
                  starting position.
         """
-        tmp = tempfile.TemporaryFile()
+        tmp = tempfile.TemporaryFile()  # pylint: disable=consider-using-with
         start = tmp.tell()
         try:
             write_meta(tmp, command_set, context.supported_ts)

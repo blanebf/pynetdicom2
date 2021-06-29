@@ -304,13 +304,13 @@ New status codes can be created using ``statuses.Status`` class::
 
     SUCCESS = Status(0x0000)
 
-``statuses.Status`` class also takes an optional argument ``command`` to create status depending on command.
+``statuses.Status`` class also takes an optional argument ``command`` to create status depending on the command.
 This class is a convenience wrapper around integer, that provides information on status type (Failure, Success, Warning
 or Pending) and status description. If status code is unknown to the library it assumes it's a failure with unspecified
 description.
 
 You can add new statuses by using ``statuses.add_status`` function. By using it you will be adding new known status code
-to a global library dictionary of status codes.
+to the global library dictionary of status codes.
 
 """
 # pylint: enable=line-too-long
@@ -354,35 +354,36 @@ def add_status(code, code_type, description, end=None, command=None):
             _status_dict[(command.command_field, _code)] = status
 
 
-class Status(int):
+class Status(object):
     """Class represents message status.
 
     This is a helper class that provides convenience methods for printing status codes.
     """
 
-    def __new__(cls, value, command=None):
-        """Initializes new Status .
+    def __init__(self, value, command=None):
+        """Initializes new Status.
 
         :param value status code
         :param command: command for which status is created. Some codes depends on the
                         type of service.
         """
-        obj = super(Status, cls).__new__(cls, value)
+        self._value = value
         status = None
         if command:
             status = _status_dict.get((command.command_field, value))
         if not status:
             status = _general_status_dict.get(value, UNKNOWN)
-        obj.status_type = status.code_type  # type: ignore
-        obj.description = status.description  # type: ignore
-        # pylint: disable=no-member
-        obj.is_success = obj.status_type == 'Success'  # type: ignore
-        obj.is_pending = obj.status_type == 'Pending'  # type: ignore
-        obj.is_failure = obj.status_type == 'Failure'  # type: ignore
-        obj.is_warning = obj.status_type == 'Warning'  # type: ignore
-        obj.is_cancel = obj.status_type == 'Cancel'  # type: ignore
-        # pylint: enable=no-member
-        return obj
+        self.status_type = status.code_type
+        self.description = status.description
+
+        self.is_success = self.status_type == 'Success'
+        self.is_pending = self.status_type == 'Pending'
+        self.is_failure = self.status_type == 'Failure'
+        self.is_warning = self.status_type == 'Warning'
+        self.is_cancel = self.status_type == 'Cancel'
+
+    def __int__(self):
+        return int(self._value)
 
     def __str__(self):
         # pylint: disable=missing-format-attribute
@@ -503,6 +504,7 @@ C_FIND_PENDING = Status(0xFF00, dimse.CFindRSPMessage)
 (0xFF00) Matches are continuing - Current Match is supplied and any Optional
 Keys were supported in the same manner as Required Keys. (C-FIND)
 """
+
 C_FIND_PENDING_WARNING = Status(0xFF01, dimse.CFindRSPMessage)
 """
 (0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
