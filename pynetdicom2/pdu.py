@@ -1,4 +1,4 @@
-# Copyright (c) 2014 Pavel 'Blane' Tuchin
+# Copyright (c) 2021 Pavel 'Blane' Tuchin
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
