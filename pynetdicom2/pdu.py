@@ -938,7 +938,7 @@ class PresentationDataValueItem(object):
 
     def __repr__(self):
         return 'PresentationDataValueItem(context_id={0}, ' \
-               'data_value)="{1}"'.format(self.context_id, self.data_value)
+               'data_value="{1}")'.format(self.context_id, self.data_value)
 
     @property
     def item_length(self):

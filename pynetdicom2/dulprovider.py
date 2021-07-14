@@ -208,6 +208,9 @@ class DULServiceProvider(threading.Thread):
             self.event.append(fsm.Events.EVT_2)
             return True
 
+        if self.raw_pdu and self._process_incoming():
+            return True
+
         # check if something comes in the client socket
         if select.select([self.dul_socket], [], [], 0.05)[0]:
             if self._check_incoming_pdu():
