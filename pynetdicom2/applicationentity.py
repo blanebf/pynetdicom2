@@ -30,6 +30,8 @@ import tempfile
 import platform
 import copy
 import contextlib
+import os
+from typing import List, Tuple, IO, Union
 
 from six.moves import socketserver, zip  # type: ignore
 from pydicom import Dataset
@@ -108,6 +110,7 @@ class AEBase(object):
     """
 
     def __init__(self, supported_ts, max_pdu_length):
+        # type: (Union[List[uid.UID],None], int) -> None
         if supported_ts is None:
             supported_ts = self.default_ts
 
@@ -199,6 +202,7 @@ class AEBase(object):
             raise
 
     def get_file(self, context, command_set):  # pylint: disable=no-self-use
+        # type: (asceprovider.PContextDef, Dataset) -> Tuple[IO[bytes],int]
         """Method is used by association to get file-like object to store
         dataset.
 
@@ -341,8 +345,8 @@ class ClientAE(AEBase):
                          add only transfer syntax of the expected dataset.
     :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
     """
-    def __init__(self, ae_title, supported_ts=None,
-                 max_pdu_length=65536):
+    def __init__(self, ae_title, supported_ts=None, max_pdu_length=65536):
+        # type: (str, Union[List[uid.UID],None], int) -> None
         """Initializes new ClientAE instance"""
         super(ClientAE, self).__init__(supported_ts, max_pdu_length)
         self.local_ae = {'address': platform.node(), 'aet': ae_title}
@@ -373,6 +377,7 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
 
     def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=65536,
                  bind_and_activate=True):
+        # type: (str, int, Union[List[uid.UID],None], int, bool) -> None
         """Initializes new AE instance."""
         AEBase.__init__(self, supported_ts, max_pdu_length)
         socketserver.ThreadingTCPServer.__init__(
@@ -422,3 +427,96 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
 
     def __exit__(self, exc_type, exc_value, traceback):  # pylint: disable=arguments-differ
         self.quit()
+
+
+class FolderStorageMixin(object):
+    """Mixin that add creating a storage file object, based on incoming command dataset.
+
+    Provides methods for getting unique filename name in a provided folder and creating
+    storage file.
+    """
+
+    max_iterations = 10
+    """
+    Maximum iteration for looking for a unique filename
+    """
+
+    def get_file_name(self, path, sop_instance_uid):
+        # type: (str, uid.UID) -> str
+        """Gets a unique filename in a folder, where incoming dataset should be stored.
+
+        Method uses SOP Instance UID of incoming dataset
+
+        :param path: path to a folder where the storage should be created
+        :type path: str
+        :param sop_instance_uid: incoming SOP Instance UID
+        :type sop_instance_uid: uid.UID
+        :raises OSError: raised if method fails to obtain unique filename for storing incoming
+                         dataset
+        :return: unique filename to store incoming dataset
+        :rtype: str
+        """
+        template = os.path.join(path, sop_instance_uid)
+        i = 0
+        full_name = '{}.dcm'.format(template)
+        while os.path.exists(full_name):
+            i += 1
+            if i > self.max_iterations:
+                raise OSError('Max iteration for free filename reached')
+            full_name = '{}_{}.dcm'.format(template, i)
+        return full_name
+
+    def get_storage_file(self, context, command_set, path):
+        # type: (asceprovider.PContextDef, Dataset, str) -> Tuple[IO[bytes],int]
+        """Gets a bytes IO and starting point in it for storing incoming dataset.
+
+        :param context: presentation context
+        :type context: asceprovider.PContextDef
+        :param command_set: incoming command dataset
+        :type command_set: Dataset
+        :param path: path to a folder where incoming dataset should be stored
+        :type path: str
+        :return: tuple of bytes IO and starting point in it
+        :rtype: Tuple[IO[bytes],int]
+        """
+        full_name = self.get_file_name(path, command_set.AffectedSOPInstanceUID)  # type: ignore
+
+        ds = open(full_name, 'w+b')  # pylint: disable=consider-using-with
+        start = ds.tell()
+        try:
+            write_meta(ds, command_set, context.supported_ts)
+        except Exception:
+            ds.close()
+            raise
+        else:
+            return ds, start
+
+
+class ClientStorageAE(ClientAE, FolderStorageMixin):
+    """Helpful client AE class, that stores incoming dataset over Storage service in a folder.
+
+    :ivar storage_dir: a folder where incoming datasets should be stored
+    """
+    def __init__(self, storage_dir, ae_title, supported_ts=None, max_pdu_length=65536):
+        # type: (str, str, Union[List[uid.UID],None], int) -> None
+        super(ClientStorageAE, self).__init__(ae_title, supported_ts, max_pdu_length)
+        self.storage_dir = storage_dir
+
+    def get_file(self, context, command_set):
+        return self.get_storage_file(context, command_set, self.storage_dir)
+
+
+class StorageAE(AE, FolderStorageMixin):
+    """Helpful AE class, that stores incoming dataset over Storage service in a folder.
+
+    :ivar storage_dir: a folder where incoming datasets should be stored
+    """
+    def __init__(self, storage_dir, ae_title, port, supported_ts=None, max_pdu_length=65536,
+                 bind_and_activate=True):
+        # type: (str, str, int, Union[List[uid.UID],None], int, bool) -> None
+        super(StorageAE, self).__init__(ae_title, port, supported_ts, max_pdu_length,
+                                        bind_and_activate)
+        self.storage_dir = storage_dir
+
+    def get_file(self, context, command_set):
+        return self.get_storage_file(context, command_set, self.storage_dir)
