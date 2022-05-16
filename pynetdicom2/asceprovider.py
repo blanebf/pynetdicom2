@@ -134,6 +134,11 @@ class Association(object):
         dul_msg = self.dul.receive(self.ae.timeout)
         if isinstance(dul_msg, tuple):
             return dul_msg
+        self._handle_errors(dul_msg)
+        raise exceptions.NetDICOMError()
+
+    @staticmethod
+    def _handle_errors(dul_msg):
         if dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
             raise exceptions.AssociationReleasedError()
         if dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
@@ -141,7 +146,6 @@ class Association(object):
         if dul_msg.pdu_type == pdu.AAssociateRjPDU.pdu_type:
             raise exceptions.AssociationRejectedError(
                 dul_msg.result, dul_msg.source, dul_msg.reason_diag)
-        raise exceptions.NetDICOMError()
 
 
 class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
@@ -377,6 +381,7 @@ class AssociationRequester(Association):
         assoc_rq.called_presentation_address = (remote_ae['address'], remote_ae['port'])
         self.dul.send(assoc_rq)
         response = self.dul.receive(self.ae.timeout)
+        self._handle_errors(response)
         if isinstance(response, tuple) or response.pdu_type != pdu.AAssociateAcPDU.pdu_type:
             return exceptions.AssociationError('Invalid repsonse')
 
