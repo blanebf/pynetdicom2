@@ -19,9 +19,6 @@ In case you would require services in SCP roles, you should go with
 Please refer to base class for each of them (:class:`~pynetdicom2.applicationentity.AEBase`) for
 more detailed information on common principles and options when working with Application Entities.
 """
-
-from __future__ import absolute_import, unicode_literals
-
 from functools import partial
 from itertools import count
 import threading
@@ -32,8 +29,8 @@ import copy
 import contextlib
 import os
 from typing import List, Tuple, IO, Union
+import socketserver
 
-from six.moves import socketserver, zip  # type: ignore
 from pydicom import Dataset
 from pydicom import filebase
 from pydicom.filewriter import write_file_meta_info
@@ -68,7 +65,7 @@ def write_meta(fp, command_set, ts):
     write_file_meta_info(filebase.DicomFileLike(fp), meta)
 
 
-class AEBase(object):
+class AEBase:
     """Base Application Entity class.
 
     This class is intended for sub-classing and should not be used directly.
@@ -429,7 +426,7 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         self.quit()
 
 
-class FolderStorageMixin(object):
+class FolderStorageMixin:
     """Mixin that add creating a storage file object, based on incoming command dataset.
 
     Provides methods for getting unique filename name in a provided folder and creating
@@ -458,12 +455,12 @@ class FolderStorageMixin(object):
         """
         template = os.path.join(path, sop_instance_uid)
         i = 0
-        full_name = '{}.dcm'.format(template)
+        full_name = f'{template}.dcm'
         while os.path.exists(full_name):
             i += 1
             if i > self.max_iterations:
                 raise OSError('Max iteration for free filename reached')
-            full_name = '{}_{}.dcm'.format(template, i)
+            full_name = f'{template}_{i}.dcm'
         return full_name
 
     def get_storage_file(self, context, command_set, path):

@@ -8,13 +8,9 @@
 Implementation of the OSI Upper Layer Services
 DICOM, Part 8, Section 7
 """
-
-from __future__ import absolute_import
-
 import socket
 
 from typing import Dict, Tuple, Callable
-import six
 
 from . import dimsemessages
 from . import dsutils
@@ -135,7 +131,7 @@ class Events(object):  # pylint: disable=too-few-public-methods
     """Unrecognized/invalid PDU"""
 
 
-class StateMachine(object):  # pylint: disable=too-many-public-methods
+class StateMachine:  # pylint: disable=too-many-public-methods
     """Service State Machine implementation.
 
     :ivar current_state: current state
@@ -541,7 +537,7 @@ class StateMachine(object):  # pylint: disable=too-many-public-methods
         return States.STA_13
 
 
-class DIMSEDecoder(object):  # pylint: disable=too-few-public-methods
+class DIMSEDecoder:  # pylint: disable=too-few-public-methods
     """DIMSE Message decoder.
 
     Decodes incoming P-DATA-TF PDUs into DIMSE message instance.
@@ -592,7 +588,7 @@ class DIMSEDecoder(object):  # pylint: disable=too-few-public-methods
             for value_item in p_data.data_value_items:
                 # must be able to read P-DATA with several PDVs
                 self.pc_id = value_item.context_id
-                marker = six.indexbytes(value_item.data_value, 0)
+                marker = value_item.data_value[0]
                 if marker in (1, 3):
                     self._encoded_command_set.append(value_item.data_value[1:])
                     if marker == 3:

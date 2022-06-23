@@ -7,12 +7,13 @@ Each sub-item class provides means for serialization and deserialization
 to and from binary formats as specified in PS 3.7 of DICOM standard.
 """
 
+from io import BytesIO
 import struct
 
 from pydicom import uid
 
 
-class MaximumLengthSubItem(object):
+class MaximumLengthSubItem:
     """Represents sub-item described in PS 3.8 D.1 Maximum Length Negotiation
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
@@ -25,21 +26,24 @@ class MaximumLengthSubItem(object):
     item_type = 0x51
     item_format = struct.Struct('>B B H I')
 
-    def __init__(self, maximum_length_received, reserved=0x00,
-                 item_length=0x0004):
-        # type: (int,int,int) -> None
+    def __init__(
+            self,
+            maximum_length_received: int,
+            reserved: int = 0x00,
+            item_length: int = 0x0004
+        ) -> None:
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.maximum_length_received = maximum_length_received  # unsigned int
 
-    def __repr__(self):
-        return 'MaximumLengthSubItem(' \
-               'maximum_length_received={self.maximum_length_received}, ' \
-               'reserved={self.reserved}, ' \
-               'item_length={self.item_length})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'MaximumLengthSubItem(' \
+               f'maximum_length_received={self.maximum_length_received}, ' \
+               f'reserved={self.reserved}, ' \
+               f'item_length={self.item_length})'
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns item total length.
 
         This item has a fixed length of 8, so method always returns 8 regardless
@@ -49,7 +53,7 @@ class MaximumLengthSubItem(object):
         """
         return 0x08
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -58,7 +62,7 @@ class MaximumLengthSubItem(object):
                                      self.maximum_length_received)
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'MaximumLengthSubItem':
         """Decodes maximum length sub-item from data stream
 
         :rtype MaximumLengthSubItem
@@ -70,7 +74,7 @@ class MaximumLengthSubItem(object):
                    maximum_length_received=maximum_length_received)
 
 
-class ImplementationClassUIDSubItem(object):
+class ImplementationClassUIDSubItem:
     """Represents sub-item described in PS 3.8 D.3.3.2 Implementation Identification Notification
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
@@ -82,18 +86,17 @@ class ImplementationClassUIDSubItem(object):
     item_type = 0x52
     header = struct.Struct('>B B H')
 
-    def __init__(self, implementation_class_uid, reserved=0x00):
-        # type: (uid.UID,int) -> None
+    def __init__(self, implementation_class_uid: str, reserved: int = 0x00) -> None:
         self.reserved = reserved  # unsigned byte
         self.implementation_class_uid = implementation_class_uid  # string
 
-    def __repr__(self):
-        return 'ImplementationClassUIDSubItem(' \
-               'implementation_class_uid="{self.implementation_class_uid}", ' \
-               'reserved={self.reserved})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'ImplementationClassUIDSubItem(' \
+               f'implementation_class_uid="{self.implementation_class_uid}", ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -101,14 +104,14 @@ class ImplementationClassUIDSubItem(object):
         return len(self.implementation_class_uid)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -117,7 +120,7 @@ class ImplementationClassUIDSubItem(object):
                          self.implementation_class_uid.encode()])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'ImplementationClassUIDSubItem':
         """Decodes Implementation Class UID sub-item from data stream
 
         :rtype ImplementationClassUIDSubItem
@@ -129,7 +132,7 @@ class ImplementationClassUIDSubItem(object):
         return cls(reserved=reserved, implementation_class_uid=implementation_class_uid)
 
 
-class ImplementationVersionNameSubItem(object):
+class ImplementationVersionNameSubItem:
     """Represents sub-item described in PS 3.8 D.3.3.2 Implementation Identification Notification
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
@@ -142,19 +145,18 @@ class ImplementationVersionNameSubItem(object):
     item_type = 0x55
     header = struct.Struct('> B B H')
 
-    def __init__(self, implementation_version_name, reserved=0x00):
-        # type: (str,int) -> None
+    def __init__(self, implementation_version_name: str, reserved: int = 0x00) -> None:
         self.reserved = reserved  # unsigned byte
         self.implementation_version_name = implementation_version_name  # string
 
-    def __repr__(self):
-        return 'ImplementationVersionNameSubItem(' \
-               'implementation_version_name=' \
-               '"{self.implementation_version_name}", ' \
-               'reserved={self.reserved})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'ImplementationVersionNameSubItem(' \
+               f'implementation_version_name=' \
+               f'"{self.implementation_version_name}", ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -162,14 +164,14 @@ class ImplementationVersionNameSubItem(object):
         return len(self.implementation_version_name)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -178,7 +180,7 @@ class ImplementationVersionNameSubItem(object):
                          self.implementation_version_name.encode()])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'ImplementationVersionNameSubItem':
         """Decodes Implementation Version Name sub-item from data stream
 
         :rtype ImplementationVersionNameSubItem
@@ -191,7 +193,7 @@ class ImplementationVersionNameSubItem(object):
                    reserved=reserved)
 
 
-class AsynchronousOperationsWindowSubItem(object):
+class AsynchronousOperationsWindowSubItem:
     """Represents sub-item described in PS 3.8 D.3.3.3 Asynchronous Operations (And Sub-Operations)
     Window Negotiation
 
@@ -206,30 +208,34 @@ class AsynchronousOperationsWindowSubItem(object):
     item_type = 0x53
     item_format = struct.Struct('>B B H H H')
 
-    def __init__(self, max_num_ops_invoked, max_num_ops_performed,
-                 reserved=0x00, item_length=0x0004):
-        # type: (int,int,int,int) -> None
+    def __init__(
+            self,
+            max_num_ops_invoked: int,
+            max_num_ops_performed: int,
+            reserved: int = 0x00,
+            item_length: int = 0x0004
+        ) -> None:
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.max_num_ops_invoked = max_num_ops_invoked  # unsigned short
         self.max_num_ops_performed = max_num_ops_performed  # unsigned short
 
-    def __repr__(self):
-        return 'AsynchronousOperationsWindowSubItem(' \
-               'max_num_ops_invoked={self.max_num_ops_invoked}, ' \
-               'max_num_ops_performed={self.max_num_ops_performed}, ' \
-               'reserved={self.reserved}, ' \
-               'item_length={self.item_length})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'AsynchronousOperationsWindowSubItem(' \
+               f'max_num_ops_invoked={self.max_num_ops_invoked}, ' \
+               f'max_num_ops_performed={self.max_num_ops_performed}, ' \
+               f'reserved={self.reserved}, ' \
+               f'item_length={self.item_length})'
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -239,7 +245,7 @@ class AsynchronousOperationsWindowSubItem(object):
                                      self.max_num_ops_performed)
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'AsynchronousOperationsWindowSubItem':
         """Decodes Asynchronous Operations Window sub-item from data stream
 
         :rtype AsynchronousOperationsWindowSubItem
@@ -253,7 +259,7 @@ class AsynchronousOperationsWindowSubItem(object):
                    max_num_ops_performed=max_num_ops_performed)
 
 
-class ScpScuRoleSelectionSubItem(object):
+class ScpScuRoleSelectionSubItem:
     """Represents sub-item described in PS 3.8 D.3.3.4 SCP/SCU Role Selection Negotiation
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
@@ -267,21 +273,26 @@ class ScpScuRoleSelectionSubItem(object):
     item_type = 0x54
     header = struct.Struct('>B B H H')
 
-    def __init__(self, sop_class_uid, scu_role, scp_role, reserved=0x00):
-        # type: (uid.UID,int,int,int) -> None
+    def __init__(
+            self,
+            sop_class_uid: uid.UID,
+            scu_role: int,
+            scp_role: int,
+            reserved: int = 0x00
+        ) -> None:
         self.reserved = reserved  # unsigned byte 0x00
         self.sop_class_uid = sop_class_uid  # string
         self.scu_role = scu_role  # unsigned byte
         self.scp_role = scp_role  # unsigned byte
 
     def __repr__(self):
-        return 'ScpScuRoleSelectionSubItem(' \
-               'sop_class_uid="{self.sop_class_uid}", ' \
-               'scu_role={self.scu_role}, scp_role={self.scp_role}, ' \
-               'reserved={self.reserved})'.format(self=self)
+        return f'ScpScuRoleSelectionSubItem(' \
+               f'sop_class_uid="{self.sop_class_uid}", ' \
+               f'scu_role={self.scu_role}, scp_role={self.scp_role}, ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -289,14 +300,14 @@ class ScpScuRoleSelectionSubItem(object):
         return 4 + len(self.sop_class_uid)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -308,7 +319,7 @@ class ScpScuRoleSelectionSubItem(object):
              struct.pack('B B', self.scu_role, self.scp_role)])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'ScpScuRoleSelectionSubItem':
         """Decodes SCP/SCU Role Selection sub-item from data stream
 
         :rtype ScpScuRoleSelectionSubItem
@@ -322,7 +333,7 @@ class ScpScuRoleSelectionSubItem(object):
                    scu_role=scu_role, scp_role=scp_role)
 
 
-class SOPClassExtendedNegotiationSubItem(object):
+class SOPClassExtendedNegotiationSubItem:
     """Represents sub-item described in D.3.3.5 Service-Object Pair (SOP) Class
     Extended Negotiation.
 
@@ -336,15 +347,14 @@ class SOPClassExtendedNegotiationSubItem(object):
     item_type = 0x56
     header = struct.Struct('>B B H H')
 
-    def __init__(self, sop_class_uid, app_info, reserved=0x00):
-        # type: (uid.UID,bytes,int) -> None
+    def __init__(self, sop_class_uid: uid.UID, app_info: bytes, reserved: int = 0x00) -> None:
         """Initializes new sub item instance"""
         self.reserved = reserved
         self.sop_class_uid = sop_class_uid
         self.app_info = app_info
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -352,14 +362,14 @@ class SOPClassExtendedNegotiationSubItem(object):
         return 2 + len(self.sop_class_uid) + len(self.app_info)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including the header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -371,7 +381,7 @@ class SOPClassExtendedNegotiationSubItem(object):
              self.app_info])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'SOPClassExtendedNegotiationSubItem':
         """Factory method. Creates sub-item from binary stream.
 
         :param stream: binary stream that should be decoded
@@ -384,7 +394,7 @@ class SOPClassExtendedNegotiationSubItem(object):
         return cls(reserved=reserved, sop_class_uid=sop_class_uid, app_info=app_info)
 
 
-class UserIdentityNegotiationSubItem(object):
+class UserIdentityNegotiationSubItem:
     """Represents sub-item described in D.3.3.7.1 User Identity sub-item
     structure(A-ASSOCIATE-RQ).
 
@@ -405,9 +415,14 @@ class UserIdentityNegotiationSubItem(object):
     item_type = 0x58
     header = struct.Struct('>B B H B B H')
 
-    def __init__(self, primary_field, secondary_field='', user_identity_type=2,
-                 positive_response_req=0, reserved=0x00):
-        # type: (str,str,int,int,int) -> None
+    def __init__(
+            self,
+            primary_field: str,
+            secondary_field: str = '',
+            user_identity_type: int = 2,
+            positive_response_req: int = 0,
+            reserved: int = 0x00
+        ) -> None:
         """Initializes new sub item instance"""
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
@@ -416,7 +431,7 @@ class UserIdentityNegotiationSubItem(object):
         self._secondary_field = secondary_field.encode('utf8')  # string
 
     @property
-    def primary_field(self):
+    def primary_field(self) -> bytes:
         """Sub-item primary field value.
 
         Meaning of the value depends on the `user_identity_type` value
@@ -427,7 +442,7 @@ class UserIdentityNegotiationSubItem(object):
         return self._primary_field.decode('utf8')
 
     @property
-    def secondary_field(self):
+    def secondary_field(self) -> str:
         """Sub-item secondary field value.
 
         Meaning of the value depends on the `user_identity_type` value
@@ -437,16 +452,16 @@ class UserIdentityNegotiationSubItem(object):
         """
         return self._secondary_field.decode('utf8')
 
-    def __repr__(self):
-        return 'UserIdentityNegotiationSubItem(' \
-               'primary_field="{self.primary_field}", ' \
-               'secondary_field="{self.secondary_field}", ' \
-               'user_identity_type={self.user_identity_type}, ' \
-               'positive_response_req={self.positive_response_req}, ' \
-               'reserved={self.reserved})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'UserIdentityNegotiationSubItem(' \
+               f'primary_field="{self.primary_field}", ' \
+               f'secondary_field="{self.secondary_field}", ' \
+               f'user_identity_type={self.user_identity_type}, ' \
+               f'positive_response_req={self.positive_response_req}, ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -454,14 +469,14 @@ class UserIdentityNegotiationSubItem(object):
         return 6 + len(self._primary_field) + len(self._secondary_field)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -475,7 +490,7 @@ class UserIdentityNegotiationSubItem(object):
              self._secondary_field])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'UserIdentityNegotiationSubItem':
         """Factory method. Creates sub-item from binary stream.
 
         :param stream: binary stream that should be decoded
@@ -491,7 +506,7 @@ class UserIdentityNegotiationSubItem(object):
                    positive_response_req, reserved)
 
 
-class UserIdentityNegotiationSubItemAc(object):
+class UserIdentityNegotiationSubItemAc:
     """Represents sub-item described in D.3.3.7.2 User Identity sub-item
     structure(A-ASSOCIATE-AC).
 
@@ -506,19 +521,18 @@ class UserIdentityNegotiationSubItemAc(object):
     item_type = 0x59
     header = struct.Struct('>B B H H')
 
-    def __init__(self, server_response, reserved=0x00):
-        # type: (str,int) -> None
+    def __init__(self, server_response: str, reserved: bytes = 0x00) -> None:
         """Initializes new response sub-item"""
         self.reserved = reserved  # byte
         self.server_response = server_response  # string
 
-    def __repr__(self):
-        return 'UserIdentityNegotiationSubItemAc(' \
-               'server_response="{self.server_response}", ' \
-               'reserved={self.reserved})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'UserIdentityNegotiationSubItemAc(' \
+               f'server_response="{self.server_response}", ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -526,14 +540,14 @@ class UserIdentityNegotiationSubItemAc(object):
         return 2 + len(self.server_response)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -545,7 +559,7 @@ class UserIdentityNegotiationSubItemAc(object):
              server_response])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'UserIdentityNegotiationSubItemAc':
         """Factory method. Creates sub-item from binary stream.
 
         :param stream: binary stream that should be decoded
@@ -564,19 +578,23 @@ class GenericUserDataSubItem(object):
     """
     header = struct.Struct('>B B H')
 
-    def __init__(self, item_type, user_data, reserved=0x00):
-        # type: (int,bytes,int) -> None
+    def __init__(
+            self,
+            item_type: int,
+            user_data: bytes,
+            reserved: int = 0x00
+        ) -> None:
         self.item_type = item_type  # unsigned byte
         self.reserved = reserved  # unsigned byte
         self.user_data = user_data  # raw string
 
     def __repr__(self):
-        return 'GenericUserDataSubItem(item_type={self.item_type}, ' \
-               'user_data="{self.user_data}", ' \
-               'reserved={self.reserved})'.format(self=self)
+        return f'GenericUserDataSubItem(item_type={self.item_type}, ' \
+               f'user_data="{self.user_data}", ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Calculates item length
 
         :return: item length
@@ -584,14 +602,14 @@ class GenericUserDataSubItem(object):
         return len(self.user_data)
 
     @property
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total item length, including header.
 
         :return: total item length
         """
         return 4 + self.item_length
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes itself into binary form
 
         :return: binary representation of an item
@@ -600,7 +618,7 @@ class GenericUserDataSubItem(object):
                          self.user_data])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'GenericUserDataSubItem':
         """Decodes generic data sub-item from data stream
 
         User data value is left in raw string format. The Application Entity
