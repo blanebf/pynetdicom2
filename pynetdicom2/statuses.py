@@ -314,24 +314,36 @@ to the global library dictionary of status codes.
 
 """
 # pylint: enable=line-too-long
-
-__author__ = 'Blane'
-from collections import namedtuple
+from dataclasses import dataclass
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from . import dimsemessages as dimse
 
-s = namedtuple('status', ['code_type', 'description'])  # pylint: disable=invalid-name
+__author__ = 'Blane'
+
+StatusType = Literal['Success', 'Pending', 'Failure', 'Warning', 'Cancel']
+
+@dataclass(frozen=True)
+class _Status:
+    code_type: StatusType
+    description: str
 
 
-_general_status_dict = {}  # pylint: disable=invalid-name
+_general_status_dict: Dict[int, _Status] = {}  # pylint: disable=invalid-name
 
-_status_dict = {}  # pylint: disable=invalid-name
-
-
-UNKNOWN = s('Failure', 'Unknown Status')
+_status_dict: Dict[Tuple[int, int], _Status] = {}  # pylint: disable=invalid-name
 
 
-def add_status(code, code_type, description, end=None, command=None):
+UNKNOWN = _Status('Failure', 'Unknown Status')
+
+
+def add_status(
+        code: int,
+        code_type: StatusType,
+        description: str,
+        end: Optional[int] = None,
+        command: Optional[dimse.DIMSEMessage] = None
+    ) -> None:
     """Adds new status code to the global library dictionary of known statuses
 
     :param code: status code or starting value for a range of statuses if ``end`` is provided
@@ -340,7 +352,7 @@ def add_status(code, code_type, description, end=None, command=None):
     :param end: optional argument that specifies end value for a range of statuses
     :param command: DIMSE command, if this status is command/service specific
     """
-    status = s(code_type, description)
+    status = _Status(code_type, description)
     if end is not None:
         code_range = range(code, end + 1)
     else:
@@ -354,13 +366,13 @@ def add_status(code, code_type, description, end=None, command=None):
             _status_dict[(command.command_field, _code)] = status
 
 
-class Status(object):
+class Status:
     """Class represents message status.
 
     This is a helper class that provides convenience methods for printing status codes.
     """
 
-    def __init__(self, value, command=None):
+    def __init__(self, value: int, command: Optional[dimse.DIMSEMessage] = None) -> None:
         """Initializes new Status.
 
         :param value status code
@@ -368,7 +380,7 @@ class Status(object):
                         type of service.
         """
         self._value = value
-        status = None
+        status: Optional[_Status] = None
         if command:
             status = _status_dict.get((command.command_field, value))
         if not status:
@@ -382,26 +394,22 @@ class Status(object):
         self.is_warning = self.status_type == 'Warning'
         self.is_cancel = self.status_type == 'Cancel'
 
-    def __int__(self):
+    def __int__(self) -> int:
         return int(self._value)
 
-    def __str__(self):
-        # pylint: disable=missing-format-attribute
-        return '(0x{value:0X}) {self.status_type}: {self.description}'.format(
-            self=self, value=int(self)
-        )
-        # pylint: enable=missing-format-attribute
+    def __str__(self) -> str:
+        return f'(0x{int(self):0X}) {self.status_type}: {self.description}'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Returns status string representation
 
         :return: status string representation
         """
-        return 'Status(0x{self:0X})'.format(self=int(self))
+        return f'Status(0x{int(self):0X})'
 
 
 # pylint: disable=line-too-long
-KNOWN_STATUSES = [
+KNOWN_STATUSES: List[Tuple[Union[int, Tuple[int, int]], StatusType, str, Optional[dimse.DIMSEMessage]]] = [
     (0x0000, 'Success', '', None),
     (0x0105, 'Failure', 'No Such Attribute', None),
     (0x0106, 'Failure', 'Invalid Attribute Value', None),
@@ -474,7 +482,7 @@ KNOWN_STATUSES = [
 # pylint: enable=line-too-long
 
 
-def register_statuses():
+def register_statuses() -> None:
     """Registers known statuses in the global library dictionary"""
     for status in KNOWN_STATUSES:
         code, code_type, desc, command = status

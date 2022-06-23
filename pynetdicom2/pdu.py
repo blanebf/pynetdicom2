@@ -28,26 +28,29 @@ module. These classes are:
 The rest sub-items for User Data Information Item can be found at
 :doc:`userdataitems`.
 """
-
-from __future__ import absolute_import
-
 import struct
+from io import BytesIO
+from typing import Dict, Iterable, List, Optional, Union
 
-import six
 from pydicom import uid
 
 from . import exceptions
 from . import userdataitems
 
-# pylint: disable=ungrouped-imports
-if six.PY3:
-    from six import BytesIO as cStringIO
-else:
-    from six.moves import cStringIO  # type: ignore
-# pylint: enable=ungrouped-imports
+
+UserItem = Union[
+    userdataitems.ImplementationClassUIDSubItem,
+    userdataitems.MaximumLengthSubItem,
+    userdataitems.ImplementationVersionNameSubItem,
+    userdataitems.AsynchronousOperationsWindowSubItem,
+    userdataitems.ScpScuRoleSelectionSubItem,
+    userdataitems.SOPClassExtendedNegotiationSubItem,
+    userdataitems.UserIdentityNegotiationSubItem,
+    userdataitems.UserIdentityNegotiationSubItemAc
+]
 
 
-SUB_ITEM_TYPES = {
+SUB_ITEM_TYPES: Dict[int, UserItem] = {
     0x52: userdataitems.ImplementationClassUIDSubItem,
     0x51: userdataitems.MaximumLengthSubItem,
     0x55: userdataitems.ImplementationVersionNameSubItem,
@@ -59,7 +62,7 @@ SUB_ITEM_TYPES = {
 }
 
 
-def _next_type(stream):
+def _next_type(stream: BytesIO) -> bytes:
     char = stream.read(1)
     if char == b'':
         return None  # we are at the end of the file
@@ -67,7 +70,7 @@ def _next_type(stream):
     return struct.unpack('B', char)[0]
 
 
-class AAssociatePDUBase(object):
+class AAssociatePDUBase:
     """Base class for A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs
 
     :ivar called_ae_title: called AE Title (remote AET)
@@ -81,9 +84,16 @@ class AAssociatePDUBase(object):
     pdu_type = None
     header = struct.Struct('>B B I H H 16s 16s 8I')
 
-    def __init__(self, called_ae_title, calling_ae_title, variable_items,
-                 protocol_version=1, reserved1=0x00, reserved2=0x00,
-                 reserved3=None):
+    def __init__(
+            self,
+            called_ae_title: str,
+            calling_ae_title: str,
+            variable_items: List['VariableItems'],
+            protocol_version: int = 1,
+            reserved1: int = 0x00,
+            reserved2: int = 0x00,
+            reserved3: Optional[Iterable[int]] = None
+        ) -> None:
         self.called_ae_title = called_ae_title  # string of length 16
         self.calling_ae_title = calling_ae_title  # string of length 16
         self.variable_items = variable_items
@@ -96,7 +106,7 @@ class AAssociatePDUBase(object):
             self.reserved3 = reserved3
 
     @property
-    def pdu_length(self):
+    def pdu_length(self) -> int:
         """PDU length without the header
 
         :return: PDU length
@@ -104,7 +114,7 @@ class AAssociatePDUBase(object):
         """
         return 68 + sum((i.total_length() for i in self.variable_items))
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes PDU into bytes
 
         :return: encoded PDU
@@ -119,13 +129,13 @@ class AAssociatePDUBase(object):
             + b''.join([item.encode() for item in self.variable_items])
 
     @classmethod
-    def decode(cls, raw_bytes):
+    def decode(cls, raw_bytes: bytes) -> 'AAssociatePDUBase':
         """Factory method. Decodes A-ASSOCIATE-RQ PDU instance from raw string.
 
         :param raw_bytes: bytes containing binary representation of the A-ASSOCIATE-RQ PDU
         :return: decoded PDU
         """
-        def iter_items():
+        def iter_items() -> Iterable[VariableItems]:
             item_type = _next_type(stream)
             while item_type:
                 if item_type == 0x10:
@@ -140,8 +150,8 @@ class AAssociatePDUBase(object):
                     raise exceptions.PDUProcessingError('Invalid variable item')
                 item_type = _next_type(stream)
 
-        stream = cStringIO(raw_bytes)
-        values = cls.header.unpack(stream.read(74))  # type: ignore
+        stream = BytesIO(raw_bytes)
+        values = cls.header.unpack(stream.read(74))
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
         reserved3 = values[7:]
@@ -154,7 +164,7 @@ class AAssociatePDUBase(object):
                    protocol_version=protocol_version, reserved1=reserved1,
                    reserved2=reserved2, reserved3=reserved3)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total PDU length including the header
 
         :return: total PDU length
@@ -171,13 +181,13 @@ class AAssociateRqPDU(AAssociatePDUBase):
     pdu_type = 0x01
     """PDU Type"""
 
-    def __repr__(self):
-        return 'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", ' \
-               'calling_ae_title="{self.calling_ae_title}", ' \
-               'variable_items={self.variable_items}, ' \
-               'protocol_version={self.protocol_version}, ' \
-               'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", ' \
+               f'calling_ae_title="{self.calling_ae_title}", ' \
+               f'variable_items={self.variable_items}, ' \
+               f'protocol_version={self.protocol_version}, ' \
+               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
+               f'reserved3={self.reserved3})'
 
 
 class AAssociateAcPDU(AAssociatePDUBase):
@@ -188,16 +198,16 @@ class AAssociateAcPDU(AAssociatePDUBase):
     pdu_type = 0x02
     """PDU Type"""
 
-    def __repr__(self):
-        return 'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", ' \
-               'calling_ae_title="{self.calling_ae_title}", ' \
-               'variable_items={self.variable_items}, ' \
-               'protocol_version={self.protocol_version}, ' \
-               'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", ' \
+               f'calling_ae_title="{self.calling_ae_title}", ' \
+               f'variable_items={self.variable_items}, ' \
+               f'protocol_version={self.protocol_version}, ' \
+               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
+               f'reserved3={self.reserved3})'
 
 
-class AAssociateRjPDU(object):
+class AAssociateRjPDU:
     """This class represents the A-ASSOCIATE-RJ PDU (PS 3.8 9.3.4)
 
     You can look up possible values for fields in DICOM standard
@@ -219,8 +229,14 @@ class AAssociateRjPDU(object):
 
     format = struct.Struct('>B B I B B B B')
 
-    def __init__(self, result, source, reason_diag, reserved1=0x00,
-                 reserved2=0x00):
+    def __init__(
+            self,
+            result: int,
+            source: int,
+            reason_diag: int,
+            reserved1: int = 0x00,
+            reserved2: int = 0x00
+        ) -> None:
         """
         Initializes new ASSOCIATE-RJ PDU with specified field values
         as described in PS 3.8 9.3.4.
@@ -233,11 +249,11 @@ class AAssociateRjPDU(object):
         self.reason_diag = reason_diag
 
     def __repr__(self):
-        return 'AAssociateRjPDU(result={self.result}, source={self.source}, ' \
-               'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
-               'reserved2={self.reserved2})'.format(self=self)
+        return f'AAssociateRjPDU(result={self.result}, source={self.source}, ' \
+               f'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
+               f'reserved2={self.reserved2})'
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Converts PDU class to its binary representation
 
         :return: PDU as a string of bytes
@@ -247,21 +263,21 @@ class AAssociateRjPDU(object):
                                 self.reason_diag)
 
     @classmethod
-    def decode(cls, rawstring):
+    def decode(cls, rawstring: bytes) -> 'AAssociateRjPDU':
         """Factory method. Decodes A-ASSOCIATE-RJ PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of the
                           A-ASSOCIATE-RJ PDU
         :return: decoded PDU
         """
-        stream = cStringIO(rawstring)
+        stream = BytesIO(rawstring)
         _, reserved1, _, reserved2, result, source, \
-            reason_diag = cls.format.unpack(stream.read(10))  # type: ignore
+            reason_diag = cls.format.unpack(stream.read(10))
         return cls(result=result, source=source, reason_diag=reason_diag,
                    reserved1=reserved1, reserved2=reserved2)
 
     @staticmethod
-    def total_length():
+    def total_length() -> int:
         """Returns PDU total length.
 
         This PDU has a fixed length of 10, so method always returns 10
@@ -272,7 +288,7 @@ class AAssociateRjPDU(object):
         return 10
 
 
-class PDataTfPDU(object):
+class PDataTfPDU:
     """This class represents the P-DATA-TF PDU (as described in PS 3.8 9.3.5).
 
     :ivar reserved: reserved field, defaults 0
@@ -284,20 +300,24 @@ class PDataTfPDU(object):
 
     header = struct.Struct('>B B I')
 
-    def __init__(self, data_value_items, reserved=0x00):
+    def __init__(
+            self,
+            data_value_items: List['PresentationDataValueItem'],
+            reserved: int = 0x00
+        ) -> None:
         self.reserved = reserved  # unsigned byte
 
         # List of one of more PresentationDataValueItem
         self.data_value_items = data_value_items
 
     def __repr__(self):
-        return 'PDataTfPDU(pdu_length={self.pdu_length}, ' \
-               'data_value_items=' \
-               '{self.data_value_items}, ' \
-               'reserved={self.reserved})'.format(self=self)
+        return f'PDataTfPDU(pdu_length={self.pdu_length}, ' \
+               f'data_value_items=' \
+               f'{self.data_value_items}, ' \
+               f'reserved={self.reserved})'
 
     @property
-    def pdu_length(self):
+    def pdu_length(self) -> int:
         """PDU length without the header
 
         :return: PDU length
@@ -305,7 +325,7 @@ class PDataTfPDU(object):
         """
         return sum((i.total_length() for i in self.data_value_items))
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes PDataTfPDU into bytes
 
         :return: encoded PDU
@@ -315,26 +335,26 @@ class PDataTfPDU(object):
             + b''.join(item.encode() for item in self.data_value_items)
 
     @classmethod
-    def decode(cls, rawstring):
+    def decode(cls, rawstring) -> 'PDataTfPDU':
         """Factory method. Decodes P-DATA-TF PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of the
                           P-DATA-TF PDU
         :return: decoded PDU
         """
-        def iter_items():
+        def iter_items() -> Iterable[PresentationDataValueItem]:
             length_read = 0
             while length_read != pdu_length:
                 item = PresentationDataValueItem.decode(stream)
                 length_read += item.total_length()
                 yield item
 
-        stream = cStringIO(rawstring)
-        _, reserved, pdu_length = cls.header.unpack(stream.read(6))  # type: ignore
+        stream = BytesIO(rawstring)
+        _, reserved, pdu_length = cls.header.unpack(stream.read(6))
         data_value_items = list(iter_items())
         return cls(data_value_items, reserved)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Returns total PDU length including the header
 
         :return: total PDU length
@@ -343,7 +363,7 @@ class PDataTfPDU(object):
         return 6 + self.pdu_length
 
 
-class AReleasePDUBase(object):
+class AReleasePDUBase:
     """Base class for the A-RELEASE-* PDUs.
 
     :ivar reserved1: reserved field, defaults 0
@@ -356,14 +376,14 @@ class AReleasePDUBase(object):
 
     format = struct.Struct('>B B I I')
 
-    def __init__(self, reserved1=0x00, reserved2=0x00):
+    def __init__(self, reserved1: int = 0x00, reserved2: int = 0x00) -> None:
         self.reserved1 = reserved1  # unsigned byte
         self.reserved2 = reserved2  # unsigned int
 
-    def __repr__(self):
-        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
+    def __repr__(self) -> str:
+        return f'AReleaseRqPDU(reserved1={self.reserved1}, reserved2={self.reserved2})'
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes PDU into bytes
 
         :return: encoded PDU
@@ -372,19 +392,19 @@ class AReleasePDUBase(object):
         return self.format.pack(self.pdu_type, self.reserved1, self.pdu_length, self.reserved2)
 
     @classmethod
-    def decode(cls, rawstring):
+    def decode(cls, rawstring: bytes) -> 'AReleasePDUBase':
         """Factory method. Decodes A-RELEASE-* PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of the
                           A-RELEASE-* PDU
         :return: decoded PDU
         """
-        stream = cStringIO(rawstring)
-        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))  # type: ignore
+        stream = BytesIO(rawstring)
+        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))
         return cls(reserved1=reserved1, reserved2=reserved2)
 
     @staticmethod
-    def total_length():
+    def total_length() -> int:
         """Returns PDU total length.
 
         This PDU has a fixed length of 10, so method always returns 10
@@ -401,8 +421,8 @@ class AReleaseRqPDU(AReleasePDUBase):
     pdu_type = 0x05
     """PDU Type"""
 
-    def __repr__(self):
-        return 'AReleaseRqPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
+    def __repr__(self) -> str:
+        return f'AReleaseRqPDU(reserved1={self.reserved1}, reserved2={self.reserved2})'
 
 
 class AReleaseRpPDU(AReleasePDUBase):
@@ -411,11 +431,11 @@ class AReleaseRpPDU(AReleasePDUBase):
     pdu_type = 0x06
     """PDU Type"""
 
-    def __repr__(self):
-        return 'AReleaseRpPDU(reserved1={0}, reserved2={1})'.format(self.reserved1, self.reserved2)
+    def __repr__(self) -> str:
+        return f'AReleaseRpPDU(reserved1={self.reserved1}, reserved2={self.reserved2})'
 
 
-class AAbortPDU(object):
+class AAbortPDU:
     """This class represents the A-ABORT PDU as described in PS 3.8 9.3.8
 
     :ivar reserved1: reserved field, defaults 0
@@ -445,21 +465,27 @@ class AAbortPDU(object):
 
     format = struct.Struct('>B B I B B B B')
 
-    def __init__(self, source, reason_diag, reserved1=0x00, reserved2=0x00,
-                 reserved3=0x00):
+    def __init__(
+            self,
+            source: int,
+            reason_diag: int,
+            reserved1: int = 0x00,
+            reserved2: int = 0x00,
+            reserved3: int = 0x00
+        ) -> None:
         self.reserved1 = reserved1  # unsigned byte
         self.reserved2 = reserved2  # unsigned byte
         self.reserved3 = reserved3  # unsigned byte
         self.source = source  # unsigned byte
         self.reason_diag = reason_diag  # unsigned byte
 
-    def __repr__(self):
-        return 'AAbortPDU(source={self.source}, ' \
-               'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
-               'reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'AAbortPDU(source={self.source}, ' \
+               f'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
+               f'reserved2={self.reserved2}, ' \
+               f'reserved3={self.reserved3})'
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes AAbortPDU into bytes
 
         :return: encoded PDU
@@ -470,14 +496,14 @@ class AAbortPDU(object):
                                 self.reason_diag)
 
     @classmethod
-    def decode(cls, rawstring):
+    def decode(cls, rawstring: bytes) -> 'AAbortPDU':
         """Factory method. Decodes A-ABORT PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of
                           the A-ABORT PDU
         :return: decoded PDU
         """
-        stream = cStringIO(rawstring)
+        stream = BytesIO(rawstring)
         _, reserved1, _, reserved2, reserved3, abort_source, \
             reason_diag = cls.format.unpack(stream.read(10))  # type: ignore
         return cls(reserved1=reserved1, reserved2=reserved2,
@@ -485,7 +511,7 @@ class AAbortPDU(object):
                    reason_diag=reason_diag)
 
     @staticmethod
-    def total_length():
+    def total_length() -> int:
         """Returns PDU total length.
 
         This PDU has a fixed length of 10, so method always returns 10
@@ -499,7 +525,7 @@ class AAbortPDU(object):
 # Items and sub-items classes
 
 
-class ApplicationContextItem(object):
+class ApplicationContextItem:
     """Application Context Item (PS 3.8 9.3.2.1)
 
     :ivar reserved: reserved field, defaults 0
@@ -511,16 +537,16 @@ class ApplicationContextItem(object):
 
     header = struct.Struct('> B B H')
 
-    def __init__(self, context_name, reserved=0x00):
+    def __init__(self, context_name: str, reserved: int = 0x00) -> None:
         self.reserved = reserved  # unsigned byte
         self.context_name = context_name  # string
 
-    def __repr__(self):
-        return 'ApplicationContextItem(context_name="{0}", ' \
-               'reserved={1})'.format(self.context_name, self.reserved)
+    def __repr__(self) -> str:
+        return f'ApplicationContextItem(context_name="{self.context_name}", ' \
+               f'reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -528,7 +554,7 @@ class ApplicationContextItem(object):
         """
         return len(self.context_name)
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -538,7 +564,7 @@ class ApplicationContextItem(object):
                                 self.item_length) + self.context_name.encode()
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'ApplicationContextItem':
         """Decodes application context item from data stream
 
         :param stream: raw data stream
@@ -548,7 +574,7 @@ class ApplicationContextItem(object):
         context_name = stream.read(item_length).decode()
         return cls(reserved=reserved, context_name=context_name)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -557,7 +583,7 @@ class ApplicationContextItem(object):
         return 4 + self.item_length
 
 
-class PresentationContextItemRQ(object):
+class PresentationContextItemRQ:
     """Presentation Context Item (request) PS 3.8 9.3.2.2
 
     :ivar context_id: presentation context ID
@@ -574,8 +600,16 @@ class PresentationContextItemRQ(object):
 
     header = struct.Struct('>B B H B B B B')
 
-    def __init__(self, context_id, abs_sub_item, ts_sub_items, reserved1=0x00,
-                 reserved2=0x00, reserved3=0x00, reserved4=0x00):
+    def __init__(
+            self,
+            context_id: int,
+            abs_sub_item: 'AbstractSyntaxSubItem',
+            ts_sub_items: List['TransferSyntaxSubItem'],
+            reserved1: int = 0x00,
+            reserved2: int = 0x00,
+            reserved3: int = 0x00,
+            reserved4: int = 0x00
+        ) -> None:
         self.context_id = context_id  # unsigned byte
         self.abs_sub_item = abs_sub_item  # AbstractSyntaxSubItem
         self.ts_sub_items = ts_sub_items  # TransferSyntaxSubItems
@@ -586,15 +620,15 @@ class PresentationContextItemRQ(object):
         self.reserved4 = reserved4  # unsigned byte
 
     def __repr__(self):
-        return 'PresentationContextItemRQ(context_id={self.context_id}, ' \
-               'abs_sub_item={self.abs_sub_item}, ' \
-               'ts_sub_items={self.ts_sub_items}, ' \
-               'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3}, ' \
-               'reserved4={self.reserved4})'.format(self=self)
+        return f'PresentationContextItemRQ(context_id={self.context_id}, ' \
+               f'abs_sub_item={self.abs_sub_item}, ' \
+               f'ts_sub_items={self.ts_sub_items}, ' \
+               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
+               f'reserved3={self.reserved3}, ' \
+               f'reserved4={self.reserved4})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -603,7 +637,7 @@ class PresentationContextItemRQ(object):
         return 4 + (self.abs_sub_item.total_length() +
                     sum(i.total_length() for i in self.ts_sub_items))
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -617,7 +651,7 @@ class PresentationContextItemRQ(object):
             + b''.join([item.encode() for item in self.ts_sub_items])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'PresentationContextItemRQ':
         """Decodes presentation context item 'request' from data stream
 
         :param stream: raw data stream
@@ -636,7 +670,7 @@ class PresentationContextItemRQ(object):
                    reserved1=reserved1, reserved2=reserved2,
                    reserved3=reserved3, reserved4=reserved4)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -645,7 +679,7 @@ class PresentationContextItemRQ(object):
         return 4 + self.item_length
 
 
-class PresentationContextItemAC(object):
+class PresentationContextItemAC:
     """Presentation Context Item (response) PS 3.8 9.3.3.2
 
     :ivar context_id:
@@ -668,8 +702,15 @@ class PresentationContextItemAC(object):
 
     header = struct.Struct('>B B H B B B B')
 
-    def __init__(self, context_id, result_reason, ts_sub_item,
-                 reserved1=0x00, reserved2=0x00, reserved3=0x00):
+    def __init__(
+            self,
+            context_id: int,
+            result_reason: int,
+            ts_sub_item: 'TransferSyntaxSubItem',
+            reserved1: int = 0x00,
+            reserved2: int = 0x00,
+            reserved3: int = 0x00
+        ) -> None:
         self.context_id = context_id  # unsigned byte
         self.result_reason = result_reason  # unsigned byte
         self.ts_sub_item = ts_sub_item  # TransferSyntaxSubItem object
@@ -678,15 +719,15 @@ class PresentationContextItemAC(object):
         self.reserved2 = reserved2  # unsigned byte
         self.reserved3 = reserved3  # unsigned byte
 
-    def __repr__(self):
-        return 'PresentationContextItemAC(context_id={self.context_id}, ' \
-               'result_reason={self.result_reason}, ' \
-               'ts_sub_item={self.ts_sub_item}, reserved1={self.reserved1}, ' \
-               'reserved2={self.reserved2}, ' \
-               'reserved3={self.reserved3})'.format(self=self)
+    def __repr__(self) -> str:
+        return f'PresentationContextItemAC(context_id={self.context_id}, ' \
+               f'result_reason={self.result_reason}, ' \
+               f'ts_sub_item={self.ts_sub_item}, reserved1={self.reserved1}, ' \
+               f'reserved2={self.reserved2}, ' \
+               f'reserved3={self.reserved3})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -694,7 +735,7 @@ class PresentationContextItemAC(object):
         """
         return 4 + self.ts_sub_item.total_length()
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -707,7 +748,7 @@ class PresentationContextItemAC(object):
                          self.ts_sub_item.encode()])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'PresentationContextItemAC':
         """Decodes presentation context item 'accepted' from data stream
 
         :param stream: raw data stream
@@ -720,7 +761,7 @@ class PresentationContextItemAC(object):
                    ts_sub_item=ts_sub_item, reserved1=reserved1,
                    reserved2=reserved2, reserved3=reserved3)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -729,7 +770,7 @@ class PresentationContextItemAC(object):
         return 4 + self.item_length
 
 
-class AbstractSyntaxSubItem(object):
+class AbstractSyntaxSubItem:
     """Abstract Syntax Sub-Item (PS 3.8 9.3.2.2.1)
 
     :ivar name: Abstract Syntax name (UID) as byte string
@@ -741,15 +782,15 @@ class AbstractSyntaxSubItem(object):
 
     header = struct.Struct('>B B H')
 
-    def __init__(self, name, reserved=0x00):
+    def __init__(self, name: str, reserved: int = 0x00) -> None:
         self.reserved = reserved  # unsigned byte
         self.name = name  # string
 
-    def __repr__(self):
-        return 'AbstractSyntaxSubItem(name="{0}", reserved={1})'.format(self.name, self.reserved)
+    def __repr__(self) -> str:
+        return f'AbstractSyntaxSubItem(name="{self.name}", reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -757,7 +798,7 @@ class AbstractSyntaxSubItem(object):
         """
         return len(self.name)
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -767,7 +808,7 @@ class AbstractSyntaxSubItem(object):
                          self.name.encode()])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'AbstractSyntaxSubItem':
         """Decodes abstract syntax sub-item from data stream
 
         :param stream: raw data stream
@@ -777,7 +818,7 @@ class AbstractSyntaxSubItem(object):
         name = uid.UID(stream.read(item_length).decode())
         return cls(name=name, reserved=reserved)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -786,7 +827,7 @@ class AbstractSyntaxSubItem(object):
         return 4 + self.item_length
 
 
-class TransferSyntaxSubItem(object):
+class TransferSyntaxSubItem:
     """Transfer Syntax Sub-Item (PS 3.8 9.3.2.2.2)
 
     :ivar name: Transfer Syntax name (UID) as byte string
@@ -798,15 +839,15 @@ class TransferSyntaxSubItem(object):
 
     header = struct.Struct('>B B H')
 
-    def __init__(self, name, reserved=0x00):
+    def __init__(self, name: str, reserved: int = 0x00) -> None:
         self.reserved = reserved  # unsigned byte
         self.name = uid.UID(name)  # string
 
-    def __repr__(self):
-        return 'TransferSyntaxSubItem(name="{0}", reserved={1})'.format(self.name, self.reserved)
+    def __repr__(self) -> str:
+        return f'TransferSyntaxSubItem(name="{self.name}", reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -814,7 +855,7 @@ class TransferSyntaxSubItem(object):
         """
         return len(self.name)
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -824,7 +865,7 @@ class TransferSyntaxSubItem(object):
                          self.name.encode()])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'TransferSyntaxSubItem':
         """Decodes transfer syntax sub-item from data stream
 
         :param stream: raw data stream
@@ -834,7 +875,7 @@ class TransferSyntaxSubItem(object):
         name = stream.read(item_length)
         return cls(name=name.decode(), reserved=reserved)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -843,7 +884,7 @@ class TransferSyntaxSubItem(object):
         return 4 + self.item_length
 
 
-class UserInformationItem(object):
+class UserInformationItem:
     """User Information Item (PS 3.8 9.3.2.3)
 
     :ivar reserved: reserved field. In most cases value should be default
@@ -858,16 +899,19 @@ class UserInformationItem(object):
     item_type = 0x50
     header = struct.Struct('>B B H')
 
-    def __init__(self, user_data, reserved=0x00):
+    def __init__(
+            self,
+            user_data: List[Union[UserItem, userdataitems.GenericUserDataSubItem]],
+            reserved: int = 0x00
+        ) -> None:
         self.reserved = reserved  # unsigned byte
         self.user_data = user_data
 
     def __repr__(self):
-        return 'UserInformationItem(user_data={0}, reserved={1})'.format(
-            self.user_data, self.reserved)
+        return f'UserInformationItem(user_data={self.user_data}, reserved={self.reserved})'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -875,7 +919,7 @@ class UserInformationItem(object):
         """
         return sum(i.total_length for i in self.user_data)
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -885,7 +929,7 @@ class UserInformationItem(object):
             + b''.join([data.encode() for data in self.user_data])
 
     @staticmethod
-    def sub_items(stream):
+    def sub_items(stream: BytesIO) -> Union[UserItem, userdataitems.GenericUserDataSubItem]:
         """Reads User Information sub-items from a data stream
 
         :param stream: raw data stream
@@ -899,11 +943,11 @@ class UserInformationItem(object):
                 factory = SUB_ITEM_TYPES.get(item_type, userdataitems.GenericUserDataSubItem)
                 yield factory.decode(stream)
                 item_type = _next_type(stream)
-            except KeyError:
-                raise exceptions.PDUProcessingError('Invalid sub-item', "0x%X" % item_type)
+            except KeyError as exc:
+                raise exceptions.PDUProcessingError(f'Invalid sub-item 0x{item_type}') from exc
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'UserInformationItem':
         """Decodes user information item from data stream
 
         :param stream: raw data stream
@@ -914,7 +958,7 @@ class UserInformationItem(object):
         user_data = list(cls.sub_items(stream))
         return cls(user_data=user_data, reserved=reserved)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length
@@ -923,7 +967,15 @@ class UserInformationItem(object):
         return 4 + self.item_length
 
 
-class PresentationDataValueItem(object):
+VariableItems = Union[
+    ApplicationContextItem,
+    PresentationContextItemRQ,
+    PresentationContextItemAC,
+    UserInformationItem
+]
+
+
+class PresentationDataValueItem:
     """Presentation Data Value Item (PS 3.8 9.3.5.1)
 
     :ivar context_id: presentation context ID
@@ -931,17 +983,16 @@ class PresentationDataValueItem(object):
     """
     header = struct.Struct('>I B')
 
-    def __init__(self, context_id, data_value):
-        # type: (int,bytes) -> None
+    def __init__(self, context_id: int, data_value: bytes) -> None:
         self.context_id = context_id  # unsigned byte
         self.data_value = data_value  # bytes
 
     def __repr__(self):
-        return 'PresentationDataValueItem(context_id={0}, ' \
-               'data_value="{1}")'.format(self.context_id, self.data_value)
+        return f'PresentationDataValueItem(context_id={self.context_id}, ' \
+               f'data_value="{self.data_value}")'
 
     @property
-    def item_length(self):
+    def item_length(self) -> int:
         """Item length, excluding the header
 
         :return: item length
@@ -949,7 +1000,7 @@ class PresentationDataValueItem(object):
         """
         return len(self.data_value) + 1
 
-    def encode(self):
+    def encode(self) -> bytes:
         """Encodes item into bytes
 
         :return: encoded item
@@ -958,7 +1009,7 @@ class PresentationDataValueItem(object):
         return b''.join([self.header.pack(self.item_length, self.context_id), self.data_value])
 
     @classmethod
-    def decode(cls, stream):
+    def decode(cls, stream: BytesIO) -> 'PresentationDataValueItem':
         """Decodes presentation data value item from data stream
 
         Presentation data value is left in raw string format.
@@ -971,7 +1022,7 @@ class PresentationDataValueItem(object):
         data_value = stream.read(int(item_length) - 1)
         return cls(context_id, data_value)
 
-    def total_length(self):
+    def total_length(self) -> int:
         """Total item length, including the header
 
         :return: total item length

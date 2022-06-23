@@ -18,20 +18,15 @@ In most of the cases you would not need to access
 use higher level objects like sub-classes of
 :class:`~pynetdicom2.asceprovider.Association` or various services.
 """
-
-from __future__ import absolute_import
-
 import collections
 
 import threading
-from typing import FrozenSet  # pylint: disable=unused-import
+from typing import FrozenSet, Optional
 import time
 import socket
 import select
 import struct
-
-import six
-from six.moves import queue  # type: ignore
+import queue
 
 from . import fsm
 from . import pdu
@@ -84,10 +79,10 @@ class DULServiceProvider(threading.Thread):
 
     def __init__(
             self,
-            store_in_file,  # type: FrozenSet[str]
+            store_in_file: FrozenSet[str],
             get_file_cb,
-            dul_socket=None,  # type: socket.socket
-            max_pdu_length=65536  # type: int
+            dul_socket: socket.socket = None,
+            max_pdu_length: int = 65536
         ):
         """Initializes DUL service.
 
@@ -237,7 +232,7 @@ class DULServiceProvider(threading.Thread):
             return True
         except KeyError:
             raise exceptions.PDUProcessingError(
-                'Unknown PDU {0} with type {1}'.format(self.primitive, self.primitive.pdu_type)
+                f'Unknown PDU {self.primitive} with type {self.primitive.pdu_type}'
             )
         except queue.Empty:
             return False
@@ -248,8 +243,7 @@ class DULServiceProvider(threading.Thread):
             return True
         return False
 
-    def _check_incoming_pdu(self):
-        # type: () -> bool
+    def _check_incoming_pdu(self) -> bool:
         # There is something to read
         try:
             data = self.dul_socket.recv(self.max_pdu_length)
@@ -269,7 +263,7 @@ class DULServiceProvider(threading.Thread):
         self.raw_pdu += data
         return False
 
-    def _process_incoming(self):
+    def _process_incoming(self) -> bool:
         if len(self.raw_pdu) < 6:
             return False
 
@@ -284,7 +278,7 @@ class DULServiceProvider(threading.Thread):
 
         # Determine the type of PDU coming on remote port and set the event accordingly
         try:
-            pdu_type, event = PDU_TYPES[six.indexbytes(raw_pdu, 0)]
+            pdu_type, event = PDU_TYPES[raw_pdu[0]]
             self.primitive = pdu_type.decode(raw_pdu)
             self.event.append(event)
         except KeyError:
@@ -309,29 +303,27 @@ class DULServiceProvider(threading.Thread):
         return True
 
 
-class Timer(object):
+class Timer:
     """A small helper timer class"""
 
-    def __init__(self, max_seconds):
-        # type: (int) -> None
+    def __init__(self, max_seconds: int) -> None:
         self._max_seconds = max_seconds
-        self._start_time = None
+        self._start_time: Optional[float] = None
 
-    def start(self):
+    def start(self) -> None:
         """Sets a timer"""
         self._start_time = time.time()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stops a timer"""
         self._start_time = None
 
-    def restart(self):
+    def restart(self) -> None:
         """Restarts a timer"""
         self.stop()
         self.start()
 
-    def check(self):
-        # type: () -> bool
+    def check(self) -> bool:
         """Checks if timer has expired"""
         if self._start_time and (time.time() - self._start_time > self._max_seconds):
             return False

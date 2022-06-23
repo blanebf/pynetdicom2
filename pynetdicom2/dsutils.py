@@ -8,19 +8,16 @@
 Helper module that provides function for converting datasets or dataset elements into
 bytes and back.
 """
-import pydicom  # pylint: disable=unused-import
+from io import BytesIO
+
+import pydicom
 from pydicom import filebase
 from pydicom import filereader
 from pydicom import filewriter
-import six
-if six.PY3:
-    from six import BytesIO as cStringIO
-else:
-    from six.moves import cStringIO  # type: ignore
 
 
-def decode(rawstr, is_implicit_vr, is_little_endian):
-    # type: (bytes,bool,bool) -> pydicom.Dataset
+
+def decode(rawstr: bytes, is_implicit_vr: bool, is_little_endian: bool) -> pydicom.Dataset:
     """Decodes dataset from raw bytes
 
     :param rawstr: raw bytes, containing dataset
@@ -32,12 +29,11 @@ def decode(rawstr, is_implicit_vr, is_little_endian):
     :return: decoded dataset
     :rtype: pydicom.Dataset
     """
-    fp = cStringIO(rawstr)  # type: ignore
+    fp = BytesIO(rawstr)
     return filereader.read_dataset(fp, is_implicit_vr, is_little_endian)
 
 
-def encode(ds, is_implicit_vr, is_little_endian):
-    # type: (pydicom.Dataset,bool,bool) -> bytes
+def encode(ds: pydicom.Dataset, is_implicit_vr: bool, is_little_endian: bool) -> bytes:
     """Encoded dataset into raw bytes
 
     :param ds: dataset to encode
@@ -58,8 +54,11 @@ def encode(ds, is_implicit_vr, is_little_endian):
     return rawstr
 
 
-def encode_element(elem, is_implicit_vr, is_little_endian):
-    # type: (pydicom.DataElement,bool,bool) -> bytes
+def encode_element(
+        elem: pydicom.DataElement,
+        is_implicit_vr: bool,
+        is_little_endian: bool
+    ) -> bytes:
     """Encodes dataset element into raw bytes
 
     :param elem: dataset element to encode

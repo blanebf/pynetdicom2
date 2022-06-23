@@ -44,10 +44,6 @@ Arguments have similar meaning to SCP role implementation. First two mandatory
 arguments are provided by association and the rest are expected from service
 user.
 """
-
-from __future__ import absolute_import
-
-import six
 import pydicom
 from pydicom import filereader
 
@@ -76,7 +72,7 @@ def store_in_file(service):
     return service
 
 
-class MessageDispatcher(object):  # pylint: disable=too-few-public-methods
+class MessageDispatcher:  # pylint: disable=too-few-public-methods
     """Base class for message dispatcher service.
 
     Class provides method for selecting method based on incoming message type.
@@ -103,11 +99,12 @@ class MessageDispatcher(object):  # pylint: disable=too-few-public-methods
         try:
             name = self.message_to_method[msg.command_field]
             return getattr(self, name)
-        except KeyError:
-            raise exceptions.DIMSEProcessingError('Unknown message type')
-        except AttributeError:
+        except KeyError as exc:
+            raise exceptions.DIMSEProcessingError('Unknown message type') from exc
+        except AttributeError as exc:
             raise exceptions.DIMSEProcessingError(
-                'Message type is not supported by service class')
+                'Message type is not supported by service class'
+            ) from exc
 
 
 class MessageDispatcherSCU(MessageDispatcher):
@@ -186,7 +183,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     c_store.move_originator_aet = asce.ae.local_ae['aet']
     c_store.move_originator_message_id = msg_id
 
-    if isinstance(dataset, six.string_types):
+    if isinstance(dataset, str):
         # Got file name
         ds = open(dataset, 'rb')  # pylint: disable=consider-using-with
         zero = ds.tell()

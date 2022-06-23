@@ -20,12 +20,9 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     message). With that said if you are using services from this library you
     should not worry about any kind of message validation.
 """
-from __future__ import absolute_import
-
 import struct
-from typing import Iterator, Tuple, IO, Union
+from typing import ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, IO, Union
 
-from six.moves import range  # type: ignore
 from pydicom.dataset import Dataset
 
 from . import dsutils
@@ -47,7 +44,7 @@ def value_or_none(elem):
     return elem.value if elem else None
 
 
-def chunks(seq, size):
+def chunks(seq: Sequence[bytes], size: int) -> Iterable[Tuple[bytes, bool]]:
     """Breaks a sequence of bytes into chunks of provided size
 
     :param seq: sequence of bytes
@@ -60,40 +57,38 @@ def chunks(seq, size):
             for pos in range(0, length, size))
 
 
-def fragment(data_set, max_pdu_length, normal, last):
-    # type: (bytes,int,int,int) -> Iterator[Tuple[bytes,int]]
+def fragment(
+        data_set: bytes,
+        max_pdu_length: int,
+        normal: int,
+        last: int
+    ) -> Iterable[Tuple[bytes, int]]:
     """Fragmets dataset byte stream into chunks
 
     :param data_set: dataset bytes stream
-    :type data_set: bytes
     :param max_pdu_length: maximum PDU length
-    :type max_pdu_length: int
     :param normal: regular chunk code
-    :type normal: int
     :param last: last chunk code
-    :type last: int
     :yield: tuple of bytes: fragment and its code
-    :rtype: Tuple[bytes,int]
     """
     maxsize = max_pdu_length - 6
-    for chunk, has_next in chunks(data_set, maxsize):
-        yield chunk, normal if has_next else last
+    _chunks = ((chunk, has_next) for chunk, has_next in chunks(data_set, maxsize))
+    yield from ((chunk, normal if has_next else last) for chunk, has_next in _chunks)
 
 
-def fragment_file(fp, max_pdu_length, normal, last):
-    # type: (IO[bytes],int,int,int) -> Iterator[Tuple[bytes,int]]
+def fragment_file(
+        fp: IO[bytes],
+        max_pdu_length: int,
+        normal: int,
+        last: int
+    ) -> Iterable[Tuple[bytes, int]]:
     """Fragmets dataset from a file-like object into chunks
 
     :param f: file-like object
-    :type f: IO[bytes]
     :param max_pdu_length: maximum PDU length
-    :type max_pdu_length: int
     :param normal: regular chunk code
-    :type normal: int
     :param last: last chunk code
-    :type last: int
     :yield: tuple of bytes: fragment and its code
-    :rtype: Tuple[bytes,int]
     """
     maxsize = max_pdu_length - 6
     while True:
@@ -119,7 +114,7 @@ def dimse_property(tag):
     return property(lambda self: value_or_none(self.command_set.get(tag)), setter)
 
 
-class StatusMixin(object):  # pylint: disable=too-few-public-methods
+class StatusMixin:  # pylint: disable=too-few-public-methods
     """Helper mixin that defines common `status` property in provided
     DIMSE message class.
 
@@ -128,7 +123,7 @@ class StatusMixin(object):  # pylint: disable=too-few-public-methods
     status = dimse_property((0x0000, 0x0900))
 
 
-class PriorityMixin(object):  # pylint: disable=too-few-public-methods
+class PriorityMixin:  # pylint: disable=too-few-public-methods
     """Helper mixin that defines common `priority` property in provided
     DIMSE message class.
 
@@ -137,18 +132,17 @@ class PriorityMixin(object):  # pylint: disable=too-few-public-methods
     priority = dimse_property((0x0000, 0x0700))
 
 
-class DIMSEMessage(object):
+class DIMSEMessage:
     """Base DIMSE message class.
 
     This class is not used directly, rather its subclasses, that represent specific DIMSE messages
     are used.
     """
-    command_field = None
-    command_fields = []
+    command_field: ClassVar[int]
+    command_fields: ClassVar[List[str]]
 
-    def __init__(self, command_set=None):
-        # type: (Union[Dataset,None]) -> None
-        self._data_set = None
+    def __init__(self, command_set: Optional[Dataset] = None) -> None:
+        self._data_set: Optional[Union[IO[bytes], bytes]] = None
         if command_set:
             self.command_set = command_set
         else:
@@ -161,18 +155,17 @@ class DIMSEMessage(object):
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
     @property
-    def data_set(self):
+    def data_set(self) -> Optional[Union[IO[bytes], bytes]]:
         """Dataset included with a DIMSE Message"""
         return self._data_set
 
     @data_set.setter
-    def data_set(self, value):
+    def data_set(self, value: Optional[Union[IO[bytes], bytes]]):
         if value:
             self.command_set.CommandDataSetType = 0x0001
         self._data_set = value
 
-    def encode(self, pc_id, max_pdu_length):
-        # type: (int,int) -> Iterator[pdu.PDataTfPDU]
+    def encode(self, pc_id: int, max_pdu_length: int) -> Iterable[pdu.PDataTfPDU]:
         """Returns the encoded message as a series of P-DATA-TF PDU objects.
 
         :param pc_id: Presentation Context ID
@@ -208,7 +201,7 @@ class DIMSEMessage(object):
                 if is_file:
                     self.data_set.close()  # type: ignore
 
-    def set_length(self):
+    def set_length(self) -> None:
         """Sets DIMSE message length attribute in command dataset"""
         it = (len(dsutils.encode_element(v, True, True))
               for v in list(self.command_set.values())[1:])
@@ -787,7 +780,7 @@ class NDeleteRSPMessage(DIMSEResponseMessage, StatusMixin):
     """
 
 
-MESSAGE_TYPE = {
+MESSAGE_TYPE: Dict[int, DIMSEMessage] = {
     0x0001: CStoreRQMessage,
     0x8001: CStoreRSPMessage,
     0x0020: CFindRQMessage,

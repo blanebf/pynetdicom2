@@ -20,16 +20,12 @@ Each association class is not only responsible for initial establishment, but al
 association life-cycle until it's either released or aborted.
 """
 
-from __future__ import absolute_import, unicode_literals
-
-# This module provides association services
 import collections
 import functools
 from itertools import chain
 import time
+import socketserver
 
-import six
-from six.moves import socketserver, range  # type: ignore
 from pydicom import uid
 
 from . import exceptions
@@ -60,11 +56,11 @@ def build_pres_context_def_list(context_def_list):
             pc_id, pdu.AbstractSyntaxSubItem(ctx.sop_class),
             [pdu.TransferSyntaxSubItem(i) for i in ctx.supported_ts]
         )
-        for pc_id, ctx in six.iteritems(context_def_list)
+        for pc_id, ctx in context_def_list.items()
     )
 
 
-class Association(object):
+class Association:
     """Base association class.
 
     Class is not intended for direct usage and meant to be sub-classed.
@@ -269,9 +265,10 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
             try:
                 _, sop_class, ts = self.sop_classes_as_scp[pc_id]
                 service = self.ae.supported_scp[_uid]
-            except KeyError:
+            except KeyError as exc:
                 raise exceptions.ClassNotSupportedError(
-                    'SOP Class {0} not supported as SCP'.format(_uid))
+                    f'SOP Class {_uid} not supported as SCP'
+                ) from exc
             else:
                 service(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
 
@@ -323,10 +320,10 @@ class AssociationRequester(Association):
         try:
             pc_id, ts = self.sop_classes_as_scu[sop_class]
             service = self.ae.supported_scu[sop_class]
-        except KeyError:
+        except KeyError as exc:
             raise exceptions.ClassNotSupportedError(
-                'SOP Class {} not supported as SCU'.format(sop_class)
-            )
+                f'SOP Class {sop_class} not supported as SCU'
+            ) from exc
         else:
             return functools.partial(service, self, PContextDef(pc_id, sop_class, ts))
 
