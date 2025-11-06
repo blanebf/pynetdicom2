@@ -422,7 +422,7 @@ class UserIdentityNegotiationSubItem:
             user_identity_type: int = 2,
             positive_response_req: int = 0,
             reserved: int = 0x00
-        ) -> None:
+    ) -> None:
         """Initializes new sub item instance"""
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
@@ -431,7 +431,7 @@ class UserIdentityNegotiationSubItem:
         self._secondary_field = secondary_field.encode('utf8')  # string
 
     @property
-    def primary_field(self) -> bytes:
+    def primary_field(self) -> str:
         """Sub-item primary field value.
 
         Meaning of the value depends on the `user_identity_type` value
@@ -521,7 +521,7 @@ class UserIdentityNegotiationSubItemAc:
     item_type = 0x59
     header = struct.Struct('>B B H H')
 
-    def __init__(self, server_response: str, reserved: bytes = 0x00) -> None:
+    def __init__(self, server_response: str, reserved: int = 0x00) -> None:
         """Initializes new response sub-item"""
         self.reserved = reserved  # byte
         self.server_response = server_response  # string
@@ -570,7 +570,7 @@ class UserIdentityNegotiationSubItemAc:
         return cls(server_response, reserved)
 
 
-class GenericUserDataSubItem(object):
+class GenericUserDataSubItem:
     """This class is provided only to allow user data to converted to and from
     PDUs.
 

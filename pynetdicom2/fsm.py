@@ -8,9 +8,16 @@
 Implementation of the OSI Upper Layer Services
 DICOM, Part 8, Section 7
 """
+from collections.abc import Iterator
+import enum
 import socket
+import time
+import queue
 
-from typing import Dict, Tuple, Callable
+from typing import Optional, Protocol, Callable, Union
+
+import pydicom
+import pydicom.uid
 
 from . import dimsemessages
 from . import dsutils
@@ -18,8 +25,7 @@ from . import exceptions
 from . import pdu
 
 
-# TODO Make into enum after dropping Py2 support
-class States(object):  # pylint: disable=too-few-public-methods
+class States(enum.Enum):
     """Services states enumeration."""
 
     # No association
@@ -69,8 +75,7 @@ class States(object):  # pylint: disable=too-few-public-methods
     """Awaiting Transport Connection Close Indication (Association no longer exists)"""
 
 
-# TODO Make into enum after dropping Py2 support
-class Events(object):  # pylint: disable=too-few-public-methods
+class Events(enum.Enum):
     """Events enumeration."""
 
     EVT_1 = 0
@@ -131,6 +136,66 @@ class Events(object):  # pylint: disable=too-few-public-methods
     """Unrecognized/invalid PDU"""
 
 
+PDUType = Union[
+    pdu.AAssociatePDUBase,
+    pdu.AAssociateRqPDU,
+    pdu.AAssociateAcPDU,
+    pdu.AAssociateRjPDU,
+    pdu.PDataTfPDU,
+    pdu.AReleasePDUBase,
+    pdu.AReleaseRqPDU,
+    pdu.AReleaseRpPDU,
+    pdu.AAbortPDU
+]
+
+
+ASCEType = Union[
+    pdu.AAssociateRqPDU,
+    pdu.AAssociateRjPDU,
+    pdu.AReleaseRqPDU,
+    pdu.AReleaseRpPDU,
+    pdu.AAbortPDU
+]
+
+
+IncomingQueue = queue.Queue[Union[tuple[dimsemessages.DIMSEMessage, int], ASCEType]]
+OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
+
+
+class ProviderProto(Protocol):
+    dul_socket: socket.socket
+    primitive: Optional[PDUType]
+    to_service_user: IncomingQueue
+    from_service_user: OutgoingQueue
+
+
+class Timer:
+    """A small helper timer class"""
+
+    def __init__(self, max_seconds: int) -> None:
+        self._max_seconds = max_seconds
+        self._start_time: Optional[float] = None
+
+    def start(self) -> None:
+        """Sets a timer"""
+        self._start_time = time.time()
+
+    def stop(self) -> None:
+        """Stops a timer"""
+        self._start_time = None
+
+    def restart(self) -> None:
+        """Restarts a timer"""
+        self.stop()
+        self.start()
+
+    def check(self) -> bool:
+        """Checks if timer has expired"""
+        if self._start_time and (time.time() - self._start_time > self._max_seconds):
+            return False
+        return True
+
+
 class StateMachine:  # pylint: disable=too-many-public-methods
     """Service State Machine implementation.
 
@@ -145,17 +210,23 @@ class StateMachine:  # pylint: disable=too-many-public-methods
                          message
     :ivar transition_table: state machine transition table
     """
-    def __init__(self, provider, timer, store_in_file, get_file_cb):
-        self.current_state = States.STA_1
-        self.provider = provider
-        self.timer = timer
-        self.store_in_file = store_in_file
+    def __init__(
+            self,
+            provider: ProviderProto,
+            timer: Timer,
+            store_in_file: set[pydicom.uid.UID],
+            get_file_cb
+    ) -> None:
+        self.current_state: States = States.STA_1
+        self.provider: ProviderProto = provider
+        self.timer: Timer = timer
+        self.store_in_file: set[pydicom.uid.UID] = store_in_file
         self.get_file_cb = get_file_cb
         self.accepted_contexts = {}
 
-        self.dimse_decoder = None
+        self.dimse_decoder: Optional[DIMSEDecoder] = None
 
-        self.transition_table = {
+        self.transition_table: dict[tuple[Events, States], Callable[[], States]] = {
             (Events.EVT_1, States.STA_1): self.ae_1,
 
             (Events.EVT_2, States.STA_4): self.ae_2,
@@ -297,25 +368,24 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             (Events.EVT_19, States.STA_11): self.aa_8,
             (Events.EVT_19, States.STA_12): self.aa_8,
             (Events.EVT_19, States.STA_13): self.aa_7
-        }  # type: Dict[Tuple[int,int],Callable[[],int]]
+        }
 
     @property
-    def primitive(self):
+    def primitive(self) -> Optional[PDUType]:
         """Current PDU."""
         return self.provider.primitive
 
     @primitive.setter
-    def primitive(self, value):
+    def primitive(self, value: Optional[PDUType]):
         self.provider.primitive = value
 
     @property
-    def dul_socket(self):
-        # type: () -> socket.socket
+    def dul_socket(self) -> socket.socket:
         """TCP Socket"""
         return self.provider.dul_socket
 
     @dul_socket.setter
-    def dul_socket(self, value):
+    def dul_socket(self, value: socket.socket) -> None:
         self.provider.dul_socket = value
 
     @property
@@ -323,44 +393,42 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """Outgoing PDU/DIMSE message queue"""
         return self.provider.to_service_user
 
-    def action(self, event):
-        # (int) -> None
+    def action(self, event: Events) -> None:
         """Execute the action triggered by event"""
         action = self.transition_table[(event, self.current_state)]
         self.current_state = action()
 
-    def ae_1(self):
+    def ae_1(self) -> States:
         """Issue TransportConnect request primitive to local transport service."""
         self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.dul_socket.connect(self.primitive.called_presentation_address)
         return States.STA_4
 
-    def ae_2(self):
+    def ae_2(self) -> States:
         """Send A_ASSOCIATE-RQ PDU."""
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_5
 
-    def ae_3(self):
+    def ae_3(self) -> States:
         """Issue A-ASSOCIATE confirmation (accept) primitive."""
         self.to_service_user.put(self.primitive)
         return States.STA_6
 
-    def ae_4(self):
+    def ae_4(self) -> States:
         """Issue A-ASSOCIATE confirmation (reject) primitive and close transport
         connection.
         """
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
-        self.dul_socket = None
         return States.STA_1
 
-    def ae_5(self):
+    def ae_5(self) -> States:
         """Issue transport connection response primitive; start ARTIM timer."""
         # Don't need to send this primitive.
         self.timer.start()
         return States.STA_2
 
-    def ae_6(self):
+    def ae_6(self) -> States:
         """Check A-ASSOCIATE-RQ.
 
         Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider - issue
@@ -372,28 +440,29 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         # TODO Look into why according to standard transition to `Sta13` may occur
         return States.STA_3
 
-    def ae_7(self):
+    def ae_7(self) -> States:
         """Send A-ASSOCIATE-AC PDU."""
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_6
 
-    def ae_8(self):
+    def ae_8(self) -> States:
         """Send A-ASSOCIATE-RJ PDU."""
         # not sure about this ...
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
-    def dt_1(self):
+    def dt_1(self) -> States:
         """Send P-DATA-TF PDU."""
         self.dul_socket.sendall(self.primitive.encode())
         self.primitive = None
         return States.STA_6
 
-    def dt_2(self):
+    def dt_2(self) -> States:
         """Send P-DATA indication primitive."""
         if self.dimse_decoder is None:
             self.dimse_decoder = DIMSEDecoder(
-                self.accepted_contexts, self.store_in_file,
+                self.accepted_contexts,
+                self.store_in_file,
                 self.get_file_cb
             )
         self.dimse_decoder.process(self.primitive)
@@ -403,37 +472,36 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             self.dimse_decoder = None
         return States.STA_6
 
-    def ar_1(self):
+    def ar_1(self) -> States:
         """Send A-RELEASE-RQ PDU."""
         self.primitive = pdu.AReleaseRqPDU()
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_7
 
-    def ar_2(self):
+    def ar_2(self) -> States:
         """Send A-RELEASE indication primitive."""
         self.to_service_user.put(self.primitive)
         return States.STA_8
 
-    def ar_3(self):
+    def ar_3(self) -> States:
         """Issue A-RELEASE confirmation primitive and close transport connection."""
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
-        self.dul_socket = None
         return States.STA_1
 
-    def ar_4(self):
+    def ar_4(self) -> States:
         """Issue A-RELEASE-RP PDU and start ARTIM timer."""
         self.primitive = pdu.AReleaseRpPDU()
         self.dul_socket.sendall(self.primitive.encode())
         self.timer.start()
         return States.STA_13
 
-    def ar_5(self):
+    def ar_5(self) -> States:
         """Stop ARTIM timer."""
         self.timer.stop()
         return States.STA_1
 
-    def ar_6(self):
+    def ar_6(self) -> States:
         """Issue P-DATA indication."""
         if self.dimse_decoder is None:
             self.dimse_decoder = DIMSEDecoder(
@@ -447,30 +515,30 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             self.dimse_decoder = None
         return States.STA_7
 
-    def ar_7(self):
+    def ar_7(self) -> States:
         """Issue P-DATA-TF PDU."""
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_8
 
-    def ar_8(self):
+    def ar_8(self) -> States:
         """Issue A-RELEASE indication (release collision)."""
         self.to_service_user.put(self.primitive)
         if self.provider.requestor == 1:
             return States.STA_9
         return States.STA_10
 
-    def ar_9(self):
+    def ar_9(self) -> States:
         """Send A-RELEASE-RP PDU."""
         self.primitive = pdu.AReleaseRpPDU()
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_11
 
-    def ar_10(self):
+    def ar_10(self) -> States:
         """Issue A-RELEASE confirmation primitive."""
         self.to_service_user.put(self.primitive)
         return States.STA_12
 
-    def aa_1(self):
+    def aa_1(self) -> States:
         """Send A-ABORT PDU (service-user source) and start (or restart)
         ARTIM timer.
         """
@@ -478,14 +546,13 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         self.timer.restart()
         return States.STA_13
 
-    def aa_2(self):
+    def aa_2(self) -> States:
         """Stop ARTIM timer if running. Close transport connection."""
         self.timer.stop()
         self.dul_socket.close()
-        self.dul_socket = None
         return States.STA_1
 
-    def aa_3(self):
+    def aa_3(self) -> States:
         """Issue A-ABORT or A-P-ABORT indication and close transport connection.
 
         If (service-user initiated abort):
@@ -500,32 +567,31 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
-        self.dul_socket = None
         return States.STA_1
 
-    def aa_4(self):
+    def aa_4(self) -> States:
         """Issue A-P-ABORT indication primitive."""
         # TODO look into this action
         self.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
         self.to_service_user.put(self.primitive)
         return States.STA_1
 
-    def aa_5(self):
+    def aa_5(self) -> States:
         """Stop ARTIM timer."""
         self.timer.stop()
         return States.STA_1
 
-    def aa_6(self):
+    def aa_6(self) -> States:
         """Ignore PDU."""
         self.primitive = None
         return States.STA_13
 
-    def aa_7(self):
+    def aa_7(self) -> States:
         """Send A-ABORT PDU."""
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
-    def aa_8(self):
+    def aa_8(self) -> States:
         """Send A-ABORT PDU, issue an A-P-ABORT indication and start ARTIM timer."""
         self.primitive = pdu.AAbortPDU(source=2, reason_diag=0)
         if self.dul_socket:
@@ -553,7 +619,12 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
     :ivar pc_id: Presentation Context ID
     :ivar msg: decoded DIMSE message
     """
-    def __init__(self, accepted_contexts, store_in_file, get_file_cb):
+    def __init__(
+            self,
+            accepted_contexts,
+            store_in_file: set[pydicom.uid.UID],
+            get_file_cb
+    ) -> None:
         """Initializes DIMSEDecoder instance
 
         :param accepted_contexts: accepted presentation contexts in current association
@@ -562,23 +633,23 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
         :param get_file_cb: callback for getting a file object for storage
         """
         self.accepted_contexts = accepted_contexts
-        self.store_in_file = store_in_file
+        self.store_in_file: set[pydicom.uid.UID] = store_in_file
         self.get_file_cb = get_file_cb
 
-        self.receiving = True
+        self.receiving: bool = True
 
-        self.command_set_received = False
-        self.data_set_received = False
+        self.command_set_received: bool = False
+        self.data_set_received: bool = False
 
-        self.pc_id = None
-        self.msg = None
+        self.pc_id: Optional[int] = None
+        self.msg: Optional[dimsemessages.DIMSEMessage] = None
 
-        self._encoded_command_set = []
-        self._encoded_data_set = []
+        self._encoded_command_set: list[bytes] = []
+        self._encoded_data_set: list[bytes] = []
         self._dataset_fp = None
-        self._start = 0
+        self._start: int = 0
 
-    def process(self, p_data):
+    def process(self, p_data: pdu.PDataTfPDU) -> None:
         """Processes new incoming P-DATA-TF PDU
 
         :param p_data: incoming P-DATA-TF PDU
@@ -634,7 +705,7 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
                 self.msg.data_set = b''.join(self._encoded_data_set)
 
     @staticmethod
-    def _command_set_to_message(command_set):
+    def _command_set_to_message(command_set: pydicom.Dataset) -> dimsemessages.DIMSEMessage:
         command_field = command_set[(0x0000, 0x0100)].value
         msg_type = dimsemessages.MESSAGE_TYPE[command_field]
         msg = msg_type(command_set)

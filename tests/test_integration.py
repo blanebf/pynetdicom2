@@ -37,7 +37,7 @@ class CEchoTestCase(unittest.TestCase):
 
 class CFindServerAE(ae.AE):
     def __init__(self, test_name, test, *args, **kwargs):
-        super(CFindServerAE, self).__init__(bind_and_activate=False, *args, **kwargs)
+        super().__init__(bind_and_activate=False, *args, **kwargs)
         self.test_name = test_name
         self.test = test
 
@@ -85,7 +85,7 @@ class CFindWrapperTestCase(unittest.TestCase):
 
 class CStoreAE(ae.AE):
     def __init__(self, test, rq, *args, **kwargs):
-        ae.AE.__init__(self, max_pdu_length=1024, bind_and_activate=False, *args, **kwargs)
+        super().__init__(max_pdu_length=1024, bind_and_activate=False, *args, **kwargs)
         self.test = test
         self.rq = rq
 
@@ -139,7 +139,7 @@ class CStoreTestCase(unittest.TestCase):
 class CommitmentAE(ae.AE):
     def __init__(self, test, transaction, success, failure, event, remote_ae,
                  *args, **kwargs):
-        ae.AE.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.test = test
         self.transaction = transaction

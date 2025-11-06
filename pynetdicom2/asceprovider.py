@@ -19,36 +19,216 @@ on how to request new association or how incoming association are handled.
 Each association class is not only responsible for initial establishment, but also for all
 association life-cycle until it's either released or aborted.
 """
-
-import collections
+from abc import abstractmethod
+import contextlib
+import dataclasses
 import functools
 from itertools import chain
 import time
 import socketserver
+from typing import Any, IO, Iterable, Iterator, Optional, Protocol, Union, cast
 
+import pydicom
 from pydicom import uid
+
+from pynetdicom2 import dimsemessages
 
 from . import exceptions
 from . import dulprovider
+from . import fsm
 
 from . import pdu
+from . import statuses
 from . import userdataitems
 
-PContextDef = collections.namedtuple(
-    'PContextDef',
-    ['id', 'sop_class', 'supported_ts']
-)
+
+@dataclasses.dataclass(frozen=True)
+class RemoteAEConfig:
+    aet: str
+    address: str
+    port: int
+    username: Optional[str] = None
+    password: Optional[str] = None
+    kerberos: Optional[str] = None
+    saml: Optional[str] = None
+    jwt: Optional[str] = None
+    user_data: list[pdu.UserItem] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(frozen=True)
+class PContextDef:
+    id: int
+    sop_class: uid.UID
+    supported_ts: uid.UID
+
+
+@dataclasses.dataclass(frozen=True)
+class AETParams:
+    address: str
+    aet: str
+    port: Optional[int] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class PContextDefList:
+    id: int
+    sop_class: uid.UID
+    supported_ts: frozenset[uid.UID]
+
+
+class SCPServiceWithSOPClass(Protocol):
+    sop_classes: list[uid.UID]
+    store_in_file: bool
+
+    @abstractmethod
+    def __call__(
+            self,
+            asce: 'AssociationAcceptor',
+            ctx: PContextDef,
+            msg: dimsemessages.DIMSERequestMessage
+    ) -> None:
+        ...
+
+
+class SCPService(Protocol):
+    @abstractmethod
+    def __call__(
+            self,
+            asce: 'AssociationAcceptor',
+            ctx: PContextDef,
+            msg: dimsemessages.DIMSERequestMessage
+     ) -> None:
+        ...
+
+
+class SCUService(Protocol):
+    def __call__(
+            self,
+            asce: 'AssociationRequester',
+            ctx: PContextDef,
+            *args: Any,
+            **kwargs: Any
+    ) -> Any:
+        ...
+
+
+class SCUServiceWithSOPClass(Protocol):
+    sop_classes: list[uid.UID]
+    store_in_file: bool
+
+    @abstractmethod
+    def __call__(
+            self,
+            asce: 'AssociationRequester',
+            ctx: PContextDef,
+            *args: Any,
+            **kwargs: Any
+    ) -> Any:
+        ...
+
+
+class AEBaseProto(Protocol):
+    default_ts: list[uid.UID]
+
+    local_ae: AETParams
+    supported_ts: frozenset[uid.UID]
+    dcm_timeout: int
+    max_pdu_length: int
+
+    context_def_list: dict[int, PContextDefList]
+    store_in_file: set[uid.UID] = set()
+    supported_scu: dict[uid.UID, SCUServiceWithSOPClass]
+    supported_scp: dict[uid.UID, SCPServiceWithSOPClass]
+
+    def add_scu(
+            self,
+            service: SCUServiceWithSOPClass,
+            sop_classes: Optional[list[uid.UID]] = None
+    ) -> 'AEBaseProto':
+        ...
+
+    def update_context_def_list(
+            self, sop_classes: Iterable[uid.UID], store_in_file: bool = False
+    ) -> None:
+        ...
+
+    def copy_context_def_list(self) -> dict[int, PContextDefList]:
+        ...
+
+    def get_file(
+            self,
+            context: PContextDef,
+            command_set: pydicom.Dataset
+    ) -> tuple[IO[bytes],int]:
+        ...
+
+    @contextlib.contextmanager
+    def request_association(
+            self,
+            remote_ae: Union[RemoteAEConfig, dict[str, Any]]
+    ) -> Iterator['AssociationRequester']:
+        ...
+
+    def on_association_request(
+            self, asce: 'AssociationAcceptor', assoc: pdu.AAssociateRqPDU
+    ) -> None:
+        ...
+
+    def on_association_response(self, response: pdu.AAssociateAcPDU) -> None:
+        ...
+
+    def on_receive_echo(self, context: PContextDef) -> statuses.Status:
+        ...
+
+    def on_receive_store(
+            self, context: PContextDef, ds: pydicom.Dataset
+        ) -> statuses.Status:
+        ...
+
+    def on_receive_find(
+            self, context: PContextDef, ds: pydicom.Dataset
+    ) -> Iterator[tuple[pydicom.Dataset, statuses.Status]]:
+        ...
+
+    def on_receive_move(
+            self, context: PContextDef, ds: pydicom.Dataset, destination: str
+     ) -> tuple[RemoteAEConfig, int, Iterator[pydicom.Dataset]]:
+        ...
+
+    def on_commitment_request(
+            self,
+            remote_ae: str,
+            uids: Iterable[tuple[uid.UID, uid.UID]]
+    ) -> tuple[
+        RemoteAEConfig,
+        Iterable[tuple[uid.UID, uid.UID]],
+        Iterable[tuple[uid.UID, uid.UID, int]]
+    ]:
+        ...
+
+    def on_commitment_response(
+            self,
+            transaction_uid: uid.UID,
+            success: Iterable[tuple[uid.UID, uid.UID]],
+            failure: Iterable[tuple[uid.UID, uid.UID, int]]
+    ) -> None:
+        ...
+
+
+class AEBaseServerProto(AEBaseProto, socketserver.BaseServer):
+    pass
 
 
 APPLICATION_CONTEXT_NAME = uid.UID('1.2.840.10008.3.1.1.1')
 IMPLEMENTATION_UID = uid.UID('1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000')
 
 
-def build_pres_context_def_list(context_def_list):
+def build_pres_context_def_list(
+        context_def_list: dict[int, PContextDefList]
+) -> Iterable[pdu.PresentationContextItemRQ]:
     """Builds a list of Presntation Context Items
 
     :param context_def_list: list of tuples (presentation context ID and PContextDef)
-    :type context_def_list: Tuple[int,PContextDef]
     :return: generator that yields :class:`pynetdicom2.pdu.PresentationContextItemRQ` instances
     """
     return (
@@ -67,7 +247,12 @@ class Association:
     Class provides basic association interface: creation, release and abort.
     """
 
-    def __init__(self, local_ae, dul_socket, max_pdu_length):
+    def __init__(
+            self,
+            local_ae: AEBaseProto,
+            dul_socket,
+            max_pdu_length: int
+    ) -> None:
         """Initializes Association instance with local AE title and DUL service
         provider
 
@@ -79,11 +264,11 @@ class Association:
         self.dul = dulprovider.DULServiceProvider(
             self.ae.store_in_file, self.ae.get_file, dul_socket, max_pdu_length
         )
-        self.association_established = False
+        self.association_established: bool = False
         self.max_pdu_length = max_pdu_length
-        self.accepted_contexts = {}
+        self.accepted_contexts: dict[int, PContextDef] = {}
 
-    def send(self, dimse_msg, pc_id):
+    def send(self, dimse_msg: dimsemessages.DIMSEMessage, pc_id: int) -> None:
         """Sends DIMSE message
 
         :param dimse_msg: DIMSE message
@@ -94,15 +279,14 @@ class Association:
         dimse_msg.set_length()
         self.dul.send(dimse_msg.encode(pc_id, self.max_pdu_length))
 
-    def receive(self):
+    def receive(self) -> tuple[dimsemessages.DIMSEMessage, int]:
         """Receives DIMSE message
 
         :return: tuple, containing DIMSE message and presentation context ID
-        :rtype: Tuple[dimsemessages.DIMSEMessage, int]
         """
         return self._get_dul_message()
 
-    def kill(self):
+    def kill(self) -> None:
         """Stops internal DUL service provider.
 
         In most cases you won't need to use this method directly. Refer to
@@ -115,33 +299,44 @@ class Association:
         self.dul.kill()
         self.association_established = False
 
-    def release(self):
+    def release(self) -> pdu.AReleaseRpPDU:
         """Releases association.
 
         Requests the release of the association and waits for
         confirmation
         """
         self.dul.send(pdu.AReleaseRqPDU())
-        rsp = self.dul.receive(self.ae.timeout)
+        rsp = self.dul.receive(self.ae.dcm_timeout)
+        if isinstance(rsp, tuple):
+            raise exceptions.NetDICOMError(
+                f'Unexpected DIMSE message on release: {rsp}'
+            )
+        if rsp.pdu_type != pdu.AReleaseRpPDU:
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU on release {rsp}'
+            )
         self.kill()
-        return rsp
+        return cast(pdu.AReleaseRpPDU, rsp)
 
-    def _get_dul_message(self):
-        dul_msg = self.dul.receive(self.ae.timeout)
+    def _get_dul_message(self) -> tuple[dimsemessages.DIMSEMessage, int]:
+        dul_msg = self.dul.receive(self.ae.dcm_timeout)
         if isinstance(dul_msg, tuple):
             return dul_msg
         self._handle_errors(dul_msg)
         raise exceptions.NetDICOMError()
 
     @staticmethod
-    def _handle_errors(dul_msg):
+    def _handle_errors(dul_msg: fsm.ASCEType) -> None:
         if dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
             raise exceptions.AssociationReleasedError()
         if dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
+            dul_msg = cast(pdu.AAbortPDU, dul_msg)
             raise exceptions.AssociationAbortedError(dul_msg.source, dul_msg.reason_diag)
         if dul_msg.pdu_type == pdu.AAssociateRjPDU.pdu_type:
+            dul_msg = cast(pdu.AAssociateRjPDU, dul_msg)
             raise exceptions.AssociationRejectedError(
-                dul_msg.result, dul_msg.source, dul_msg.reason_diag)
+                dul_msg.result, dul_msg.source, dul_msg.reason_diag
+            )
 
 
 class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
@@ -150,7 +345,13 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     Class is intended for handling incoming association requests.
     """
 
-    def __init__(self, request, client_address, local_ae, max_pdu_length):
+    def __init__(
+            self,
+            request,
+            client_address,
+            local_ae: AEBaseServerProto,
+            max_pdu_length: int
+    ) -> None:
         """Initializes AssociationAcceptor instance with specified client socket
 
         :param local_ae: local AE title
@@ -158,20 +359,21 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         """
         Association.__init__(self, local_ae, request, max_pdu_length)
         self.is_killed = False
-        self.sop_classes_as_scp = {}
-        self.remote_ae = b''
+        self.sop_classes_as_scp: dict[int, tuple[int, uid.UID, uid.UID]] = {}
+        self.remote_ae: str = ''
+        self.local_ae: str = ''
 
         socketserver.StreamRequestHandler.__init__(self, request, client_address, local_ae)
 
-    def kill(self):
+    def kill(self) -> None:
         """Overrides base class kill method to set stop-flag for running thread
 
         :rtype : None
         """
         self.is_killed = True
-        super(AssociationAcceptor, self).kill()
+        super().kill()
 
-    def abort(self, reason):
+    def abort(self, reason: int) -> None:
         """Aborts association with specified reason
 
         :rtype : None
@@ -180,7 +382,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
         self.kill()
 
-    def reject(self, result, source, diag):
+    def reject(self, result: int, source: int, diag: int) -> None:
         """Rejects association with specified parameters
 
         :param result:
@@ -189,7 +391,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         """
         self.dul.send(pdu.AAssociateRjPDU(result, source, diag))
 
-    def accept(self, assoc_req):
+    def accept(self, assoc_req: pdu.AAssociateRqPDU) -> None:
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
         acceptable_pr_contexts"""
@@ -233,8 +435,9 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         )
         self.dul.send(res)
         self.remote_ae = assoc_req.calling_ae_title
+        self.local_ae = assoc_req.called_ae_title
 
-    def handle(self):
+    def handle(self) -> None:
         try:
             self._establish()
             self._loop()
@@ -247,18 +450,21 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         finally:
             self.kill()
 
-    def _establish(self):
+    def _establish(self) -> None:
         try:
-            assoc_req = self.dul.receive(self.ae.timeout)
+            assoc_req = self.dul.receive(self.ae.dcm_timeout)
             self.ae.on_association_request(self, assoc_req)
         except exceptions.AssociationRejectedError as exc:
             self.reject(exc.result, exc.source, exc.diagnostic)
             raise
 
-        self.accept(assoc_req)
+        if isinstance(assoc_req, tuple) or assoc_req.pdu_type != pdu.AAssociateRqPDU.pdu_type:
+            raise exceptions.AssociationError(f'Invalid request on associaction: {assoc_req}')
+
+        self.accept(cast(pdu.AAssociateRqPDU, assoc_req))
         self.association_established = True
 
-    def _loop(self):
+    def _loop(self) -> None:
         while not self.is_killed:
             dimse_msg, pc_id = self.receive()
             _uid = dimse_msg.sop_class_uid
@@ -287,24 +493,32 @@ class AssociationRequester(Association):
                               empty, until association is established.
     """
 
-    def __init__(self, local_ae, max_pdu_length, remote_ae):
-        super(AssociationRequester, self).__init__(local_ae, None, max_pdu_length)
+    def __init__(
+            self,
+            local_ae: AEBaseProto,
+            max_pdu_length: int,
+            remote_ae: Union[RemoteAEConfig, dict[str, Any]]
+    ) -> None:
+        super().__init__(local_ae, None, max_pdu_length)
+        if isinstance(remote_ae, dict):
+            remote_ae = RemoteAEConfig(**remote_ae)
+
         self.context_def_list = local_ae.copy_context_def_list()
         self.remote_ae = remote_ae
-        self.sop_classes_as_scu = {}
+        self.sop_classes_as_scu: dict[uid.UID, tuple[int, uid.UID]] = {}
 
-    def request(self):
+    def request(self) -> None:
         """Requests association with remote AET."""
         ext = [userdataitems.ScpScuRoleSelectionSubItem(uid, 0, 1)
                for uid in self.ae.supported_scp.keys()]
-        custom_items = self.remote_ae.get('user_data', [])
+        custom_items = self.remote_ae.user_data
         response = self._request(
             self.ae.local_ae, self.remote_ae, users_pdu=ext+custom_items
         )
         self.ae.on_association_response(response)
         self.association_established = True
 
-    def get_scu(self, sop_class):
+    def get_scu(self, sop_class: uid.UID):
         """Get SCU function to use (like for making a C-FIND request).
 
         SCU are generally provided by `sopclass` module. First argument of the service
@@ -327,7 +541,7 @@ class AssociationRequester(Association):
         else:
             return functools.partial(service, self, PContextDef(pc_id, sop_class, ts))
 
-    def abort(self, reason=0):
+    def abort(self, reason: int = 0) -> None:
         """Aborts association with specified reason
 
         :param reason: abort reason
@@ -335,49 +549,58 @@ class AssociationRequester(Association):
         self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
         self.kill()
 
-    def _request(self, local_ae, remote_ae, users_pdu=None):
+    def _request(self, local_ae: AETParams, remote_ae: RemoteAEConfig, users_pdu=None):
         """Requests an association with a remote AE and waits for association
         response."""
         max_pdu_length_par = userdataitems.MaximumLengthSubItem(self.max_pdu_length)
         implementation_uid = userdataitems.ImplementationClassUIDSubItem(IMPLEMENTATION_UID)
         user_information = [max_pdu_length_par, implementation_uid] + users_pdu \
             if users_pdu else [max_pdu_length_par, implementation_uid]
-        username = remote_ae.get('username')
-        password = remote_ae.get('password')
+        username = remote_ae.username
+        password = remote_ae.password
         if username and password:
             user_information.append(
-                userdataitems.UserIdentityNegotiationSubItem(username, password))
+                userdataitems.UserIdentityNegotiationSubItem(username, password)
+            )
         elif username:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
-                    username, user_identity_type=1))
-        elif 'kerberos' in remote_ae:
+                    username, user_identity_type=1
+                )
+            )
+        elif remote_ae.kerberos:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
-                    remote_ae['kerberos'], user_identity_type=3))
-        elif 'saml' in remote_ae:
+                    remote_ae.kerberos, user_identity_type=3
+                )
+            )
+        elif remote_ae.saml:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
-                    remote_ae['saml'], user_identity_type=4))
-        elif 'jwt' in remote_ae:
+                    remote_ae.saml, user_identity_type=4
+                )
+            )
+        elif remote_ae.jwt:
             user_information.append(
                 userdataitems.UserIdentityNegotiationSubItem(
-                    remote_ae['jwt'], user_identity_type=5))
+                    remote_ae.jwt, user_identity_type=5
+                )
+            )
 
-        variable_items = list(chain(
+        variable_items: list[pdu.VariableItems] = list(chain(
             [pdu.ApplicationContextItem(APPLICATION_CONTEXT_NAME)],
             build_pres_context_def_list(self.context_def_list),
             [pdu.UserInformationItem(user_information)]
         ))
         assoc_rq = pdu.AAssociateRqPDU(
-            called_ae_title=remote_ae['aet'],
-            calling_ae_title=local_ae['aet'],
+            called_ae_title=remote_ae.aet,
+            calling_ae_title=local_ae.aet,
             variable_items=variable_items
         )
         # FIXME pass parameter properly
-        assoc_rq.called_presentation_address = (remote_ae['address'], remote_ae['port'])
+        assoc_rq.called_presentation_address = (remote_ae.address, remote_ae.port)
         self.dul.send(assoc_rq)
-        response = self.dul.receive(self.ae.timeout)
+        response = self.dul.receive(self.ae.dcm_timeout)
         self._handle_errors(response)
         if isinstance(response, tuple) or response.pdu_type != pdu.AAssociateAcPDU.pdu_type:
             return exceptions.AssociationError('Invalid repsonse')

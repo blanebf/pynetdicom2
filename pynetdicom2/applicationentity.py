@@ -28,11 +28,12 @@ import platform
 import copy
 import contextlib
 import os
-from typing import List, Tuple, IO, Union
+from typing import Any, BinaryIO, Iterator, Iterable, Optional, IO, Union
 import socketserver
 
 from pydicom import Dataset
 from pydicom import filebase
+from pydicom.dataset import FileMetaDataset
 from pydicom.filewriter import write_file_meta_info
 from pydicom import uid
 
@@ -45,7 +46,7 @@ from . import statuses
 PREAMBLE = b'\0' * 128 + b'DICM'
 
 
-def write_meta(fp, command_set, ts):
+def write_meta(fp: BinaryIO, command_set: Dataset, ts: uid.UID) -> None:
     """Writes file meta information.
 
     This is a small utility function that can be useful when overriding
@@ -57,7 +58,7 @@ def write_meta(fp, command_set, ts):
     :param ts: dataset transfer syntax
     """
     fp.write(PREAMBLE)
-    meta = Dataset()
+    meta = FileMetaDataset()
     meta.MediaStorageSOPClassUID = command_set.AffectedSOPClassUID
     meta.MediaStorageSOPInstanceUID = command_set.AffectedSOPInstanceUID
     meta.TransferSyntaxUID = ts
@@ -100,28 +101,47 @@ class AEBase:
                          class clients.
 
     """
-    default_ts = [uid.ExplicitVRLittleEndian, uid.ImplicitVRLittleEndian,
-                  uid.ExplicitVRBigEndian]
+    default_ts = [
+        uid.ExplicitVRLittleEndian,
+        uid.ImplicitVRLittleEndian,
+        uid.ExplicitVRBigEndian
+    ]
+
     """
     Default list of supported transfer syntaxes.
     """
 
-    def __init__(self, supported_ts, max_pdu_length):
-        # type: (Union[List[uid.UID],None], int) -> None
+    def __init__(
+            self,
+            supported_ts: Optional[list[uid.UID]],
+            max_pdu_length: int,
+            ae_title: str,
+            port: Optional[int] = None
+    ) -> None:
         if supported_ts is None:
             supported_ts = self.default_ts
 
+        self.local_ae = asceprovider.AETParams(
+            address=platform.node(),
+            aet=ae_title,
+            port=port
+        )
+
         self.supported_ts = frozenset(supported_ts)
-        self.timeout = 15
+        self.dcm_timeout: int = 15
         self.max_pdu_length = max_pdu_length
 
-        self.context_def_list = {}
-        self.store_in_file = set()
-        self.supported_scu = {}
-        self.supported_scp = {}
+        self.context_def_list: dict[int, asceprovider.PContextDefList] = {}
+        self.store_in_file: set[uid.UID] = set()
+        self.supported_scu: dict[uid.UID, asceprovider.SCUServiceWithSOPClass] = {}
+        self.supported_scp: dict[uid.UID, asceprovider.SCPServiceWithSOPClass] = {}
         self.lock = Lock()
 
-    def add_scu(self, service, sop_classes=None):
+    def add_scu(
+            self,
+            service: asceprovider.SCUServiceWithSOPClass,
+            sop_classes: Optional[list[uid.UID]] = None
+    ) -> asceprovider.AEBaseProto:
         """Adds service as SCU to the AE.
 
         Presentation context definition list is updated based on SOP Class UIDs
@@ -132,15 +152,14 @@ class AEBase:
         :param sop_classes: overrides list of SOP Class UIDs provided by the service
         """
         sop_classes = sop_classes or service.sop_classes
-        self.supported_scu.update({
-            uid: service for uid in sop_classes
-        })
-        store_in_file = (hasattr(service, 'store_in_file') and
-                         service.store_in_file)
+        self.supported_scu.update({uid: service for uid in sop_classes})
+        store_in_file = (hasattr(service, 'store_in_file') and service.store_in_file)
         self.update_context_def_list(sop_classes, store_in_file)
         return self
 
-    def update_context_def_list(self, sop_classes, store_in_file=False):
+    def update_context_def_list(
+            self, sop_classes: Iterable[uid.UID], store_in_file: bool = False
+    ) -> None:
         """Updates presentation context definition list.
 
         :param sop_classes: new SOP Class UIDs that should be added to
@@ -148,14 +167,13 @@ class AEBase:
         :param store_in_file: indicates if incoming datasets for these SOP
                               Classes should be stored in file.
         """
-        start = max(self.context_def_list.keys()) + 2 if self.context_def_list \
-            else 1
+        start = max(self.context_def_list.keys()) + 2 if self.context_def_list else 1
 
         self.context_def_list.update(
             self._build_context_def_list(sop_classes, start, store_in_file)
         )
 
-    def copy_context_def_list(self):
+    def copy_context_def_list(self) -> dict[int, asceprovider.PContextDefList]:
         """Makes a shallow copy of presentation context definition list.
 
         .. note::
@@ -168,7 +186,10 @@ class AEBase:
             return copy.copy(self.context_def_list)
 
     @contextlib.contextmanager
-    def request_association(self, remote_ae):
+    def request_association(
+            self,
+            remote_ae: Union[asceprovider.RemoteAEConfig, dict[str, Any]]
+    ) -> Iterator[asceprovider.AssociationRequester]:
         """Requests association to a remote application entity.
 
         Request is formed based on configuration dictionary that is passed in.
@@ -198,8 +219,11 @@ class AEBase:
                 assoc.kill()
             raise
 
-    def get_file(self, context, command_set):  # pylint: disable=no-self-use
-        # type: (asceprovider.PContextDef, Dataset) -> Tuple[IO[bytes],int]
+    def get_file(
+            self,
+            context: asceprovider.PContextDef,
+            command_set: Dataset
+    ) -> tuple[IO[bytes], int]:
         """Method is used by association to get file-like object to store
         dataset.
 
@@ -317,17 +341,20 @@ class AEBase:
         :param transaction_uid: Transaction UID
         :param success: iterable of tuples (SOP Class UID, SOP Instance UID)
         :param failure: iterable of tuples (SOP Class UID, SOP Instance UID,
-                        Failure Reason
+                        Failure Reason)
         """
         raise exceptions.EventHandlingError('Not implemented')
 
-    def _build_context_def_list(self, sop_classes, start, store_in_file):
+    def _build_context_def_list(
+            self,
+            sop_classes: Iterable[uid.UID],
+            start: int,
+            store_in_file: bool
+    ) -> dict[int, asceprovider.PContextDefList]:
         if store_in_file:
             self.store_in_file.update(sop_classes)
-        return {pc_id: asceprovider.PContextDef(pc_id, uid.UID(sop_class),
-                                                self.supported_ts)
-                for sop_class, pc_id in zip(sop_classes,
-                                            count(start, 2))}
+        return {pc_id: asceprovider.PContextDefList(pc_id, sop_class, self.supported_ts)
+                for sop_class, pc_id in zip(sop_classes, count(start, 2))}
 
 
 class ClientAE(AEBase):
@@ -342,11 +369,14 @@ class ClientAE(AEBase):
                          add only transfer syntax of the expected dataset.
     :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
     """
-    def __init__(self, ae_title, supported_ts=None, max_pdu_length=65536):
-        # type: (str, Union[List[uid.UID],None], int) -> None
+    def __init__(
+            self,
+            ae_title: str,
+            supported_ts: Optional[list[uid.UID]] = None,
+            max_pdu_length: int = 65536
+    ) -> None:
         """Initializes new ClientAE instance"""
-        super(ClientAE, self).__init__(supported_ts, max_pdu_length)
-        self.local_ae = {'address': platform.node(), 'aet': ae_title}
+        super().__init__(supported_ts, max_pdu_length, ae_title)
 
 
 class AE(AEBase, socketserver.ThreadingTCPServer):
@@ -372,11 +402,16 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
     :param max_pdu_length: maximum PDU length in bytes (defaults to 64kb).
     """
 
-    def __init__(self, ae_title, port, supported_ts=None, max_pdu_length=65536,
-                 bind_and_activate=True):
-        # type: (str, int, Union[List[uid.UID],None], int, bool) -> None
+    def __init__(
+            self,
+            ae_title: str,
+            port: int,
+            supported_ts: Optional[list[uid.UID]] = None,
+            max_pdu_length: int = 65536,
+            bind_and_activate: bool = True
+    ) -> None:
         """Initializes new AE instance."""
-        AEBase.__init__(self, supported_ts, max_pdu_length)
+        AEBase.__init__(self, supported_ts, max_pdu_length, ae_title, port)
         socketserver.ThreadingTCPServer.__init__(
             self,
             ('', port),
@@ -388,10 +423,7 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         self.allow_reuse_address = True
         self.activted = bind_and_activate
 
-        self.local_ae = {'address': platform.node(), 'port': port,
-                         'aet': ae_title}
-
-    def add_scp(self, service):
+    def add_scp(self, service: asceprovider.SCPServiceWithSOPClass) -> 'AE':
         """Adds service as SCP to the AE.
 
         Method is similar to ``add_scu`` method of the
@@ -402,12 +434,11 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         self.supported_scp.update({
             uid: service for uid in service.sop_classes
         })
-        store_in_file = (hasattr(service, 'store_in_file') and
-                         service.store_in_file)
+        store_in_file = (hasattr(service, 'store_in_file') and service.store_in_file)
         self.update_context_def_list(service.sop_classes, store_in_file)
         return self
 
-    def quit(self):
+    def quit(self) -> None:
         """Stops AE from accepting any more connections."""
         self.shutdown()
         self.server_close()
@@ -433,25 +464,21 @@ class FolderStorageMixin:
     storage file.
     """
 
-    max_iterations = 10
+    max_iterations: int = 10
     """
     Maximum iteration for looking for a unique filename
     """
 
-    def get_file_name(self, path, sop_instance_uid):
-        # type: (str, uid.UID) -> str
+    def get_file_name(self, path: str, sop_instance_uid: uid.UID) -> str:
         """Gets a unique filename in a folder, where incoming dataset should be stored.
 
         Method uses SOP Instance UID of incoming dataset
 
         :param path: path to a folder where the storage should be created
-        :type path: str
         :param sop_instance_uid: incoming SOP Instance UID
-        :type sop_instance_uid: uid.UID
         :raises OSError: raised if method fails to obtain unique filename for storing incoming
                          dataset
         :return: unique filename to store incoming dataset
-        :rtype: str
         """
         template = os.path.join(path, sop_instance_uid)
         i = 0
@@ -463,18 +490,18 @@ class FolderStorageMixin:
             full_name = f'{template}_{i}.dcm'
         return full_name
 
-    def get_storage_file(self, context, command_set, path):
-        # type: (asceprovider.PContextDef, Dataset, str) -> Tuple[IO[bytes],int]
+    def get_storage_file(
+            self,
+            context: asceprovider.PContextDef,
+            command_set: Dataset,
+            path: str
+    ) -> tuple[IO[bytes],int]:
         """Gets a bytes IO and starting point in it for storing incoming dataset.
 
         :param context: presentation context
-        :type context: asceprovider.PContextDef
         :param command_set: incoming command dataset
-        :type command_set: Dataset
         :param path: path to a folder where incoming dataset should be stored
-        :type path: str
         :return: tuple of bytes IO and starting point in it
-        :rtype: Tuple[IO[bytes],int]
         """
         full_name = self.get_file_name(path, command_set.AffectedSOPInstanceUID)  # type: ignore
 
@@ -494,12 +521,19 @@ class ClientStorageAE(ClientAE, FolderStorageMixin):
 
     :ivar storage_dir: a folder where incoming datasets should be stored
     """
-    def __init__(self, storage_dir, ae_title, supported_ts=None, max_pdu_length=65536):
-        # type: (str, str, Union[List[uid.UID],None], int) -> None
-        super(ClientStorageAE, self).__init__(ae_title, supported_ts, max_pdu_length)
+    def __init__(
+            self,
+            storage_dir: str,
+            ae_title: str,
+            supported_ts: Optional[list[uid.UID]] = None,
+            max_pdu_length: int = 65536
+    ) -> None:
+        super().__init__(ae_title, supported_ts, max_pdu_length)
         self.storage_dir = storage_dir
 
-    def get_file(self, context, command_set):
+    def get_file(
+            self, context: asceprovider.PContextDef, command_set: Dataset
+    ) -> tuple[IO[bytes], int]:
         return self.get_storage_file(context, command_set, self.storage_dir)
 
 
@@ -508,12 +542,19 @@ class StorageAE(AE, FolderStorageMixin):
 
     :ivar storage_dir: a folder where incoming datasets should be stored
     """
-    def __init__(self, storage_dir, ae_title, port, supported_ts=None, max_pdu_length=65536,
-                 bind_and_activate=True):
-        # type: (str, str, int, Union[List[uid.UID],None], int, bool) -> None
-        super(StorageAE, self).__init__(ae_title, port, supported_ts, max_pdu_length,
-                                        bind_and_activate)
+    def __init__(
+            self,
+            storage_dir: str,
+            ae_title: str,
+            port: int,
+            supported_ts: Optional[list[uid.UID]] = None,
+            max_pdu_length: int = 65536,
+            bind_and_activate: bool = True
+    ) -> None:
+        super().__init__(ae_title, port, supported_ts, max_pdu_length, bind_and_activate)
         self.storage_dir = storage_dir
 
-    def get_file(self, context, command_set):
+    def get_file(
+            self, context: asceprovider.PContextDef, command_set: Dataset
+    ) -> tuple[IO[bytes], int]:
         return self.get_storage_file(context, command_set, self.storage_dir)

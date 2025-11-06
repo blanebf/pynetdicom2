@@ -118,7 +118,7 @@ class AssociationRejectedError(AssociationError):
     def __init__(self, result, source, diagnostic, *args, **kwargs):
         """Overrides base exception initialization."""
 
-        super(AssociationRejectedError, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.result = result
         self.source = source
         self.diagnostic = diagnostic
@@ -137,7 +137,7 @@ class AssociationAbortedError(AssociationError):
 
     def __init__(self, source, reason_diag, *args, **kwargs):
         """Overrides base exception initialization."""
-        super(AssociationAbortedError, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.source = source
         self.reason_diag = reason_diag
 

@@ -19,21 +19,21 @@ use higher level objects like sub-classes of
 :class:`~pynetdicom2.asceprovider.Association` or various services.
 """
 import collections
+from collections.abc import Iterator
 
 import threading
-from typing import FrozenSet, Optional
-import time
+from typing import Optional, Type, Union
 import socket
 import select
 import struct
 import queue
 
-from . import fsm
-from . import pdu
-from . import exceptions
+from pydicom import uid
+
+from . import dimsemessages, fsm, pdu, exceptions
 
 
-PDU_TYPES = {
+PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]]= {
     0x01: (pdu.AAssociateRqPDU, fsm.Events.EVT_6),
     0x02: (pdu.AAssociateAcPDU, fsm.Events.EVT_3),
     0x03: (pdu.AAssociateRjPDU, fsm.Events.EVT_4),
@@ -79,11 +79,11 @@ class DULServiceProvider(threading.Thread):
 
     def __init__(
             self,
-            store_in_file: FrozenSet[str],
+            store_in_file: set[uid.UID],
             get_file_cb,
-            dul_socket: socket.socket = None,
+            dul_socket: Optional[socket.socket] = None,
             max_pdu_length: int = 65536
-        ):
+    ) -> None:
         """Initializes DUL service.
 
         If no socket is provided service will act as 'client' and will open
@@ -96,18 +96,18 @@ class DULServiceProvider(threading.Thread):
         :param dul_socket: remote client socket that will be used to send and
                            receive PDUs.
         """
-        super(DULServiceProvider, self).__init__()
+        super().__init__()
 
-        self.primitive = None  # current pdu
-        self.dimse_gen = None
-        self.event = collections.deque()
+        self.primitive: Optional[fsm.PDUType] = None  # current pdu
+        self.dimse_gen: Optional[Iterator[pdu.PDataTfPDU]] = None
+        self.event: collections.deque = collections.deque()
         self.max_pdu_length = max_pdu_length
 
-        self.to_service_user = queue.Queue()
-        self.from_service_user = queue.Queue()
+        self.to_service_user: fsm.IncomingQueue = queue.Queue()
+        self.from_service_user: fsm.OutgoingQueue = queue.Queue()
 
         # Setup the timer and finite state machines
-        self.timer = Timer(10)
+        self.timer = fsm.Timer(10)
         self.state_machine = fsm.StateMachine(self, self.timer, store_in_file, get_file_cb)
         self._is_killed = threading.Event()
 
@@ -115,9 +115,9 @@ class DULServiceProvider(threading.Thread):
             self.event.append(fsm.Events.EVT_5)
 
         self.dul_socket = dul_socket
-        self.raw_pdu = b''
+        self.raw_pdu: bytes = b''
 
-        self.is_killed = False
+        self.is_killed: bool = False
         self.start()
 
     @property
@@ -126,10 +126,10 @@ class DULServiceProvider(threading.Thread):
         return self.state_machine.accepted_contexts
 
     @accepted_contexts.setter
-    def accepted_contexts(self, value):
+    def accepted_contexts(self, value) -> None:
         self.state_machine.accepted_contexts = value
 
-    def send(self, primitive):
+    def send(self, primitive: Union[Iterator[pdu.PDataTfPDU], fsm.PDUType]) -> None:
         """Puts PDU into outgoing queue.
 
         .. note::
@@ -141,7 +141,7 @@ class DULServiceProvider(threading.Thread):
         """
         self.from_service_user.put(primitive)
 
-    def receive(self, timeout):
+    def receive(self, timeout: float) -> Union[tuple[dimsemessages.DIMSEMessage, int], fsm.ASCEType]:
         """Tries to get PDU from incoming queue.
 
         If timeout is exceeded method
@@ -155,10 +155,10 @@ class DULServiceProvider(threading.Thread):
         """
         try:
             return self.to_service_user.get(timeout=timeout)
-        except queue.Empty:
-            raise exceptions.DCMTimeoutError()
+        except queue.Empty as exc:
+            raise exceptions.DCMTimeoutError() from exc
 
-    def stop(self):
+    def stop(self) -> bool:
         """Tries to stop service for idle association.
 
         If association is not in idle state, method will return ``False`` and
@@ -172,12 +172,12 @@ class DULServiceProvider(threading.Thread):
             return True
         return False
 
-    def kill(self):
+    def kill(self) -> None:
         """Sets termination flag for event loop and waits for thread to exit."""
         self.is_killed = True
         self._is_killed.wait()
 
-    def run(self):
+    def run(self) -> None:
         try:
             while not self.is_killed:
                 self._check_network() or self._check_outgoing_pdu() or self._check_timer()  # pylint: disable=expression-not-assigned
@@ -192,7 +192,7 @@ class DULServiceProvider(threading.Thread):
         finally:
             self._is_killed.set()
 
-    def _check_network(self):
+    def _check_network(self) -> bool:
         if self.state_machine.current_state == fsm.States.STA_13:
             return self._close()
 
@@ -213,7 +213,7 @@ class DULServiceProvider(threading.Thread):
 
         return self._process_incoming()
 
-    def _check_outgoing_pdu(self):
+    def _check_outgoing_pdu(self) -> bool:
         try:
             if self.dimse_gen:
                 try:
@@ -230,14 +230,15 @@ class DULServiceProvider(threading.Thread):
                 self.primitive = next(self.dimse_gen)
             self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
             return True
-        except KeyError:
+        except KeyError as exc:
+            pdu_type = self.primitive.pdu_type if self.primitive else ''
             raise exceptions.PDUProcessingError(
-                f'Unknown PDU {self.primitive} with type {self.primitive.pdu_type}'
-            )
+                f'Unknown PDU {self.primitive} with type {pdu_type}'
+            ) from exc
         except queue.Empty:
             return False
 
-    def _check_timer(self):
+    def _check_timer(self) -> bool:
         if self.timer.check() is False:
             self.event.append(fsm.Events.EVT_18)  # Timer expired
             return True
@@ -245,6 +246,9 @@ class DULServiceProvider(threading.Thread):
 
     def _check_incoming_pdu(self) -> bool:
         # There is something to read
+        if not self.dul_socket:
+            return True
+
         try:
             data = self.dul_socket.recv(self.max_pdu_length)
         except socket.error:
@@ -268,8 +272,8 @@ class DULServiceProvider(threading.Thread):
             return False
 
         length = self.raw_pdu[2:6]
-        length = struct.unpack('>L', length)[0]
-        full_length = length + 6
+        _length = struct.unpack('>L', length)[0]
+        full_length = _length + 6
         if len(self.raw_pdu) < full_length:
             return False
 
@@ -285,7 +289,7 @@ class DULServiceProvider(threading.Thread):
             self.event.append(fsm.Events.EVT_19)
         return True
 
-    def _close(self):
+    def _close(self) -> bool:
         # waiting for connection to close
         if self.dul_socket is None:
             return False
@@ -300,31 +304,4 @@ class DULServiceProvider(threading.Thread):
         self.dul_socket.close()
         self.dul_socket = None
         self.event.append(fsm.Events.EVT_17)
-        return True
-
-
-class Timer:
-    """A small helper timer class"""
-
-    def __init__(self, max_seconds: int) -> None:
-        self._max_seconds = max_seconds
-        self._start_time: Optional[float] = None
-
-    def start(self) -> None:
-        """Sets a timer"""
-        self._start_time = time.time()
-
-    def stop(self) -> None:
-        """Stops a timer"""
-        self._start_time = None
-
-    def restart(self) -> None:
-        """Restarts a timer"""
-        self.stop()
-        self.start()
-
-    def check(self) -> bool:
-        """Checks if timer has expired"""
-        if self._start_time and (time.time() - self._start_time > self._max_seconds):
-            return False
         return True
