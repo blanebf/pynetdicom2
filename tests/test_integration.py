@@ -45,7 +45,7 @@ class CFindServerAE(ae.AE):
         self.test.assertEqual(ds.PatientName, self.test_name)
         rsp = dataset.Dataset()
         rsp.PatientName = self.test_name
-        return iter([(rsp, statuses.SUCCESS)])
+        return iter([(rsp, statuses.C_FIND_PENDING)])
 
 
 class CFindTestCase(unittest.TestCase):
@@ -62,8 +62,9 @@ class CFindTestCase(unittest.TestCase):
                 req = dataset.Dataset()
                 req.PatientName = test_name
                 for result, status in service(req, 1):
-                    self.assertEqual(result.PatientName, test_name)
-                    self.assertTrue(status.is_success)
+                    if result:
+                        self.assertEqual(result.PatientName, test_name)
+                        self.assertTrue(status.is_pending)
 
 
 class CFindWrapperTestCase(unittest.TestCase):
@@ -79,8 +80,9 @@ class CFindWrapperTestCase(unittest.TestCase):
             .add_scp(sc.qr_find_scp)
         with ae2:
             for result, status in c_find(remote_ae, 'AET1', ds):
-                self.assertEqual(result.PatientName, test_name)
-                self.assertTrue(status.is_success)
+                if result:
+                    self.assertEqual(result.PatientName, test_name)
+                    self.assertTrue(status.is_pending)
 
 
 class CStoreAE(ae.AE):

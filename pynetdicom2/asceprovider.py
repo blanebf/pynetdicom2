@@ -311,7 +311,7 @@ class Association:
             raise exceptions.NetDICOMError(
                 f'Unexpected DIMSE message on release: {rsp}'
             )
-        if rsp.pdu_type != pdu.AReleaseRpPDU:
+        if rsp.pdu_type != pdu.AReleaseRpPDU.pdu_type:
             raise exceptions.NetDICOMError(
                 f'Unexpected PDU on release {rsp}'
             )

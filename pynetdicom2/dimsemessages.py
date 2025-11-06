@@ -141,7 +141,7 @@ class DIMSEMessage:
             self.command_set.CommandField = self.command_field
             self.command_set.CommandDataSetType = NO_DATASET
             for field in self.command_fields:
-                setattr(self.command_set, field, '')
+                setattr(self.command_set, field, None)
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
