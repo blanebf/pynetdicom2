@@ -3,16 +3,10 @@
 #    See the file license.txt included with this distribution.
 
 __author__ = 'Blane'
-
+from io import BytesIO
 import unittest
-import six
 import pynetdicom2.pdu
 import pynetdicom2.userdataitems
-
-if six.PY3:
-    from six import BytesIO as cStringIO
-else:
-    from six.moves import cStringIO
 
 
 class TestPDUEncoding(unittest.TestCase):
@@ -41,7 +35,7 @@ class TestPDUEncoding(unittest.TestCase):
 class TestSubItemEncoding(unittest.TestCase):
     def decode_and_compare_sub_item(self, item):
         encoded = item.encode()
-        stream = cStringIO(encoded)
+        stream = BytesIO(encoded)
         item2 = type(item).decode(stream)
         self.assertIsInstance(item, item2.__class__)
         self.assertEqual(item.__dict__, item2.__dict__)

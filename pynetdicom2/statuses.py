@@ -315,7 +315,7 @@ to the global library dictionary of status codes.
 """
 # pylint: enable=line-too-long
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Type, Union
 
 from . import dimsemessages as dimse
 
@@ -329,9 +329,9 @@ class _Status:
     description: str
 
 
-_general_status_dict: Dict[int, _Status] = {}  # pylint: disable=invalid-name
+_general_status_dict: dict[int, _Status] = {}  # pylint: disable=invalid-name
 
-_status_dict: Dict[Tuple[int, int], _Status] = {}  # pylint: disable=invalid-name
+_status_dict: dict[tuple[int, int], _Status] = {}  # pylint: disable=invalid-name
 
 
 UNKNOWN = _Status('Failure', 'Unknown Status')
@@ -342,7 +342,7 @@ def add_status(
         code_type: StatusType,
         description: str,
         end: Optional[int] = None,
-        command: Optional[dimse.DIMSEMessage] = None
+        command: Optional[Type[dimse.DIMSEMessage]] = None
     ) -> None:
     """Adds new status code to the global library dictionary of known statuses
 
@@ -354,7 +354,7 @@ def add_status(
     """
     status = _Status(code_type, description)
     if end is not None:
-        code_range = range(code, end + 1)
+        code_range = list(range(code, end + 1))
     else:
         code_range = [code]
 
@@ -372,7 +372,7 @@ class Status:
     This is a helper class that provides convenience methods for printing status codes.
     """
 
-    def __init__(self, value: int, command: Optional[dimse.DIMSEMessage] = None) -> None:
+    def __init__(self, value: int, command: Optional[Type[dimse.DIMSEMessage]] = None) -> None:
         """Initializes new Status.
 
         :param value status code
@@ -409,7 +409,7 @@ class Status:
 
 
 # pylint: disable=line-too-long
-KNOWN_STATUSES: List[Tuple[Union[int, Tuple[int, int]], StatusType, str, Optional[dimse.DIMSEMessage]]] = [
+KNOWN_STATUSES: list[tuple[Union[int, tuple[int, int]], StatusType, str, Optional[Type[dimse.DIMSEMessage]]]] = [
     (0x0000, 'Success', '', None),
     (0x0105, 'Failure', 'No Such Attribute', None),
     (0x0106, 'Failure', 'Invalid Attribute Value', None),

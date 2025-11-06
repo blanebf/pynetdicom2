@@ -30,7 +30,7 @@ The rest sub-items for User Data Information Item can be found at
 """
 import struct
 from io import BytesIO
-from typing import Dict, Iterable, List, Optional, Union
+from typing import ClassVar, Iterable, Optional, Type, Union
 
 from pydicom import uid
 
@@ -46,11 +46,12 @@ UserItem = Union[
     userdataitems.ScpScuRoleSelectionSubItem,
     userdataitems.SOPClassExtendedNegotiationSubItem,
     userdataitems.UserIdentityNegotiationSubItem,
-    userdataitems.UserIdentityNegotiationSubItemAc
+    userdataitems.UserIdentityNegotiationSubItemAc,
+    userdataitems.GenericUserDataSubItem
 ]
 
 
-SUB_ITEM_TYPES: Dict[int, UserItem] = {
+SUB_ITEM_TYPES: dict[int, Type[UserItem]] = {
     0x52: userdataitems.ImplementationClassUIDSubItem,
     0x51: userdataitems.MaximumLengthSubItem,
     0x55: userdataitems.ImplementationVersionNameSubItem,
@@ -62,7 +63,7 @@ SUB_ITEM_TYPES: Dict[int, UserItem] = {
 }
 
 
-def _next_type(stream: BytesIO) -> bytes:
+def _next_type(stream: BytesIO) -> Optional[int]:
     char = stream.read(1)
     if char == b'':
         return None  # we are at the end of the file
@@ -81,14 +82,14 @@ class AAssociatePDUBase:
     :ivar reserved2: reserved field, defaults 0
     :ivar reserved3: reserved field, defaults eight 0
     """
-    pdu_type = None
+    pdu_type: ClassVar[int]
     header = struct.Struct('>B B I H H 16s 16s 8I')
 
     def __init__(
             self,
             called_ae_title: str,
             calling_ae_title: str,
-            variable_items: List['VariableItems'],
+            variable_items: list['VariableItems'],
             protocol_version: int = 1,
             reserved1: int = 0x00,
             reserved2: int = 0x00,
@@ -101,7 +102,7 @@ class AAssociatePDUBase:
         self.reserved1 = reserved1  # unsigned byte
         self.reserved2 = reserved2  # unsigned short
         if not reserved3:  # 32 bytes
-            self.reserved3 = (0, 0, 0, 0, 0, 0, 0, 0)
+            self.reserved3: Iterable[int] = (0, 0, 0, 0, 0, 0, 0, 0)
         else:
             self.reserved3 = reserved3
 
@@ -302,7 +303,7 @@ class PDataTfPDU:
 
     def __init__(
             self,
-            data_value_items: List['PresentationDataValueItem'],
+            data_value_items: list['PresentationDataValueItem'],
             reserved: int = 0x00
         ) -> None:
         self.reserved = reserved  # unsigned byte
@@ -370,7 +371,7 @@ class AReleasePDUBase:
     :ivar reserved2: reserved field, defaults 0
     """
 
-    pdu_type = None
+    pdu_type: ClassVar[int]
     pdu_length = 4
     """Association Release PDUs have fixed length of 4 bytes"""
 
@@ -604,7 +605,7 @@ class PresentationContextItemRQ:
             self,
             context_id: int,
             abs_sub_item: 'AbstractSyntaxSubItem',
-            ts_sub_items: List['TransferSyntaxSubItem'],
+            ts_sub_items: list['TransferSyntaxSubItem'],
             reserved1: int = 0x00,
             reserved2: int = 0x00,
             reserved3: int = 0x00,
@@ -901,7 +902,7 @@ class UserInformationItem:
 
     def __init__(
             self,
-            user_data: List[Union[UserItem, userdataitems.GenericUserDataSubItem]],
+            user_data: list[Union[UserItem, userdataitems.GenericUserDataSubItem]],
             reserved: int = 0x00
         ) -> None:
         self.reserved = reserved  # unsigned byte
@@ -929,7 +930,9 @@ class UserInformationItem:
             + b''.join([data.encode() for data in self.user_data])
 
     @staticmethod
-    def sub_items(stream: BytesIO) -> Union[UserItem, userdataitems.GenericUserDataSubItem]:
+    def sub_items(
+        stream: BytesIO
+    ) -> Iterable[Union[UserItem, userdataitems.GenericUserDataSubItem]]:
         """Reads User Information sub-items from a data stream
 
         :param stream: raw data stream

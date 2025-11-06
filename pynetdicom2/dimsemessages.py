@@ -21,7 +21,7 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     should not worry about any kind of message validation.
 """
 import struct
-from typing import ClassVar, Dict, Iterable, List, Optional, Sequence, Tuple, IO, Union
+from typing import ClassVar, Iterator, Optional, Type, IO, Union
 
 from pydicom.dataset import Dataset
 
@@ -44,7 +44,7 @@ def value_or_none(elem):
     return elem.value if elem else None
 
 
-def chunks(seq: Sequence[bytes], size: int) -> Iterable[Tuple[bytes, bool]]:
+def chunks(seq: bytes, size: int) -> Iterator[tuple[bytes, bool]]:
     """Breaks a sequence of bytes into chunks of provided size
 
     :param seq: sequence of bytes
@@ -62,7 +62,7 @@ def fragment(
         max_pdu_length: int,
         normal: int,
         last: int
-    ) -> Iterable[Tuple[bytes, int]]:
+    ) -> Iterator[tuple[bytes, int]]:
     """Fragmets dataset byte stream into chunks
 
     :param data_set: dataset bytes stream
@@ -81,7 +81,7 @@ def fragment_file(
         max_pdu_length: int,
         normal: int,
         last: int
-    ) -> Iterable[Tuple[bytes, int]]:
+    ) -> Iterator[tuple[bytes, int]]:
     """Fragmets dataset from a file-like object into chunks
 
     :param f: file-like object
@@ -114,15 +114,6 @@ def dimse_property(tag):
     return property(lambda self: value_or_none(self.command_set.get(tag)), setter)
 
 
-class StatusMixin:  # pylint: disable=too-few-public-methods
-    """Helper mixin that defines common `status` property in provided
-    DIMSE message class.
-
-    This property is usually found in response messages.
-    """
-    status = dimse_property((0x0000, 0x0900))
-
-
 class PriorityMixin:  # pylint: disable=too-few-public-methods
     """Helper mixin that defines common `priority` property in provided
     DIMSE message class.
@@ -139,7 +130,7 @@ class DIMSEMessage:
     are used.
     """
     command_field: ClassVar[int]
-    command_fields: ClassVar[List[str]]
+    command_fields: ClassVar[list[str]]
 
     def __init__(self, command_set: Optional[Dataset] = None) -> None:
         self._data_set: Optional[Union[IO[bytes], bytes]] = None
@@ -165,7 +156,7 @@ class DIMSEMessage:
             self.command_set.CommandDataSetType = 0x0001
         self._data_set = value
 
-    def encode(self, pc_id: int, max_pdu_length: int) -> Iterable[pdu.PDataTfPDU]:
+    def encode(self, pc_id: int, max_pdu_length: int) -> Iterator[pdu.PDataTfPDU]:
         """Returns the encoded message as a series of P-DATA-TF PDU objects.
 
         :param pc_id: Presentation Context ID
@@ -219,6 +210,7 @@ class DIMSERequestMessage(DIMSEMessage):
 class DIMSEResponseMessage(DIMSEMessage):
     """Base class for all DIMSE response messages"""
     message_id_being_responded_to = dimse_property((0x0000, 0x0120))
+    status = dimse_property((0x0000, 0x0900))
 
 
 class CEchoRQMessage(DIMSERequestMessage):
@@ -236,7 +228,7 @@ class CEchoRQMessage(DIMSERequestMessage):
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID']
 
 
-class CEchoRSPMessage(DIMSEResponseMessage, StatusMixin):
+class CEchoRSPMessage(DIMSEResponseMessage):
     """C-ECHO-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.5.5 C-ECHO-RSP
@@ -286,7 +278,7 @@ class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
     """
 
 
-class CStoreRSPMessage(DIMSEResponseMessage, StatusMixin):
+class CStoreRSPMessage(DIMSEResponseMessage):
     """C-STORE-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.1.2 C-STORE-RSP
@@ -324,7 +316,7 @@ class CFindRQMessage(DIMSERequestMessage, PriorityMixin):
                       'Priority']
 
 
-class CFindRSPMessage(DIMSEResponseMessage, StatusMixin):
+class CFindRSPMessage(DIMSEResponseMessage):
     """C-FIND-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.2.2 C-FIND-RSP
@@ -356,7 +348,7 @@ class CGetRQMessage(DIMSERequestMessage, PriorityMixin):
                       'Priority']
 
 
-class CGetRSPMessage(DIMSEResponseMessage, StatusMixin):
+class CGetRSPMessage(DIMSEResponseMessage):
     """C-GET-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.3.2 C-GET-RSP
@@ -420,7 +412,7 @@ class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
     """
 
 
-class CMoveRSPMessage(DIMSEResponseMessage, StatusMixin):
+class CMoveRSPMessage(DIMSEResponseMessage):
     """C-MOVE-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.4.2 C-MOVE-RSP
@@ -506,7 +498,7 @@ class NEventReportRQMessage(DIMSERequestMessage):
     """
 
 
-class NEventReportRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NEventReportRSPMessage(DIMSEResponseMessage):
     """N-EVENT-REPORT-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.1.2 N-EVENT-REPORT-RSP
@@ -562,7 +554,7 @@ class NGetRQMessage(DIMSERequestMessage):
     """
 
 
-class NGetRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NGetRSPMessage(DIMSEResponseMessage):
     """N-GET-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.2.2 N-GET-RSP
@@ -606,7 +598,7 @@ class NSetRQMessage(DIMSERequestMessage):
     """
 
 
-class NSetRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NSetRSPMessage(DIMSEResponseMessage):
     """N-SET-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.3.2 N-SET-RSP
@@ -657,7 +649,7 @@ class NActionRQMessage(DIMSERequestMessage):
     """
 
 
-class NActionRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NActionRSPMessage(DIMSEResponseMessage):
     """N-ACTION-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.4.2 N-ACTION-RSP
@@ -709,7 +701,7 @@ class NCreateRQMessage(DIMSERequestMessage):
     """
 
 
-class NCreateRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NCreateRSPMessage(DIMSEResponseMessage):
     """N-CREATE-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.5.2 N-CREATE-RSP
@@ -756,7 +748,7 @@ class NDeleteRQMessage(DIMSERequestMessage):
     """
 
 
-class NDeleteRSPMessage(DIMSEResponseMessage, StatusMixin):
+class NDeleteRSPMessage(DIMSEResponseMessage):
     """N-DELETE-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 10.3.6.2 N-DELETE-RSP
@@ -780,7 +772,7 @@ class NDeleteRSPMessage(DIMSEResponseMessage, StatusMixin):
     """
 
 
-MESSAGE_TYPE: Dict[int, DIMSEMessage] = {
+MESSAGE_TYPE: dict[int, Type[DIMSEMessage]] = {
     0x0001: CStoreRQMessage,
     0x8001: CStoreRSPMessage,
     0x0020: CFindRQMessage,

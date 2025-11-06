@@ -44,8 +44,12 @@ Arguments have similar meaning to SCP role implementation. First two mandatory
 arguments are provided by association and the rest are expected from service
 user.
 """
+from typing import IO, Any, Iterable, Union, cast, overload
 import pydicom
 from pydicom import filereader
+from pydicom import uid
+
+from pynetdicom2 import asceprovider
 
 from . import dsutils
 from . import exceptions
@@ -54,19 +58,34 @@ from . import statuses
 from .uids import *  # pylint: disable=wildcard-import,unused-wildcard-import
 
 
-def sop_classes(uids):
+def sop_classes(uids: list[uid.UID]):
     """Simple decorator that adds or extends ``sop_classes`` attribute
     with provided list of UIDs.
     """
+    @overload
+    def augment(
+            service: asceprovider.SCPService
+    ) -> asceprovider.SCPServiceWithSOPClass:
+        ...
+
+    @overload
+    def augment(
+            service: asceprovider.SCUService
+    ) -> asceprovider.SCUServiceWithSOPClass:
+        ...
+
     def augment(service):
         if not hasattr(service, 'sop_classes'):
             service.sop_classes = []
         service.sop_classes.extend(uids)
+        service.store_in_file = False
         return service
     return augment
 
 
-def store_in_file(service):
+def store_in_file(
+        service: asceprovider.SCPServiceWithSOPClass
+) -> asceprovider.SCPServiceWithSOPClass:
     """Sets ``store_in_file`` attribute to ``True``"""
     service.store_in_file = True
     return service
@@ -77,7 +96,7 @@ class MessageDispatcher:  # pylint: disable=too-few-public-methods
 
     Class provides method for selecting method based on incoming message type.
     """
-    message_to_method = {
+    message_to_method: dict[int, str] = {
         0x0001: 'c_store',
         0x0020: 'c_find',
         0x0010: 'c_get',
@@ -91,7 +110,7 @@ class MessageDispatcher:  # pylint: disable=too-few-public-methods
         0x0150: 'n_delete',
     }
 
-    def get_method(self, msg):
+    def get_method(self, msg: dimsemessages.DIMSEMessage):
         """Gets object's method based on incoming message type
 
         :param msg: incoming message
@@ -113,7 +132,14 @@ class MessageDispatcherSCU(MessageDispatcher):
     When object instance is called with specific message method type appropriate
     method is selected and all arguments are forwarded to it.
     """
-    def __call__(self, asce, ctx, msg, *args, **kwargs):
+    def __call__(
+            self,
+            asce: asceprovider.AssociationRequester,
+            ctx: asceprovider.PContextDef,
+            msg: dimsemessages.DIMSERequestMessage,
+            *args: Any,
+            **kwargs: Any
+    ) -> Any:
         method = self.get_method(msg)
         return method(asce, ctx, msg, *args, **kwargs)
 
@@ -123,13 +149,22 @@ class MessageDispatcherSCP(MessageDispatcher):
 
     Object dispatches incoming message to appropriate method.
     """
-    def __call__(self, asce, ctx, msg):
+    def __call__(
+            self,
+            asce: asceprovider.AssociationAcceptor,
+            ctx: asceprovider.PContextDef,
+            msg: dimsemessages.DIMSERequestMessage
+    ) -> None:
         method = self.get_method(msg)
         return method(asce, ctx, msg)
 
 
 @sop_classes([VERIFICATION_SOP_CLASS])
-def verification_scu(asce, ctx, msg_id):
+def verification_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        msg_id: int
+) -> statuses.Status:
     """Sends verification request and returns it's status result
 
     :param msg_id: message ID
@@ -143,11 +178,17 @@ def verification_scu(asce, ctx, msg_id):
     asce.send(c_echo, ctx.id)
 
     response, msg_id = asce.receive()
+    if not isinstance(response, dimsemessages.CEchoRSPMessage):
+        raise exceptions.NetDICOMError(f'Unexpected message type: {response}')
     return statuses.Status(response.status, dimsemessages.CEchoRSPMessage)
 
 
 @sop_classes([VERIFICATION_SOP_CLASS])
-def verification_scp(asce, ctx, msg):
+def verification_scp(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        msg: dimsemessages.DIMSERequestMessage
+) -> None:
     """Process received C-ECHO.
 
     Method delegates actual handling of C-ECHO to AE instance by calling
@@ -167,7 +208,12 @@ def verification_scp(asce, ctx, msg):
 
 
 @sop_classes([])
-def storage_scu(asce, ctx, dataset, msg_id):
+def storage_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        dataset: Union[str, pydicom.Dataset],
+        msg_id: int
+) -> statuses.Status:
     """Simple storage SCU role implementation.
 
     This implementation provides *no* SOP Class UIDs. When adding this SCU you should provide
@@ -180,7 +226,7 @@ def storage_scu(asce, ctx, dataset, msg_id):
     c_store = dimsemessages.CStoreRQMessage()
     c_store.message_id = msg_id
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
-    c_store.move_originator_aet = asce.ae.local_ae['aet']
+    c_store.move_originator_aet = asce.ae.local_ae.aet
     c_store.move_originator_message_id = msg_id
 
     if isinstance(dataset, str):
@@ -210,20 +256,28 @@ def storage_scu(asce, ctx, dataset, msg_id):
         # Assume it's dataset object
         c_store.sop_class_uid = dataset.SOPClassUID
         c_store.affected_sop_instance_uid = dataset.SOPInstanceUID
-        ds = dsutils.encode(dataset, ctx.supported_ts.is_implicit_VR,
-                            ctx.supported_ts.is_little_endian)
-        c_store.data_set = ds
+        buff = dsutils.encode(
+            dataset, ctx.supported_ts.is_implicit_VR,
+            ctx.supported_ts.is_little_endian
+        )
+        c_store.data_set = buff
         # send c_store request
         asce.send(c_store, ctx.id)
 
     # wait for c-store response
     response, _ = asce.receive()
+    if not isinstance(response, dimsemessages.CStoreRSPMessage):
+        raise exceptions.NetDICOMError(f'Unexpected message type: {response}')
     return statuses.Status(response.status, dimsemessages.CStoreRSPMessage)
 
 
 @store_in_file
 @sop_classes(STORAGE_SOP_CLASSES)
-def storage_scp(asce, ctx, msg):
+def storage_scp(
+        asce: asceprovider.AssociationAcceptor,
+        ctx: asceprovider.PContextDef,
+        msg: dimsemessages.CStoreRQMessage
+) -> None:
     """Storage SCP role implementation.
 
     Service simple passes file object from received message to
@@ -238,7 +292,7 @@ def storage_scp(asce, ctx, msg):
     except exceptions.EventHandlingError:
         status = statuses.C_STORE_CANNON_UNDERSTAND
     finally:
-        if msg.data_set:
+        if msg.data_set and hasattr(msg.data_set, 'close'):
             msg.data_set.close()
     # make response
     rsp = dimsemessages.CStoreRSPMessage()
@@ -250,11 +304,15 @@ def storage_scp(asce, ctx, msg):
 
 
 FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS]
-                    #PATIENT_STUDY_ONLY_FIND_SOP_CLASS
 
 
 @sop_classes(FIND_SOP_CLASSES)
-def qr_find_scu(asce, ctx, ds, msg_id):
+def qr_find_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        ds: pydicom.Dataset,
+        msg_id: int
+) -> Iterable[tuple[pydicom.Dataset, statuses.Status]]:
     """Query/Retrieve find service user role implementation.
 
     SCU is implemented as generator that yields responses (dataset and status)
@@ -269,18 +327,22 @@ def qr_find_scu(asce, ctx, ds, msg_id):
     c_find.message_id = msg_id
     c_find.sop_class_uid = ctx.sop_class
     c_find.priority = dimsemessages.PRIORITY_MEDIUM
-    c_find.data_set = dsutils.encode(ds,
-                                     ctx.supported_ts.is_implicit_VR,
-                                     ctx.supported_ts.is_little_endian)
+    c_find.data_set = dsutils.encode(
+        ds, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+    )
 
     # send c-find request
     asce.send(c_find, ctx.id)
     while True:
         response, _ = asce.receive()
+        if not isinstance(response, dimsemessages.CFindRSPMessage):
+            raise exceptions.NetDICOMError(f'Unexpected message type: {response}')
+
         if response.data_set:
-            data_set = dsutils.decode(response.data_set,
-                                      ctx.supported_ts.is_implicit_VR,
-                                      ctx.supported_ts.is_little_endian)
+            data_set = dsutils.decode(
+                cast(bytes, response.data_set), ctx.supported_ts.is_implicit_VR,
+                ctx.supported_ts.is_little_endian
+            )
         else:
             data_set = None
         status = statuses.Status(response.status, dimsemessages.CFindRSPMessage)
@@ -290,7 +352,11 @@ def qr_find_scu(asce, ctx, ds, msg_id):
 
 
 @sop_classes(FIND_SOP_CLASSES)
-def qr_find_scp(asce, ctx, msg):
+def qr_find_scp(
+        asce: asceprovider.AssociationAcceptor,
+        ctx: asceprovider.PContextDef,
+        msg: dimsemessages.CFindRQMessage
+) -> None:
     """Query/Retrieve find SCP role implementation.
 
     Service calls `on_receive_find` from AE with received C-FIND parameters
@@ -299,8 +365,13 @@ def qr_find_scp(asce, ctx, msg):
 
     :param msg: received C-FIND message
     """
-    ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
-                        ctx.supported_ts.is_little_endian)
+    if not msg.data_set:
+        raise exceptions.NetDICOMError('C-FIND-RQ should contain a dataset')
+
+    ds = dsutils.decode(
+        cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+        ctx.supported_ts.is_little_endian
+    )
 
     # make response
     rsp = dimsemessages.CFindRSPMessage()
@@ -310,9 +381,9 @@ def qr_find_scp(asce, ctx, msg):
     gen = asce.ae.on_receive_find(ctx, ds)
     for data_set, status in gen:
         rsp.status = int(status)
-        rsp.data_set = dsutils.encode(data_set,
-                                      ctx.supported_ts.is_implicit_VR,
-                                      ctx.supported_ts.is_little_endian)
+        rsp.data_set = dsutils.encode(
+            data_set, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+        )
         asce.send(rsp, ctx.id)
 
     rsp = dimsemessages.CFindRSPMessage()
@@ -327,7 +398,12 @@ GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
 
 
 @sop_classes(GET_SOP_CLASSES)
-def qr_get_scu(asce, ctx, ds, msg_id):
+def qr_get_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        ds: pydicom.Dataset,
+        msg_id: int
+) -> Iterable[tuple[asceprovider.PContextDef, Union[pydicom.Dataset, IO[bytes]]]]:
     """Query/Retrieve C-GET service implementation.
 
     C-GET service is probably one of the most trickiest service to use.
@@ -345,28 +421,31 @@ def qr_get_scu(asce, ctx, ds, msg_id):
     :param ds: dataset that contains request parameters.
     :param msg_id: message ID
     """
-    def decode_ds(_ds):
-        return dsutils.decode(_ds, ctx.supported_ts.is_implicit_VR,
-                              ctx.supported_ts.is_little_endian)
+    def decode_ds(_ds: bytes) -> pydicom.Dataset:
+        return dsutils.decode(
+            _ds, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+        )
 
     c_get = dimsemessages.CGetRQMessage()
     c_get.message_id = msg_id
     c_get.sop_class_uid = ctx.sop_class
     c_get.priority = dimsemessages.PRIORITY_MEDIUM
-    c_get.data_set = dsutils.encode(ds,
-                                    ctx.supported_ts.is_implicit_VR,
-                                    ctx.supported_ts.is_little_endian)
+    c_get.data_set = dsutils.encode(
+        ds, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+    )
 
     asce.send(c_get, ctx.id)
     while True:
         # receive c-store
         msg, pc_id = asce.receive()
         if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
+            msg = cast(dimsemessages.CGetRSPMessage, msg)
             if statuses.Status(msg.status, dimsemessages.CGetRSPMessage).is_pending:
                 pass  # pending. intermediate C-GET response
             else:
                 break  # last answer
         elif msg.command_field == dimsemessages.CStoreRQMessage.command_field:
+            msg = cast(dimsemessages.CStoreRQMessage, msg)
             store_ctx = asce.ae.context_def_list[pc_id]
             in_file = store_ctx.sop_class in asce.ae.store_in_file
 
@@ -377,12 +456,12 @@ def qr_get_scu(asce, ctx, ds, msg_id):
 
             try:
                 status = asce.ae.on_receive_store(ctx, msg.data_set)
-                yield ctx, msg.data_set if in_file else decode_ds(msg.data_set)
+                yield ctx, msg.data_set if in_file else decode_ds(cast(bytes, msg.data_set))
             except exceptions.EventHandlingError:
                 status = statuses.C_GET_UNABLE_TO_PROCESS
             finally:
                 if in_file and msg.data_set:
-                    msg.data_set.close()
+                    cast(IO[bytes], msg.data_set).close()
 
             rsp.status = int(status)
             asce.send(rsp, pc_id)
@@ -393,7 +472,13 @@ MOVE_SOP_CLASSES = [PATIENT_ROOT_MOVE_SOP_CLASS, STUDY_ROOT_MOVE_SOP_CLASS,
 
 
 @sop_classes(MOVE_SOP_CLASSES)
-def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
+def qr_move_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        ds: pydicom.Dataset,
+        dest_ae: str,
+        msg_id: int
+) -> Iterable[tuple[statuses.Status, dimsemessages.CMoveRSPMessage]]:
     """Query/Retrieve C-MOVE service implementation.
 
     Service is pretty simple to use. All you have to do is provide C-MOVE
@@ -410,14 +495,17 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
     c_move.sop_class_uid = ctx.sop_class
     c_move.move_destination = dest_ae
     c_move.priority = dimsemessages.PRIORITY_MEDIUM
-    c_move.data_set = dsutils.encode(ds,
-                                     ctx.supported_ts.is_implicit_VR,
-                                     ctx.supported_ts.is_little_endian)
+    c_move.data_set = dsutils.encode(
+        ds, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+    )
     asce.send(c_move, ctx.id)
 
     while True:
         # wait for c-move responses
         response, _ = asce.receive()
+        if not isinstance(response, dimsemessages.CMoveRSPMessage):
+            raise exceptions.NetDICOMError(f'Unexpected message type: {response}')
+
         status = statuses.Status(response.status, dimsemessages.CMoveRSPMessage)
         yield status, response
         if not status.is_pending:
@@ -425,7 +513,11 @@ def qr_move_scu(asce, ctx, ds, dest_ae, msg_id):
 
 
 @sop_classes(MOVE_SOP_CLASSES)
-def qr_move_scp(asce, ctx, msg):
+def qr_move_scp(
+        asce: asceprovider.AssociationAcceptor,
+        ctx: asceprovider.PContextDef,
+        msg: dimsemessages.CMoveRQMessage
+) -> None:
     """Query/Retrieve C-MOVE service implementation.
 
     Service call `on_receive_move` on AE instance with current presentation context,
@@ -437,8 +529,13 @@ def qr_move_scp(asce, ctx, msg):
     :param ctx: presentation context
     :param msg: received C-MOVE message
     """
-    ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
-                        ctx.supported_ts.is_little_endian)
+    if not msg.data_set:
+        raise exceptions.NetDICOMError('C-MOVE-RQ should contain a dataset')
+
+    ds = dsutils.decode(
+        cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+        ctx.supported_ts.is_little_endian
+    )
 
     # make response
     rsp = dimsemessages.CMoveRSPMessage()
@@ -450,13 +547,13 @@ def qr_move_scp(asce, ctx, msg):
         _send_response(asce, ctx, msg, 0, 0, 0, 0)
 
     with asce.ae.request_association(remote_ae) as assoc:
-        failed = 0
-        warning = 0
-        completed = 0
+        failed: int = 0
+        warning: int = 0
+        completed: int = 0
         for data_set in gen:
             # request an association with destination send C-STORE
             service = assoc.get_scu(data_set.SOPClassUID)
-            status = service(data_set, completed)
+            status = cast(statuses.Status, service(data_set, completed))
             if status.is_failure:
                 failed += 1
             if status.is_warning:
@@ -473,7 +570,15 @@ def qr_move_scp(asce, ctx, msg):
         _send_response(asce, ctx, msg, nop, failed, warning, completed)
 
 
-def _send_response(asce, ctx, msg, nop, failed, warning, completed):
+def _send_response(
+        asce: asceprovider.AssociationAcceptor,
+        ctx: asceprovider.PContextDef,
+        msg: dimsemessages.CMoveRQMessage,
+        nop: int,
+        failed: int,
+        warning: int,
+        completed: int
+) -> None:
     rsp = dimsemessages.CMoveRSPMessage()
     rsp.message_id_being_responded_to = msg.message_id
     rsp.sop_class_uid = msg.sop_class_uid
@@ -486,7 +591,12 @@ def _send_response(asce, ctx, msg, nop, failed, warning, completed):
 
 
 @sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
-def modality_work_list_scu(asce, ctx, ds, msg_id):
+def modality_work_list_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        ds: pydicom.Dataset,
+        msg_id: int
+) -> Iterable[tuple[statuses.Status, pydicom.Dataset]]:
     """Modality WorkList service implementation (SCU).
 
     Pretty much the same as Query/Retrieve C-FIND
@@ -502,7 +612,11 @@ def modality_work_list_scu(asce, ctx, ds, msg_id):
 
 
 @sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
-def modality_work_list_scp(asce, ctx, msg):
+def modality_work_list_scp(
+        asce: asceprovider.AssociationAcceptor,
+        ctx: asceprovider.PContextDef,
+        msg: pydicom.Dataset
+) -> None:
     """Modality WorkList service implementation (SCP).
 
     Pretty much the same as Query/Retrieve C-FIND
@@ -532,7 +646,11 @@ class StorageCommitment(MessageDispatcherSCP):
     DUPLICATE_TRANSACTION_UID = 0x0131
 
     @staticmethod
-    def n_event_report(asce, ctx, msg):
+    def n_event_report(
+            asce: asceprovider.AssociationAcceptor,
+            ctx: asceprovider.PContextDef,
+            msg: dimsemessages.NEventReportRQMessage
+    ) -> None:
         """N-EVENT-REPORT message handler
 
         On incoming N-EVENT-REPORT-RQ message service calls `on_commitment_response` on the AE
@@ -549,19 +667,27 @@ class StorageCommitment(MessageDispatcherSCP):
         rsp.event_type_id = msg.event_type_id
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
 
-        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
-                            ctx.supported_ts.is_little_endian)
+        if not msg.data_set:
+            raise exceptions.NetDICOMError('N-EVENT-REPORT-RQ should contain a dataset')
+
+        ds = dsutils.decode(
+            cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+            ctx.supported_ts.is_little_endian
+        )
         transaction_uid = ds.TransactionUID
         if hasattr(ds, 'ReferencedSOPSequence'):
-            success = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
-                       for item in ds.ReferencedSOPSequence)
+            success: Iterable[tuple[uid.UID, uid.UID]] = (
+                (item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
+                for item in ds.ReferencedSOPSequence
+            )
         else:
             success = []
 
         if hasattr(ds, 'FailedSOPSequence'):
-            failure = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID,
-                        item.FailureReason)
-                       for item in ds.FailedSOPSequence)
+            failure: Iterable[tuple[uid.UID, uid.UID, int]] = (
+                (item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID, item.FailureReason)
+                for item in ds.FailedSOPSequence
+            )
         else:
             failure = []
         try:
@@ -572,7 +698,11 @@ class StorageCommitment(MessageDispatcherSCP):
             asce.send(rsp, ctx.id)
 
     @staticmethod
-    def n_action(asce, ctx, msg):
+    def n_action(
+            asce: asceprovider.AssociationAcceptor,
+            ctx: asceprovider.PContextDef,
+            msg: dimsemessages.NActionRQMessage
+    ) -> None:
         """N-ACTION message handler.
 
         On incoming N-ACTION message service call `on_commitment_request` on the AE instance
@@ -586,14 +716,19 @@ class StorageCommitment(MessageDispatcherSCP):
         :param ctx: presentation context
         :param msg: incoming N-ACTION message
         """
+        if not msg.data_set:
+            raise exceptions.NetDICOMError('N-ACTION-RQ should contain a dataset')
+
         instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
         rsp = dimsemessages.NActionRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.action_type_id = 1
         rsp.sop_class_uid = ctx.sop_class
         rsp.affected_sop_instance_uid = instance_uid
-        ds = dsutils.decode(msg.data_set, ctx.supported_ts.is_implicit_VR,
-                            ctx.supported_ts.is_little_endian)
+        ds = dsutils.decode(
+            cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+            ctx.supported_ts.is_little_endian
+        )
         uids = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
                 for item in ds.ReferencedSOPSequence)
         try:
@@ -613,7 +748,7 @@ class StorageCommitment(MessageDispatcherSCP):
             report_ds = pydicom.Dataset()
             report_ds.TransactionUID = ds.TransactionUID
             if success:
-                seq = []
+                seq: list[pydicom.Dataset] = []
                 for sop_class_uid, sop_instance_uid in success:
                     ref = pydicom.Dataset()
                     ref.ReferencedSOPClassUID = sop_class_uid
@@ -641,7 +776,13 @@ class StorageCommitment(MessageDispatcherSCP):
 
 
 @sop_classes([STORAGE_COMMITMENT_SOP_CLASS])
-def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
+def storage_commitment_scu(
+        asce: asceprovider.AssociationRequester,
+        ctx: asceprovider.PContextDef,
+        transaction_uid: uid.UID,
+        uids,
+        msg_id: int
+    ):
     """Storage Commitment service implementation (SCU)
 
     :param asce: active association
@@ -660,7 +801,7 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
 
     ds = pydicom.Dataset()
     ds.TransactionUID = transaction_uid
-    seq = []
+    seq: list[pydicom.Dataset] = []
     for sop_class_uid, sop_instance_uid in uids:
         ref = pydicom.Dataset()
         ref.ReferencedSOPClassUID = sop_class_uid
@@ -675,4 +816,7 @@ def storage_commitment_scu(asce, ctx, transaction_uid, uids, msg_id):
     asce.send(request, ctx.id)
 
     rsp, _ = asce.receive()
+    if not isinstance(rsp, dimsemessages.NActionRSPMessage):
+        raise exceptions.NetDICOMError(f'Unexpected message type: {rsp}')
+
     return statuses.Status(rsp.status, dimsemessages.NActionRSPMessage)
