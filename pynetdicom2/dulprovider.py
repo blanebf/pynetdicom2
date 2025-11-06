@@ -129,7 +129,10 @@ class DULServiceProvider(threading.Thread):
     def accepted_contexts(self, value) -> None:
         self.state_machine.accepted_contexts = value
 
-    def send(self, primitive: Union[Iterator[pdu.PDataTfPDU], fsm.PDUType]) -> None:
+    def send(
+            self,
+            primitive: Union[Iterator[pdu.PDataTfPDU], fsm.PDUType]
+    ) -> None:
         """Puts PDU into outgoing queue.
 
         .. note::
@@ -141,7 +144,10 @@ class DULServiceProvider(threading.Thread):
         """
         self.from_service_user.put(primitive)
 
-    def receive(self, timeout: float) -> Union[tuple[dimsemessages.DIMSEMessage, int], fsm.ASCEType]:
+    def receive(
+            self,
+            timeout: float
+    ) -> Union[tuple[dimsemessages.DIMSEMessage, int], fsm.ASCEType]:
         """Tries to get PDU from incoming queue.
 
         If timeout is exceeded method

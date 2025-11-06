@@ -406,6 +406,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ae_2(self) -> States:
         """Send A_ASSOCIATE-RQ PDU."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_5
 
@@ -442,17 +444,23 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ae_7(self) -> States:
         """Send A-ASSOCIATE-AC PDU."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_6
 
     def ae_8(self) -> States:
         """Send A-ASSOCIATE-RJ PDU."""
         # not sure about this ...
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
     def dt_1(self) -> States:
         """Send P-DATA-TF PDU."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         self.primitive = None
         return States.STA_6
@@ -517,6 +525,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ar_7(self) -> States:
         """Issue P-DATA-TF PDU."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_8
 
@@ -542,6 +552,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """Send A-ABORT PDU (service-user source) and start (or restart)
         ARTIM timer.
         """
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         self.timer.restart()
         return States.STA_13
@@ -588,6 +600,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def aa_7(self) -> States:
         """Send A-ABORT PDU."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.dul_socket.sendall(self.primitive.encode())
         return States.STA_13
 
