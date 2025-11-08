@@ -1,8 +1,14 @@
-from typing import Any, cast
+from typing import Callable, Iterable, Optional, cast
 
-from pydicom import filereader
+from pydicom import dataset, filereader
 
 from . import applicationentity, asceprovider, sopclass, statuses, uids
+
+
+BoundFind = Callable[
+    [dataset.Dataset, int],
+    Iterable[tuple[Optional[dataset.Dataset], statuses.Status]]
+]
 
 
 def verify(local_aet: str, remote_ae: asceprovider.RemoteAEConfig) -> bool:
@@ -14,11 +20,17 @@ def verify(local_aet: str, remote_ae: asceprovider.RemoteAEConfig) -> bool:
         return result.is_success
 
 
-def find(local_aet, remote_ae, level, request, root=uids.STUDY_ROOT_FIND_SOP_CLASS):
+def find(
+        local_aet: str,
+        remote_ae: asceprovider.RemoteAEConfig,
+        request: dataset.Dataset,
+        root=uids.STUDY_ROOT_FIND_SOP_CLASS
+) -> Iterable[tuple[Optional[dataset.Dataset], statuses.Status]]:
     ae = applicationentity.ClientAE(local_aet)
     ae.add_scu(sopclass.qr_find_scu)
     with ae.request_association(remote_ae) as assoc:
-        service = assoc.get_scu(root)
+        service = cast(BoundFind, assoc.get_scu(root))
+        yield from service(request, 1)
 
 
 def store(
@@ -37,9 +49,9 @@ def store(
         return result.is_success
 
 
-def get(local_aet, remote_ae, level, request, root=uids.STUDY_ROOT_GET_SOP_CLASS):
+def get(local_aet, remote_ae, request, root=uids.STUDY_ROOT_GET_SOP_CLASS):
     pass
 
 
-def move(local_aet, remote_ae, level, request, root=uids.STUDY_ROOT_MOVE_SOP_CLASS):
+def move(local_aet, remote_ae, request, root=uids.STUDY_ROOT_MOVE_SOP_CLASS):
     pass
