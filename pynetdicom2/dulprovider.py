@@ -80,7 +80,7 @@ class DULServiceProvider(threading.Thread):
     def __init__(
             self,
             store_in_file: set[uid.UID],
-            get_file_cb,
+            get_file_cb: fsm.GetFileCB,
             dul_socket: Optional[socket.socket] = None,
             max_pdu_length: int = 65536
     ) -> None:
@@ -108,7 +108,9 @@ class DULServiceProvider(threading.Thread):
 
         # Setup the timer and finite state machines
         self.timer = fsm.Timer(10)
-        self.state_machine = fsm.StateMachine(self, self.timer, store_in_file, get_file_cb)
+        self.state_machine = fsm.StateMachine(
+            self, self.timer, store_in_file, get_file_cb
+        )
         self._is_killed = threading.Event()
 
         if dul_socket:  # A client socket has been given. Generate an event 5
@@ -121,12 +123,12 @@ class DULServiceProvider(threading.Thread):
         self.start()
 
     @property
-    def accepted_contexts(self):
+    def accepted_contexts(self) -> dict[int, fsm.PContextDef]:
         """Accepted presentation contexts in the current association"""
         return self.state_machine.accepted_contexts
 
     @accepted_contexts.setter
-    def accepted_contexts(self, value) -> None:
+    def accepted_contexts(self, value: dict[int, fsm.PContextDef]) -> None:
         self.state_machine.accepted_contexts = value
 
     def send(

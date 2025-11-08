@@ -9,12 +9,13 @@ Implementation of the OSI Upper Layer Services
 DICOM, Part 8, Section 7
 """
 from collections.abc import Iterator
+import dataclasses
 import enum
 import socket
 import time
 import queue
 
-from typing import Optional, Protocol, Callable, Union
+from typing import BinaryIO, Optional, Protocol, Callable, Union
 
 import pydicom
 import pydicom.uid
@@ -23,6 +24,16 @@ from . import dimsemessages
 from . import dsutils
 from . import exceptions
 from . import pdu
+
+
+@dataclasses.dataclass(frozen=True)
+class PContextDef:
+    id: int
+    sop_class: pydicom.uid.UID
+    supported_ts: pydicom.uid.UID
+
+
+GetFileCB = Callable[[PContextDef, pydicom.Dataset], tuple[BinaryIO, int]]
 
 
 class States(enum.Enum):
@@ -215,14 +226,14 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             provider: ProviderProto,
             timer: Timer,
             store_in_file: set[pydicom.uid.UID],
-            get_file_cb
+            get_file_cb: GetFileCB
     ) -> None:
         self.current_state: States = States.STA_1
         self.provider: ProviderProto = provider
         self.timer: Timer = timer
         self.store_in_file: set[pydicom.uid.UID] = store_in_file
         self.get_file_cb = get_file_cb
-        self.accepted_contexts = {}
+        self.accepted_contexts: dict[int, PContextDef] = {}
 
         self.dimse_decoder: Optional[DIMSEDecoder] = None
 
@@ -513,7 +524,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """Issue P-DATA indication."""
         if self.dimse_decoder is None:
             self.dimse_decoder = DIMSEDecoder(
-                self.accepted_contexts, self.store_in_file,
+                self.accepted_contexts,
+                self.store_in_file,
                 self.get_file_cb
             )
         self.dimse_decoder.process(self.primitive)
@@ -635,9 +647,9 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
     """
     def __init__(
             self,
-            accepted_contexts,
+            accepted_contexts: dict[int, PContextDef],
             store_in_file: set[pydicom.uid.UID],
-            get_file_cb
+            get_file_cb: GetFileCB
     ) -> None:
         """Initializes DIMSEDecoder instance
 
@@ -660,7 +672,7 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
 
         self._encoded_command_set: list[bytes] = []
         self._encoded_data_set: list[bytes] = []
-        self._dataset_fp = None
+        self._dataset_fp: Optional[BinaryIO] = None
         self._start: int = 0
 
     def process(self, p_data: pdu.PDataTfPDU) -> None:
@@ -711,7 +723,7 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
                 self._dataset_fp.close()
             raise
 
-        if self.data_set_received:
+        if self.data_set_received and self.msg:
             if self._dataset_fp:
                 self._dataset_fp.seek(self._start)
                 self.msg.data_set = self._dataset_fp

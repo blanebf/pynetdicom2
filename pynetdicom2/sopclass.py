@@ -30,7 +30,7 @@ Each SCP role implementation must conform to the following interface::
 The arguments have the following meaning:
     * ``asce`` - ``asceprovider.Association`` object. Can be used to send and
       receive DIMSE messages, and get access to the Application Entity instance.
-    * ``ctx`` - presentation context definition (``asceprovider.PContextDef``).
+    * ``ctx`` - presentation context definition (``fsm.PContextDef``).
       contains context ID for current association, SOP Class UID and selected
       transfer syntax.
     * ``msg`` - received DIMSE message.
@@ -51,7 +51,7 @@ from pydicom import uid
 
 from pynetdicom2 import asceprovider
 
-from . import dimsemessages, dsutils, exceptions, statuses, uids
+from . import dimsemessages, dsutils, exceptions, fsm, statuses, uids
 
 
 def sop_classes(uids: list[uid.UID]):
@@ -131,7 +131,7 @@ class MessageDispatcherSCU(MessageDispatcher):
     def __call__(
             self,
             asce: asceprovider.AssociationRequester,
-            ctx: asceprovider.PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.DIMSERequestMessage,
             *args: Any,
             **kwargs: Any
@@ -148,7 +148,7 @@ class MessageDispatcherSCP(MessageDispatcher):
     def __call__(
             self,
             asce: asceprovider.AssociationAcceptor,
-            ctx: asceprovider.PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.DIMSERequestMessage
     ) -> None:
         method = self.get_method(msg)
@@ -158,7 +158,7 @@ class MessageDispatcherSCP(MessageDispatcher):
 @sop_classes([uids.VERIFICATION_SOP_CLASS])
 def verification_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg_id: int
 ) -> statuses.Status:
     """Sends verification request and returns it's status result
@@ -182,7 +182,7 @@ def verification_scu(
 @sop_classes([uids.VERIFICATION_SOP_CLASS])
 def verification_scp(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: dimsemessages.DIMSERequestMessage
 ) -> None:
     """Process received C-ECHO.
@@ -206,7 +206,7 @@ def verification_scp(
 @sop_classes([])
 def storage_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         dataset: Union[str, pydicom.Dataset],
         msg_id: int
 ) -> statuses.Status:
@@ -271,7 +271,7 @@ def storage_scu(
 @sop_classes(uids.STORAGE_SOP_CLASSES)
 def storage_scp(
         asce: asceprovider.AssociationAcceptor,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: dimsemessages.CStoreRQMessage
 ) -> None:
     """Storage SCP role implementation.
@@ -310,7 +310,7 @@ FIND_SOP_CLASSES = [
 @sop_classes(FIND_SOP_CLASSES)
 def qr_find_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
 ) -> Iterable[tuple[Optional[pydicom.Dataset], statuses.Status]]:
@@ -356,7 +356,7 @@ def qr_find_scu(
 @sop_classes(FIND_SOP_CLASSES)
 def qr_find_scp(
         asce: asceprovider.AssociationAcceptor,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: dimsemessages.CFindRQMessage
 ) -> None:
     """Query/Retrieve find SCP role implementation.
@@ -408,10 +408,10 @@ GET_SOP_CLASSES = [
 @sop_classes(GET_SOP_CLASSES)
 def qr_get_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
-) -> Iterable[tuple[asceprovider.PContextDef, Union[pydicom.Dataset, BinaryIO]]]:
+) -> Iterable[tuple[fsm.PContextDef, Union[pydicom.Dataset, BinaryIO]]]:
     """Query/Retrieve C-GET service implementation.
 
     C-GET service is probably one of the most trickiest service to use.
@@ -490,7 +490,7 @@ MOVE_SOP_CLASSES = [
 @sop_classes(MOVE_SOP_CLASSES)
 def qr_move_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         ds: pydicom.Dataset,
         dest_ae: str,
         msg_id: int
@@ -531,7 +531,7 @@ def qr_move_scu(
 @sop_classes(MOVE_SOP_CLASSES)
 def qr_move_scp(
         asce: asceprovider.AssociationAcceptor,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: dimsemessages.CMoveRQMessage
 ) -> None:
     """Query/Retrieve C-MOVE service implementation.
@@ -588,7 +588,7 @@ def qr_move_scp(
 
 def _send_response(
         asce: asceprovider.AssociationAcceptor,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: dimsemessages.CMoveRQMessage,
         nop: int,
         failed: int,
@@ -609,7 +609,7 @@ def _send_response(
 @sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
 ) -> Iterable[tuple[statuses.Status, pydicom.Dataset]]:
@@ -629,7 +629,7 @@ def modality_work_list_scu(
 @sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scp(
         asce: asceprovider.AssociationAcceptor,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         msg: pydicom.Dataset
 ) -> None:
     """Modality WorkList service implementation (SCP).
@@ -663,7 +663,7 @@ class StorageCommitment(MessageDispatcherSCP):
     @staticmethod
     def n_event_report(
             asce: asceprovider.AssociationAcceptor,
-            ctx: asceprovider.PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.NEventReportRQMessage
     ) -> None:
         """N-EVENT-REPORT message handler
@@ -715,7 +715,7 @@ class StorageCommitment(MessageDispatcherSCP):
     @staticmethod
     def n_action(
             asce: asceprovider.AssociationAcceptor,
-            ctx: asceprovider.PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.NActionRQMessage
     ) -> None:
         """N-ACTION message handler.
@@ -793,7 +793,7 @@ class StorageCommitment(MessageDispatcherSCP):
 @sop_classes([uids.STORAGE_COMMITMENT_SOP_CLASS])
 def storage_commitment_scu(
         asce: asceprovider.AssociationRequester,
-        ctx: asceprovider.PContextDef,
+        ctx: fsm.PContextDef,
         transaction_uid: uid.UID,
         uids,
         msg_id: int

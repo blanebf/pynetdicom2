@@ -56,13 +56,6 @@ class RemoteAEConfig:
 
 
 @dataclasses.dataclass(frozen=True)
-class PContextDef:
-    id: int
-    sop_class: uid.UID
-    supported_ts: uid.UID
-
-
-@dataclasses.dataclass(frozen=True)
 class AETParams:
     address: str
     aet: str
@@ -84,7 +77,7 @@ class SCPServiceWithSOPClass(Protocol):
     def __call__(
             self,
             asce: 'AssociationAcceptor',
-            ctx: PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.DIMSERequestMessage
     ) -> None:
         ...
@@ -95,7 +88,7 @@ class SCPService(Protocol):
     def __call__(
             self,
             asce: 'AssociationAcceptor',
-            ctx: PContextDef,
+            ctx: fsm.PContextDef,
             msg: dimsemessages.DIMSERequestMessage
      ) -> None:
         ...
@@ -105,7 +98,7 @@ class SCUService(Protocol):
     def __call__(
             self,
             asce: 'AssociationRequester',
-            ctx: PContextDef,
+            ctx: fsm.PContextDef,
             *args: Any,
             **kwargs: Any
     ) -> Any:
@@ -120,7 +113,7 @@ class SCUServiceWithSOPClass(Protocol):
     def __call__(
             self,
             asce: 'AssociationRequester',
-            ctx: PContextDef,
+            ctx: fsm.PContextDef,
             *args: Any,
             **kwargs: Any
     ) -> Any:
@@ -157,7 +150,7 @@ class AEBaseProto(Protocol):
 
     def get_file(
             self,
-            context: PContextDef,
+            context: fsm.PContextDef,
             command_set: pydicom.Dataset
     ) -> tuple[BinaryIO,int]:
         ...
@@ -177,21 +170,24 @@ class AEBaseProto(Protocol):
     def on_association_response(self, response: pdu.AAssociateAcPDU) -> None:
         ...
 
-    def on_receive_echo(self, context: PContextDef) -> statuses.Status:
+    def on_receive_echo(self, context: fsm.PContextDef) -> statuses.Status:
         ...
 
     def on_receive_store(
-            self, context: PContextDef, ds: Union[BinaryIO, bytes]
+            self, context: fsm.PContextDef, ds: Union[BinaryIO, bytes]
         ) -> statuses.Status:
         ...
 
     def on_receive_find(
-            self, context: PContextDef, ds: pydicom.Dataset
+            self, context: fsm.PContextDef, ds: pydicom.Dataset
     ) -> Iterator[tuple[pydicom.Dataset, statuses.Status]]:
         ...
 
     def on_receive_move(
-            self, context: PContextDef, ds: pydicom.Dataset, destination: str
+            self,
+            context: fsm.PContextDef,
+            ds: pydicom.Dataset,
+            destination: str
      ) -> tuple[RemoteAEConfig, int, Iterator[pydicom.Dataset]]:
         ...
 
@@ -266,15 +262,13 @@ class Association:
         )
         self.association_established: bool = False
         self.max_pdu_length = max_pdu_length
-        self.accepted_contexts: dict[int, PContextDef] = {}
+        self.accepted_contexts: dict[int, fsm.PContextDef] = {}
 
     def send(self, dimse_msg: dimsemessages.DIMSEMessage, pc_id: int) -> None:
         """Sends DIMSE message
 
         :param dimse_msg: DIMSE message
-        :type dimse_msg: dimsemessages.DIMSEMessage
         :param pc_id: Presentation Context Definition
-        :type pc_id: PContextDef
         """
         dimse_msg.set_length()
         self.dul.send(dimse_msg.encode(pc_id, self.max_pdu_length))
@@ -419,7 +413,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
                     rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
                     ts_uid = uid.UID(ts.name)
                     self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop, ts_uid)
-                    self.accepted_contexts[pc_id] = PContextDef(pc_id, proposed_sop, ts_uid)
+                    self.accepted_contexts[pc_id] = fsm.PContextDef(pc_id, proposed_sop, ts_uid)
                     break
             else:  # Refuse sop class because of TS not supported
                 rsp.append(
@@ -476,7 +470,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
                     f'SOP Class {_uid} not supported as SCP'
                 ) from exc
             else:
-                service(self, PContextDef(pc_id, sop_class, ts), dimse_msg)
+                service(self, fsm.PContextDef(pc_id, sop_class, ts), dimse_msg)
 
 
 class AssociationRequester(Association):
@@ -539,7 +533,7 @@ class AssociationRequester(Association):
                 f'SOP Class {sop_class} not supported as SCU'
             ) from exc
         else:
-            return functools.partial(service, self, PContextDef(pc_id, sop_class, ts))
+            return functools.partial(service, self, fsm.PContextDef(pc_id, sop_class, ts))
 
     def abort(self, reason: int = 0) -> None:
         """Aborts association with specified reason
@@ -621,6 +615,6 @@ class AssociationRequester(Association):
             sop_class = self.context_def_list[ctx.context_id].sop_class
             ts_uid = uid.UID(ctx.ts_sub_item.name)
             self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
-            self.accepted_contexts[pc_id] = PContextDef(pc_id, sop_class, ts_uid)
+            self.accepted_contexts[pc_id] = fsm.PContextDef(pc_id, sop_class, ts_uid)
         self.dul.accepted_contexts = self.accepted_contexts
         return response
