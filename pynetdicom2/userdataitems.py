@@ -31,7 +31,7 @@ class MaximumLengthSubItem:
             maximum_length_received: int,
             reserved: int = 0x00,
             item_length: int = 0x0004
-        ) -> None:
+    ) -> None:
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.maximum_length_received = maximum_length_received  # unsigned int
@@ -86,7 +86,11 @@ class ImplementationClassUIDSubItem:
     item_type = 0x52
     header = struct.Struct('>B B H')
 
-    def __init__(self, implementation_class_uid: str, reserved: int = 0x00) -> None:
+    def __init__(
+            self,
+            implementation_class_uid: str,
+            reserved: int = 0x00
+    ) -> None:
         self.reserved = reserved  # unsigned byte
         self.implementation_class_uid = implementation_class_uid  # string
 
@@ -145,7 +149,11 @@ class ImplementationVersionNameSubItem:
     item_type = 0x55
     header = struct.Struct('> B B H')
 
-    def __init__(self, implementation_version_name: str, reserved: int = 0x00) -> None:
+    def __init__(
+            self,
+            implementation_version_name: str,
+            reserved: int = 0x00
+    ) -> None:
         self.reserved = reserved  # unsigned byte
         self.implementation_version_name = implementation_version_name  # string
 
@@ -176,8 +184,10 @@ class ImplementationVersionNameSubItem:
 
         :return: binary representation of an item
         """
-        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
-                         self.implementation_version_name.encode()])
+        return b''.join([
+            self.header.pack(self.item_type, self.reserved, self.item_length),
+            self.implementation_version_name.encode()
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'ImplementationVersionNameSubItem':
@@ -214,7 +224,7 @@ class AsynchronousOperationsWindowSubItem:
             max_num_ops_performed: int,
             reserved: int = 0x00,
             item_length: int = 0x0004
-        ) -> None:
+    ) -> None:
         self.reserved = reserved  # unsigned byte
         self.item_length = item_length  # unsigned short
         self.max_num_ops_invoked = max_num_ops_invoked  # unsigned short
@@ -279,13 +289,13 @@ class ScpScuRoleSelectionSubItem:
             scu_role: int,
             scp_role: int,
             reserved: int = 0x00
-        ) -> None:
+    ) -> None:
         self.reserved = reserved  # unsigned byte 0x00
         self.sop_class_uid = sop_class_uid  # string
         self.scu_role = scu_role  # unsigned byte
         self.scp_role = scp_role  # unsigned byte
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'ScpScuRoleSelectionSubItem(' \
                f'sop_class_uid="{self.sop_class_uid}", ' \
                f'scu_role={self.scu_role}, scp_role={self.scp_role}, ' \
@@ -312,11 +322,14 @@ class ScpScuRoleSelectionSubItem:
 
         :return: binary representation of an item
         """
-        return b''.join(
-            [self.header.pack(self.item_type, self.reserved, self.item_length,
-                              len(self.sop_class_uid)),
-             self.sop_class_uid.encode(),
-             struct.pack('B B', self.scu_role, self.scp_role)])
+        return b''.join([
+            self.header.pack(
+                self.item_type, self.reserved, self.item_length,
+                len(self.sop_class_uid)
+            ),
+            self.sop_class_uid.encode(),
+            struct.pack('B B', self.scu_role, self.scp_role)
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'ScpScuRoleSelectionSubItem':
@@ -347,7 +360,12 @@ class SOPClassExtendedNegotiationSubItem:
     item_type = 0x56
     header = struct.Struct('>B B H H')
 
-    def __init__(self, sop_class_uid: uid.UID, app_info: bytes, reserved: int = 0x00) -> None:
+    def __init__(
+            self,
+            sop_class_uid: uid.UID,
+            app_info: bytes,
+            reserved: int = 0x00
+    ) -> None:
         """Initializes new sub item instance"""
         self.reserved = reserved
         self.sop_class_uid = sop_class_uid
@@ -583,14 +601,14 @@ class GenericUserDataSubItem:
             item_type: int,
             user_data: bytes,
             reserved: int = 0x00
-        ) -> None:
+    ) -> None:
         self.item_type = item_type  # unsigned byte
         self.reserved = reserved  # unsigned byte
         self.user_data = user_data  # raw string
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'GenericUserDataSubItem(item_type={self.item_type}, ' \
-               f'user_data="{self.user_data}", ' \
+               f'user_data="{str(self.user_data)}", ' \
                f'reserved={self.reserved})'
 
     @property

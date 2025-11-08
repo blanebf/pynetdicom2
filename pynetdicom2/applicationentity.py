@@ -28,7 +28,7 @@ import platform
 import copy
 import contextlib
 import os
-from typing import Any, BinaryIO, Iterator, Iterable, Optional, IO, Union
+from typing import Any, BinaryIO, Iterator, Iterable, Optional, Union
 import socketserver
 
 from pydicom import Dataset
@@ -223,7 +223,7 @@ class AEBase:
             self,
             context: asceprovider.PContextDef,
             command_set: Dataset
-    ) -> tuple[IO[bytes], int]:
+    ) -> tuple[BinaryIO, int]:
         """Method is used by association to get file-like object to store
         dataset.
 
@@ -495,7 +495,7 @@ class FolderStorageMixin:
             context: asceprovider.PContextDef,
             command_set: Dataset,
             path: str
-    ) -> tuple[IO[bytes],int]:
+    ) -> tuple[BinaryIO,int]:
         """Gets a bytes IO and starting point in it for storing incoming dataset.
 
         :param context: presentation context
@@ -533,7 +533,7 @@ class ClientStorageAE(ClientAE, FolderStorageMixin):
 
     def get_file(
             self, context: asceprovider.PContextDef, command_set: Dataset
-    ) -> tuple[IO[bytes], int]:
+    ) -> tuple[BinaryIO, int]:
         return self.get_storage_file(context, command_set, self.storage_dir)
 
 
@@ -556,5 +556,5 @@ class StorageAE(AE, FolderStorageMixin):
 
     def get_file(
             self, context: asceprovider.PContextDef, command_set: Dataset
-    ) -> tuple[IO[bytes], int]:
+    ) -> tuple[BinaryIO, int]:
         return self.get_storage_file(context, command_set, self.storage_dir)

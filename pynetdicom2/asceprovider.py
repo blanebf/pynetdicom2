@@ -26,7 +26,7 @@ import functools
 from itertools import chain
 import time
 import socketserver
-from typing import Any, IO, Iterable, Iterator, Optional, Protocol, Union, cast
+from typing import Any, BinaryIO, Iterable, Iterator, Optional, Protocol, Union, cast
 
 import pydicom
 from pydicom import uid
@@ -159,7 +159,7 @@ class AEBaseProto(Protocol):
             self,
             context: PContextDef,
             command_set: pydicom.Dataset
-    ) -> tuple[IO[bytes],int]:
+    ) -> tuple[BinaryIO,int]:
         ...
 
     @contextlib.contextmanager
@@ -181,7 +181,7 @@ class AEBaseProto(Protocol):
         ...
 
     def on_receive_store(
-            self, context: PContextDef, ds: pydicom.Dataset
+            self, context: PContextDef, ds: Union[BinaryIO, bytes]
         ) -> statuses.Status:
         ...
 

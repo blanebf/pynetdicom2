@@ -44,18 +44,14 @@ Arguments have similar meaning to SCP role implementation. First two mandatory
 arguments are provided by association and the rest are expected from service
 user.
 """
-from typing import IO, Any, Iterable, Union, cast, overload
+from typing import Any, BinaryIO, Iterable, Optional, Union, cast, overload
 import pydicom
 from pydicom import filereader
 from pydicom import uid
 
 from pynetdicom2 import asceprovider
 
-from . import dsutils
-from . import exceptions
-from . import dimsemessages
-from . import statuses
-from .uids import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from . import dimsemessages, dsutils, exceptions, statuses, uids
 
 
 def sop_classes(uids: list[uid.UID]):
@@ -159,7 +155,7 @@ class MessageDispatcherSCP(MessageDispatcher):
         return method(asce, ctx, msg)
 
 
-@sop_classes([VERIFICATION_SOP_CLASS])
+@sop_classes([uids.VERIFICATION_SOP_CLASS])
 def verification_scu(
         asce: asceprovider.AssociationRequester,
         ctx: asceprovider.PContextDef,
@@ -183,7 +179,7 @@ def verification_scu(
     return statuses.Status(response.status, dimsemessages.CEchoRSPMessage)
 
 
-@sop_classes([VERIFICATION_SOP_CLASS])
+@sop_classes([uids.VERIFICATION_SOP_CLASS])
 def verification_scp(
         asce: asceprovider.AssociationRequester,
         ctx: asceprovider.PContextDef,
@@ -272,7 +268,7 @@ def storage_scu(
 
 
 @store_in_file
-@sop_classes(STORAGE_SOP_CLASSES)
+@sop_classes(uids.STORAGE_SOP_CLASSES)
 def storage_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: asceprovider.PContextDef,
@@ -288,7 +284,10 @@ def storage_scp(
     :param msg: received message
     """
     try:
-        status = asce.ae.on_receive_store(ctx, msg.data_set)
+        if not msg.data_set:
+            status = statuses.C_STORE_CANNON_UNDERSTAND
+        else:
+            status = asce.ae.on_receive_store(ctx, msg.data_set)
     except exceptions.EventHandlingError:
         status = statuses.C_STORE_CANNON_UNDERSTAND
     finally:
@@ -303,7 +302,9 @@ def storage_scp(
     asce.send(rsp, ctx.id)
 
 
-FIND_SOP_CLASSES = [PATIENT_ROOT_FIND_SOP_CLASS, STUDY_ROOT_FIND_SOP_CLASS]
+FIND_SOP_CLASSES = [
+    uids.PATIENT_ROOT_FIND_SOP_CLASS, uids.STUDY_ROOT_FIND_SOP_CLASS
+]
 
 
 @sop_classes(FIND_SOP_CLASSES)
@@ -312,7 +313,7 @@ def qr_find_scu(
         ctx: asceprovider.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
-) -> Iterable[tuple[pydicom.Dataset, statuses.Status]]:
+) -> Iterable[tuple[Optional[pydicom.Dataset], statuses.Status]]:
     """Query/Retrieve find service user role implementation.
 
     SCU is implemented as generator that yields responses (dataset and status)
@@ -340,7 +341,8 @@ def qr_find_scu(
 
         if response.data_set:
             data_set = dsutils.decode(
-                cast(bytes, response.data_set), ctx.supported_ts.is_implicit_VR,
+                cast(bytes, response.data_set),
+                ctx.supported_ts.is_implicit_VR,
                 ctx.supported_ts.is_little_endian
             )
         else:
@@ -369,7 +371,8 @@ def qr_find_scp(
         raise exceptions.NetDICOMError('C-FIND-RQ should contain a dataset')
 
     ds = dsutils.decode(
-        cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+        cast(bytes, msg.data_set),
+        ctx.supported_ts.is_implicit_VR,
         ctx.supported_ts.is_little_endian
     )
 
@@ -382,7 +385,9 @@ def qr_find_scp(
     for data_set, status in gen:
         rsp.status = int(status)
         rsp.data_set = dsutils.encode(
-            data_set, ctx.supported_ts.is_implicit_VR, ctx.supported_ts.is_little_endian
+            data_set,
+            ctx.supported_ts.is_implicit_VR,
+            ctx.supported_ts.is_little_endian
         )
         asce.send(rsp, ctx.id)
 
@@ -393,8 +398,11 @@ def qr_find_scp(
     asce.send(rsp, ctx.id)
 
 
-GET_SOP_CLASSES = [PATIENT_ROOT_GET_SOP_CLASS, STUDY_ROOT_GET_SOP_CLASS,
-                   PATIENT_STUDY_ONLY_GET_SOP_CLASS]
+GET_SOP_CLASSES = [
+    uids.PATIENT_ROOT_GET_SOP_CLASS,
+    uids.STUDY_ROOT_GET_SOP_CLASS,
+    uids.PATIENT_STUDY_ONLY_GET_SOP_CLASS
+]
 
 
 @sop_classes(GET_SOP_CLASSES)
@@ -403,7 +411,7 @@ def qr_get_scu(
         ctx: asceprovider.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
-) -> Iterable[tuple[asceprovider.PContextDef, Union[pydicom.Dataset, IO[bytes]]]]:
+) -> Iterable[tuple[asceprovider.PContextDef, Union[pydicom.Dataset, BinaryIO]]]:
     """Query/Retrieve C-GET service implementation.
 
     C-GET service is probably one of the most trickiest service to use.
@@ -440,10 +448,9 @@ def qr_get_scu(
         msg, pc_id = asce.receive()
         if msg.command_field == dimsemessages.CGetRSPMessage.command_field:
             msg = cast(dimsemessages.CGetRSPMessage, msg)
-            if statuses.Status(msg.status, dimsemessages.CGetRSPMessage).is_pending:
-                pass  # pending. intermediate C-GET response
-            else:
+            if not statuses.Status(msg.status, dimsemessages.CGetRSPMessage).is_pending:
                 break  # last answer
+            # pending. intermediate C-GET response
         elif msg.command_field == dimsemessages.CStoreRQMessage.command_field:
             msg = cast(dimsemessages.CStoreRQMessage, msg)
             store_ctx = asce.ae.context_def_list[pc_id]
@@ -455,20 +462,29 @@ def qr_get_scu(
             rsp.sop_class_uid = msg.sop_class_uid
 
             try:
-                status = asce.ae.on_receive_store(ctx, msg.data_set)
-                yield ctx, msg.data_set if in_file else decode_ds(cast(bytes, msg.data_set))
+                if not msg.data_set:
+                    status = statuses.C_GET_UNABLE_TO_PROCESS
+                else:
+                    status = asce.ae.on_receive_store(ctx, msg.data_set)
+                    if in_file:
+                        yield ctx, cast(BinaryIO, msg.data_set)
+                    else:
+                        yield ctx, decode_ds(cast(bytes, msg.data_set))
             except exceptions.EventHandlingError:
                 status = statuses.C_GET_UNABLE_TO_PROCESS
             finally:
                 if in_file and msg.data_set:
-                    cast(IO[bytes], msg.data_set).close()
+                    cast(BinaryIO, msg.data_set).close()
 
             rsp.status = int(status)
             asce.send(rsp, pc_id)
 
 
-MOVE_SOP_CLASSES = [PATIENT_ROOT_MOVE_SOP_CLASS, STUDY_ROOT_MOVE_SOP_CLASS,
-                    PATIENT_STUDY_ONLY_MOVE_SOP_CLASS]
+MOVE_SOP_CLASSES = [
+    uids.PATIENT_ROOT_MOVE_SOP_CLASS,
+    uids.STUDY_ROOT_MOVE_SOP_CLASS,
+    uids.PATIENT_STUDY_ONLY_MOVE_SOP_CLASS
+]
 
 
 @sop_classes(MOVE_SOP_CLASSES)
@@ -590,7 +606,7 @@ def _send_response(
     asce.send(rsp, ctx.id)
 
 
-@sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
+@sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scu(
         asce: asceprovider.AssociationRequester,
         ctx: asceprovider.PContextDef,
@@ -607,11 +623,10 @@ def modality_work_list_scu(
     :param msg_id: message ID
     :yield: response dataset, response status
     """
-    for status, data_set in qr_find_scu(asce, ctx, ds, msg_id):
-        yield status, data_set
+    yield from qr_find_scu(asce, ctx, ds, msg_id)
 
 
-@sop_classes([MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
+@sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: asceprovider.PContextDef,
@@ -636,7 +651,7 @@ class StorageCommitment(MessageDispatcherSCP):
 
     Handles incoming N-ACTION-RQ and N-EVENT-REPORT-RQ messages.
     """
-    sop_classes = [STORAGE_COMMITMENT_SOP_CLASS]
+    sop_classes = [uids.STORAGE_COMMITMENT_SOP_CLASS]
 
     PROCESSING_FAILURE = 0x0110
     NO_SUCH_OBJECT_INSTANCE = 0x0112
@@ -775,14 +790,14 @@ class StorageCommitment(MessageDispatcherSCP):
                 assoc.receive()  # Get response. Current implementation ignores it
 
 
-@sop_classes([STORAGE_COMMITMENT_SOP_CLASS])
+@sop_classes([uids.STORAGE_COMMITMENT_SOP_CLASS])
 def storage_commitment_scu(
         asce: asceprovider.AssociationRequester,
         ctx: asceprovider.PContextDef,
         transaction_uid: uid.UID,
         uids,
         msg_id: int
-    ):
+) -> statuses.Status:
     """Storage Commitment service implementation (SCU)
 
     :param asce: active association
