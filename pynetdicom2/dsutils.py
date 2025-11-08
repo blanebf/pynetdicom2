@@ -9,11 +9,11 @@ Helper module that provides function for converting datasets or dataset elements
 bytes and back.
 """
 from io import BytesIO
+from typing import Union
 
 import pydicom
-from pydicom import filebase
-from pydicom import filereader
-from pydicom import filewriter
+from pydicom import dataelem, filebase, filereader, filewriter
+
 
 
 
@@ -59,7 +59,7 @@ def encode(
 
 
 def encode_element(
-        elem: pydicom.DataElement,
+        elem: Union[pydicom.DataElement, dataelem.RawDataElement],
         is_implicit_vr: bool,
         is_little_endian: bool
 ) -> bytes:

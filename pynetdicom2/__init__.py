@@ -4,8 +4,7 @@ from . import __version__
 
 __version_info__ = __version__.__version__.split('.')
 
-from . import applicationentity
-from . import sopclass
+from . import applicationentity, sopclass, uids
 
 
 _tls = threading.local()
@@ -21,7 +20,7 @@ def _new_msg_id():
     return _tls.msg_id
 
 
-def c_find(remote_ae, local_aet, ds, root=sopclass.PATIENT_ROOT_FIND_SOP_CLASS):
+def c_find(remote_ae, local_aet, ds, root=uids.PATIENT_ROOT_FIND_SOP_CLASS):
     """Executes Query/Retrieve C-FIND.
 
     For each result generator yields result dataset (None in case of failure

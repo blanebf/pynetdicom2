@@ -21,7 +21,7 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     should not worry about any kind of message validation.
 """
 import struct
-from typing import ClassVar, Iterator, Optional, Type, IO, Union
+from typing import BinaryIO, ClassVar, Iterator, Optional, Type, Union
 
 from pydicom.dataset import Dataset
 
@@ -77,7 +77,7 @@ def fragment(
 
 
 def fragment_file(
-        fp: IO[bytes],
+        fp: BinaryIO,
         max_pdu_length: int,
         normal: int,
         last: int
@@ -133,7 +133,7 @@ class DIMSEMessage:
     command_fields: ClassVar[list[str]]
 
     def __init__(self, command_set: Optional[Dataset] = None) -> None:
-        self._data_set: Optional[Union[IO[bytes], bytes]] = None
+        self._data_set: Optional[Union[BinaryIO, bytes]] = None
         if command_set:
             self.command_set = command_set
         else:
@@ -146,17 +146,21 @@ class DIMSEMessage:
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
     @property
-    def data_set(self) -> Optional[Union[IO[bytes], bytes]]:
+    def data_set(self) -> Optional[Union[BinaryIO, bytes]]:
         """Dataset included with a DIMSE Message"""
         return self._data_set
 
     @data_set.setter
-    def data_set(self, value: Optional[Union[IO[bytes], bytes]]):
+    def data_set(self, value: Optional[Union[BinaryIO, bytes]]) -> None:
         if value:
             self.command_set.CommandDataSetType = 0x0001
         self._data_set = value
 
-    def encode(self, pc_id: int, max_pdu_length: int) -> Iterator[pdu.PDataTfPDU]:
+    def encode(
+            self,
+            pc_id: int,
+            max_pdu_length: int
+    ) -> Iterator[pdu.PDataTfPDU]:
         """Returns the encoded message as a series of P-DATA-TF PDU objects.
 
         :param pc_id: Presentation Context ID
@@ -171,7 +175,9 @@ class DIMSEMessage:
         # fragment command set
         for item, bit in fragment(encoded_command_set, max_pdu_length, 1, 3):
             # send only one pdv per p-data primitive
-            value_item = pdu.PresentationDataValueItem(pc_id, struct.pack('b', bit) + item)
+            value_item = pdu.PresentationDataValueItem(
+                pc_id, struct.pack('b', bit) + item
+            )
             yield pdu.PDataTfPDU([value_item])
 
         # fragment data set
@@ -186,7 +192,9 @@ class DIMSEMessage:
                 gen = fragment_file(self.data_set, max_pdu_length, 0, 2)
             try:
                 for item, bit in gen:
-                    value_item = pdu.PresentationDataValueItem(pc_id, struct.pack('b', bit) + item)
+                    value_item = pdu.PresentationDataValueItem(
+                        pc_id, struct.pack('b', bit) + item
+                    )
                     yield pdu.PDataTfPDU([value_item])
             finally:
                 if is_file:
@@ -240,8 +248,12 @@ class CEchoRSPMessage(DIMSEResponseMessage):
     The value of this field shall be set to 8030H for the C-ECHO-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status'
+    ]
 
 
 class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
@@ -256,10 +268,16 @@ class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
     The value of this field shall be set to 0001H for the C-STORE-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageID', 'Priority', 'AffectedSOPInstanceUID',
-                      'MoveOriginatorApplicationEntityTitle',
-                      'MoveOriginatorMessageID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageID',
+        'Priority',
+        'AffectedSOPInstanceUID',
+        'MoveOriginatorApplicationEntityTitle',
+        'MoveOriginatorMessageID'
+    ]
+
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
     """
     Contains the UID of the SOP Instance to be stored.

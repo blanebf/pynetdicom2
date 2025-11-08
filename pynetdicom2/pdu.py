@@ -94,7 +94,7 @@ class AAssociatePDUBase:
             reserved1: int = 0x00,
             reserved2: int = 0x00,
             reserved3: Optional[Iterable[int]] = None
-        ) -> None:
+    ) -> None:
         self.called_ae_title = called_ae_title  # string of length 16
         self.calling_ae_title = calling_ae_title  # string of length 16
         self.variable_items = variable_items
@@ -237,7 +237,7 @@ class AAssociateRjPDU:
             reason_diag: int,
             reserved1: int = 0x00,
             reserved2: int = 0x00
-        ) -> None:
+    ) -> None:
         """
         Initializes new ASSOCIATE-RJ PDU with specified field values
         as described in PS 3.8 9.3.4.
@@ -249,7 +249,7 @@ class AAssociateRjPDU:
         self.source = source
         self.reason_diag = reason_diag
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'AAssociateRjPDU(result={self.result}, source={self.source}, ' \
                f'reason_diag={self.reason_diag}, reserved1={self.reserved1}, ' \
                f'reserved2={self.reserved2})'
@@ -305,13 +305,13 @@ class PDataTfPDU:
             self,
             data_value_items: list['PresentationDataValueItem'],
             reserved: int = 0x00
-        ) -> None:
+    ) -> None:
         self.reserved = reserved  # unsigned byte
 
         # List of one of more PresentationDataValueItem
         self.data_value_items = data_value_items
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'PDataTfPDU(pdu_length={self.pdu_length}, ' \
                f'data_value_items=' \
                f'{self.data_value_items}, ' \
@@ -473,7 +473,7 @@ class AAbortPDU:
             reserved1: int = 0x00,
             reserved2: int = 0x00,
             reserved3: int = 0x00
-        ) -> None:
+    ) -> None:
         self.reserved1 = reserved1  # unsigned byte
         self.reserved2 = reserved2  # unsigned byte
         self.reserved3 = reserved3  # unsigned byte
@@ -610,7 +610,7 @@ class PresentationContextItemRQ:
             reserved2: int = 0x00,
             reserved3: int = 0x00,
             reserved4: int = 0x00
-        ) -> None:
+    ) -> None:
         self.context_id = context_id  # unsigned byte
         self.abs_sub_item = abs_sub_item  # AbstractSyntaxSubItem
         self.ts_sub_items = ts_sub_items  # TransferSyntaxSubItems
@@ -620,7 +620,7 @@ class PresentationContextItemRQ:
         self.reserved3 = reserved3  # unsigned byte
         self.reserved4 = reserved4  # unsigned byte
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'PresentationContextItemRQ(context_id={self.context_id}, ' \
                f'abs_sub_item={self.abs_sub_item}, ' \
                f'ts_sub_items={self.ts_sub_items}, ' \
@@ -711,7 +711,7 @@ class PresentationContextItemAC:
             reserved1: int = 0x00,
             reserved2: int = 0x00,
             reserved3: int = 0x00
-        ) -> None:
+    ) -> None:
         self.context_id = context_id  # unsigned byte
         self.result_reason = result_reason  # unsigned byte
         self.ts_sub_item = ts_sub_item  # TransferSyntaxSubItem object
@@ -805,8 +805,10 @@ class AbstractSyntaxSubItem:
         :return: encoded item
         :rtype: bytes
         """
-        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
-                         self.name.encode()])
+        return b''.join([
+            self.header.pack(self.item_type, self.reserved, self.item_length),
+            self.name.encode()
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'AbstractSyntaxSubItem':
@@ -862,8 +864,10 @@ class TransferSyntaxSubItem:
         :return: encoded item
         :rtype: bytes
         """
-        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
-                         self.name.encode()])
+        return b''.join([
+            self.header.pack(self.item_type, self.reserved, self.item_length),
+            self.name.encode()
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'TransferSyntaxSubItem':
@@ -904,11 +908,11 @@ class UserInformationItem:
             self,
             user_data: list[Union[UserItem, userdataitems.GenericUserDataSubItem]],
             reserved: int = 0x00
-        ) -> None:
+    ) -> None:
         self.reserved = reserved  # unsigned byte
         self.user_data = user_data
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'UserInformationItem(user_data={self.user_data}, reserved={self.reserved})'
 
     @property
@@ -931,12 +935,11 @@ class UserInformationItem:
 
     @staticmethod
     def sub_items(
-        stream: BytesIO
+            stream: BytesIO
     ) -> Iterable[Union[UserItem, userdataitems.GenericUserDataSubItem]]:
         """Reads User Information sub-items from a data stream
 
         :param stream: raw data stream
-        :type stream: IO[bytes]
         :raises exceptions.PDUProcessingError: [description]
         :yield: User Information sub-item
         """
@@ -990,9 +993,9 @@ class PresentationDataValueItem:
         self.context_id = context_id  # unsigned byte
         self.data_value = data_value  # bytes
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'PresentationDataValueItem(context_id={self.context_id}, ' \
-               f'data_value="{self.data_value}")'
+               f'data_value="{str(self.data_value)}")'
 
     @property
     def item_length(self) -> int:
@@ -1009,7 +1012,10 @@ class PresentationDataValueItem:
         :return: encoded item
         :rtype: bytes
         """
-        return b''.join([self.header.pack(self.item_length, self.context_id), self.data_value])
+        return b''.join([
+            self.header.pack(self.item_length, self.context_id),
+            self.data_value
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'PresentationDataValueItem':

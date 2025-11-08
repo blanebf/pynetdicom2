@@ -4,14 +4,13 @@ import os
 import threading
 import unittest
 
-from six.moves import range  # type: ignore
-
 import pydicom
 from pydicom import uid
 from pydicom import dataset
 
 import pynetdicom2.applicationentity as ae
 import pynetdicom2.sopclass as sc
+from pynetdicom2 import uids
 
 from pynetdicom2 import statuses
 
@@ -21,7 +20,7 @@ BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 class CEchoTestCase(unittest.TestCase):
-    def test_c_echo_positive(self):
+    def test_c_echo_positive(self) -> None:
         ae1 = ae.ClientAE('AET1').add_scu(sc.verification_scu)
         ae2 = ae.AE('AET2', 11112, bind_and_activate=False).add_scp(sc.verification_scp)
         with ae2:
@@ -29,14 +28,14 @@ class CEchoTestCase(unittest.TestCase):
                              username='admin', password='123')
             with ae1.request_association(remote_ae) as assoc:
                 self.assertIsNotNone(assoc)
-                service = assoc.get_scu(sc.VERIFICATION_SOP_CLASS)
+                service = assoc.get_scu(uids.VERIFICATION_SOP_CLASS)
                 self.assertIsNotNone(service)
                 result = service(1)
                 self.assertTrue(result.is_success)
 
 
 class CFindServerAE(ae.AE):
-    def __init__(self, test_name, test, *args, **kwargs):
+    def __init__(self, test_name, test, *args, **kwargs) -> None:
         super().__init__(bind_and_activate=False, *args, **kwargs)
         self.test_name = test_name
         self.test = test
@@ -49,7 +48,7 @@ class CFindServerAE(ae.AE):
 
 
 class CFindTestCase(unittest.TestCase):
-    def test_c_find_positive(self):
+    def test_c_find_positive(self) -> None:
         test_name = 'Patient^Name^Test'
         ae1 = ae.ClientAE('AET1').add_scu(sc.qr_find_scu)
         ae2 = CFindServerAE(test_name, self, 'AET2', 11112)\
@@ -58,7 +57,7 @@ class CFindTestCase(unittest.TestCase):
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                              username='admin', password='123')
             with ae1.request_association(remote_ae) as assoc:
-                service = assoc.get_scu(sc.PATIENT_ROOT_FIND_SOP_CLASS)
+                service = assoc.get_scu(uids.PATIENT_ROOT_FIND_SOP_CLASS)
                 req = dataset.Dataset()
                 req.PatientName = test_name
                 for result, status in service(req, 1):
@@ -68,7 +67,7 @@ class CFindTestCase(unittest.TestCase):
 
 
 class CFindWrapperTestCase(unittest.TestCase):
-    def test_c_find_positive(self):
+    def test_c_find_positive(self) -> None:
         test_name = 'Patient^Name^Test'
         remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
                          username='admin', password='123')
@@ -110,14 +109,14 @@ class CStoreTestCase(unittest.TestCase):
         rq.StudyInstanceUID = '1.2.3.4.5'
         rq.SeriesInstanceUID = '1.2.3.4.5.1'
         rq.SOPInstanceUID = '1.2.3.4.5.1.1'
-        rq.SOPClassUID = sc.BASIC_TEXT_SR_STORAGE
+        rq.SOPClassUID = uids.BASIC_TEXT_SR_STORAGE
 
-        ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu, [sc.BASIC_TEXT_SR_STORAGE])
+        ae1 = ae.ClientAE('AET1').add_scu(sc.storage_scu, [uids.BASIC_TEXT_SR_STORAGE])
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
             with ae1.request_association(remote_ae) as assoc:
-                service = assoc.get_scu(sc.BASIC_TEXT_SR_STORAGE)
+                service = assoc.get_scu(uids.BASIC_TEXT_SR_STORAGE)
 
                 status = service(rq, 1)
                 self.assertTrue(status.is_success)
@@ -127,12 +126,12 @@ class CStoreTestCase(unittest.TestCase):
         rq = pydicom.dcmread(file_name)
 
         ae1 = ae.ClientAE('AET1', [uid.ExplicitVRLittleEndian],  max_pdu_length=1024)\
-            .add_scu(sc.storage_scu, [sc.COMPREHENSIVE_SR_STORAGE])
+            .add_scu(sc.storage_scu, [uids.COMPREHENSIVE_SR_STORAGE])
         ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2')
             with ae1.request_association(remote_ae) as assoc:
-                service = assoc.get_scu(sc.COMPREHENSIVE_SR_STORAGE)
+                service = assoc.get_scu(uids.COMPREHENSIVE_SR_STORAGE)
 
                 status = service(file_name, 1)
                 self.assertTrue(status.is_success)
@@ -179,45 +178,45 @@ class StorageCommitmentTestCase(unittest.TestCase):
         self.transaction = uid.generate_uid()
 
     def test_commitment_positive(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()) for _ in range(5)]
+        _uids = [(uids.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()) for _ in range(5)]
 
-        ae1 = CommitmentAE(self, self.transaction, uids, [], self.event,
+        ae1 = CommitmentAE(self, self.transaction, _uids, [], self.event,
                            self.remote_ae1,
                            'AET2', 11113)\
             .add_scp(sc.StorageCommitment())\
             .add_scu(sc.storage_commitment_scu)
 
-        ae2 = CommitmentAE(self, self.transaction, uids, [], self.event,
+        ae2 = CommitmentAE(self, self.transaction, _uids, [], self.event,
                            self.remote_ae2,
                            'AET2', 11112)\
             .add_scp(sc.StorageCommitment())
 
         with ae2, ae1:
             with ae1.request_association(self.remote_ae2) as assoc:
-                service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
+                service = assoc.get_scu(uids.STORAGE_COMMITMENT_SOP_CLASS)
 
                 status = service(self.transaction, uids, 1)
                 self.assertTrue(status.is_success)
                 self.event.wait(20)
 
     def test_commitment_failure(self):
-        uids = [(sc.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i)) for i in range(10)]
+        _uids = [(uids.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i)) for i in range(10)]
 
-        ae1 = CommitmentAE(self, self.transaction, uids[:5], uids[5:],
+        ae1 = CommitmentAE(self, self.transaction, _uids[:5], _uids[5:],
                            self.event, self.remote_ae1,
                            'AET2', 11113)\
             .add_scp(sc.StorageCommitment())\
             .add_scu(sc.storage_commitment_scu)
 
-        ae2 = CommitmentAE(self, self.transaction, uids[:5], uids[5:],
+        ae2 = CommitmentAE(self, self.transaction, _uids[:5], _uids[5:],
                            self.event, self.remote_ae2,
                            'AET2', 11112)\
             .add_scp(sc.StorageCommitment())
 
         with ae2, ae1:
             with ae1.request_association(self.remote_ae2) as assoc:
-                service = assoc.get_scu(sc.STORAGE_COMMITMENT_SOP_CLASS)
+                service = assoc.get_scu(uids.STORAGE_COMMITMENT_SOP_CLASS)
 
-                status = service(self.transaction, uids, 1)
+                status = service(self.transaction, _uids, 1)
                 self.assertTrue(status.is_success)
                 self.event.wait(20)
