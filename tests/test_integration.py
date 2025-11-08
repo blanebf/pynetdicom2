@@ -10,11 +10,7 @@ from pydicom import dataset
 
 import pynetdicom2.applicationentity as ae
 import pynetdicom2.sopclass as sc
-from pynetdicom2 import uids
-
-from pynetdicom2 import statuses
-
-from pynetdicom2 import c_find
+from pynetdicom2 import asceprovider, statuses, commands, uids
 
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -69,8 +65,13 @@ class CFindTestCase(unittest.TestCase):
 class CFindWrapperTestCase(unittest.TestCase):
     def test_c_find_positive(self) -> None:
         test_name = 'Patient^Name^Test'
-        remote_ae = dict(address='127.0.0.1', port=11112, aet='AET2',
-                         username='admin', password='123')
+        remote_ae = asceprovider.RemoteAEConfig(
+            address='127.0.0.1',
+            port=11112,
+            aet='AET2',
+            username='admin',
+            password='123'
+        )
 
         ds = dataset.Dataset()
         ds.PatientName = test_name
@@ -78,7 +79,7 @@ class CFindWrapperTestCase(unittest.TestCase):
         ae2 = CFindServerAE(test_name, self, 'AET2', 11112)\
             .add_scp(sc.qr_find_scp)
         with ae2:
-            for result, status in c_find(remote_ae, 'AET1', ds):
+            for result, status in commands.find('AET1', remote_ae, ds):
                 if result:
                     self.assertEqual(result.PatientName, test_name)
                     self.assertTrue(status.is_pending)
