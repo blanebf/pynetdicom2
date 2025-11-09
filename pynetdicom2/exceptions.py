@@ -23,6 +23,8 @@ The class hierarchy for exceptions is:
 |      +-- EventHandlingError
 
 """
+from typing import Any
+
 
 class NetDICOMError(Exception):
     """Base class for all library specific exceptions exception."""
@@ -115,7 +117,14 @@ class AssociationRejectedError(AssociationError):
 
     """
 
-    def __init__(self, result, source, diagnostic, *args, **kwargs):
+    def __init__(
+            self,
+            result: int,
+            source: int,
+            diagnostic: int,
+            *args: Any,
+            **kwargs: Any
+    ) -> None:
         """Overrides base exception initialization."""
 
         super().__init__(*args, **kwargs)
@@ -135,7 +144,13 @@ class AssociationAbortedError(AssociationError):
     :param reason_diag:
     """
 
-    def __init__(self, source, reason_diag, *args, **kwargs):
+    def __init__(
+            self,
+            source: int,
+            reason_diag: int,
+            *args: Any,
+            **kwargs: Any
+    ) -> None:
         """Overrides base exception initialization."""
         super().__init__(*args, **kwargs)
         self.source = source

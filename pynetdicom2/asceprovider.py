@@ -25,8 +25,11 @@ import dataclasses
 import functools
 from itertools import chain
 import time
+import socket
 import socketserver
-from typing import Any, BinaryIO, Iterable, Iterator, Optional, Protocol, Union, cast
+from typing import (
+    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol, TypeVar, Union, cast
+)
 
 import pydicom
 from pydicom import uid
@@ -69,7 +72,10 @@ class PContextDefList:
     supported_ts: frozenset[uid.UID]
 
 
-class SCPServiceWithSOPClass(Protocol):
+T = TypeVar('T', bound=dimsemessages.DIMSERequestMessage, contravariant=True)
+
+
+class SCPServiceWithSOPClass(Protocol[T]):
     sop_classes: list[uid.UID]
     store_in_file: bool
 
@@ -78,18 +84,18 @@ class SCPServiceWithSOPClass(Protocol):
             self,
             asce: 'AssociationAcceptor',
             ctx: fsm.PContextDef,
-            msg: dimsemessages.DIMSERequestMessage
+            msg: T
     ) -> None:
         ...
 
 
-class SCPService(Protocol):
+class SCPService(Protocol[T]):
     @abstractmethod
     def __call__(
             self,
             asce: 'AssociationAcceptor',
             ctx: fsm.PContextDef,
-            msg: dimsemessages.DIMSERequestMessage
+            msg: T
      ) -> None:
         ...
 
@@ -131,7 +137,7 @@ class AEBaseProto(Protocol):
     context_def_list: dict[int, PContextDefList]
     store_in_file: set[uid.UID] = set()
     supported_scu: dict[uid.UID, SCUServiceWithSOPClass]
-    supported_scp: dict[uid.UID, SCPServiceWithSOPClass]
+    supported_scp: dict[uid.UID, SCPServiceWithSOPClass[dimsemessages.DIMSERequestMessage]]
 
     def add_scu(
             self,
@@ -175,7 +181,7 @@ class AEBaseProto(Protocol):
 
     def on_receive_store(
             self, context: fsm.PContextDef, ds: Union[BinaryIO, bytes]
-        ) -> statuses.Status:
+    ) -> statuses.Status:
         ...
 
     def on_receive_find(
@@ -246,7 +252,7 @@ class Association:
     def __init__(
             self,
             local_ae: AEBaseProto,
-            dul_socket,
+            dul_socket: Optional[socket.socket],
             max_pdu_length: int
     ) -> None:
         """Initializes Association instance with local AE title and DUL service
@@ -341,8 +347,8 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
 
     def __init__(
             self,
-            request,
-            client_address,
+            request: socket.socket,
+            client_address: tuple[str, int],
             local_ae: AEBaseServerProto,
             max_pdu_length: int
     ) -> None:
@@ -357,7 +363,9 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         self.remote_ae: str = ''
         self.local_ae: str = ''
 
-        socketserver.StreamRequestHandler.__init__(self, request, client_address, local_ae)
+        socketserver.StreamRequestHandler.__init__(
+            self, request, client_address, local_ae
+        )
 
     def kill(self) -> None:
         """Overrides base class kill method to set stop-flag for running thread
@@ -512,7 +520,7 @@ class AssociationRequester(Association):
         self.ae.on_association_response(response)
         self.association_established = True
 
-    def get_scu(self, sop_class: uid.UID):
+    def get_scu(self, sop_class: uid.UID) -> Callable[..., Any]:
         """Get SCU function to use (like for making a C-FIND request).
 
         SCU are generally provided by `sopclass` module. First argument of the service
@@ -520,7 +528,6 @@ class AssociationRequester(Association):
         contexnt.
 
         :param sop_class: SOP Class UID
-        :type sop_class: Union[str,pydicom.uid.UID]
         :raises exceptions.ClassNotSupportedError: raised if provided SOP Class UID is not
                                                    supported by association.
         :return: SCU function
@@ -533,7 +540,9 @@ class AssociationRequester(Association):
                 f'SOP Class {sop_class} not supported as SCU'
             ) from exc
         else:
-            return functools.partial(service, self, fsm.PContextDef(pc_id, sop_class, ts))
+            return functools.partial(
+                service, self, fsm.PContextDef(pc_id, sop_class, ts)
+            )
 
     def abort(self, reason: int = 0) -> None:
         """Aborts association with specified reason
@@ -543,7 +552,12 @@ class AssociationRequester(Association):
         self.dul.send(pdu.AAbortPDU(source=0, reason_diag=reason))
         self.kill()
 
-    def _request(self, local_ae: AETParams, remote_ae: RemoteAEConfig, users_pdu=None):
+    def _request(
+            self,
+            local_ae: AETParams,
+            remote_ae: RemoteAEConfig,
+            users_pdu: Optional[pdu.UserItem] = None
+    ) -> pdu.AAssociateAcPDU:
         """Requests an association with a remote AE and waits for association
         response."""
         max_pdu_length_par = userdataitems.MaximumLengthSubItem(self.max_pdu_length)
@@ -591,13 +605,12 @@ class AssociationRequester(Association):
             calling_ae_title=local_ae.aet,
             variable_items=variable_items
         )
-        # FIXME pass parameter properly
-        assoc_rq.called_presentation_address = (remote_ae.address, remote_ae.port)
+        self.dul.called_presentation_address = (remote_ae.address, remote_ae.port)
         self.dul.send(assoc_rq)
         response = self.dul.receive(self.ae.dcm_timeout)
         self._handle_errors(response)
-        if isinstance(response, tuple) or response.pdu_type != pdu.AAssociateAcPDU.pdu_type:
-            return exceptions.AssociationError('Invalid repsonse')
+        if not isinstance(response, pdu.AAssociateAcPDU):
+            raise exceptions.AssociationError('Invalid repsonse')
 
         # Get maximum pdu length from answer
         user_data = response.variable_items[-1].user_data

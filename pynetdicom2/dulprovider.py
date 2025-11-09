@@ -100,7 +100,7 @@ class DULServiceProvider(threading.Thread):
 
         self.primitive: Optional[fsm.PDUType] = None  # current pdu
         self.dimse_gen: Optional[Iterator[pdu.PDataTfPDU]] = None
-        self.event: collections.deque = collections.deque()
+        self.event: collections.deque[fsm.Events] = collections.deque()
         self.max_pdu_length = max_pdu_length
 
         self.to_service_user: fsm.IncomingQueue = queue.Queue()
@@ -112,9 +112,13 @@ class DULServiceProvider(threading.Thread):
             self, self.timer, store_in_file, get_file_cb
         )
         self._is_killed = threading.Event()
+        self.called_presentation_address: Optional[tuple[str, int]] = None
 
         if dul_socket:  # A client socket has been given. Generate an event 5
             self.event.append(fsm.Events.EVT_5)
+            self.is_acceptor = True
+        else:
+            self.is_acceptor = False
 
         self.dul_socket = dul_socket
         self.raw_pdu: bytes = b''

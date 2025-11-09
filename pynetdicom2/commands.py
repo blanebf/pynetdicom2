@@ -1,6 +1,6 @@
 from typing import Callable, Iterable, Optional, cast
 
-from pydicom import dataset, filereader
+from pydicom import dataset, filereader, uid
 
 from . import applicationentity, asceprovider, sopclass, statuses, uids
 
@@ -24,7 +24,7 @@ def find(
         local_aet: str,
         remote_ae: asceprovider.RemoteAEConfig,
         request: dataset.Dataset,
-        root=uids.STUDY_ROOT_FIND_SOP_CLASS
+        root: uid.UID = uids.STUDY_ROOT_FIND_SOP_CLASS
 ) -> Iterable[tuple[Optional[dataset.Dataset], statuses.Status]]:
     ae = applicationentity.ClientAE(local_aet)
     ae.add_scu(sopclass.qr_find_scu)
@@ -47,11 +47,3 @@ def store(
         service = assoc.get_scu(sop_class)
         result = cast(statuses.Status, service(file_name, 1))
         return result.is_success
-
-
-def get(local_aet, remote_ae, request, root=uids.STUDY_ROOT_GET_SOP_CLASS):
-    pass
-
-
-def move(local_aet, remote_ae, request, root=uids.STUDY_ROOT_MOVE_SOP_CLASS):
-    pass
