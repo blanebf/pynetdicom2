@@ -399,6 +399,10 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         acceptable_pr_contexts"""
         user_items = assoc_req.variable_items[-1]
         max_pdu_sub_item = user_items.user_data[0]
+        if not isinstance(max_pdu_sub_item, userdataitems.MaximumLengthSubItem):
+            raise exceptions.AssociationError(
+                f'First sub-item is not MaximumLengthSubItem: {max_pdu_sub_item}'
+            )
         if self.max_pdu_length > max_pdu_sub_item.maximum_length_received:
             self.max_pdu_length = max_pdu_sub_item.maximum_length_received
         max_pdu_sub_item.maximum_length_received = self.max_pdu_length
@@ -455,15 +459,17 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     def _establish(self) -> None:
         try:
             assoc_req = self.dul.receive(self.ae.dcm_timeout)
+            if not isinstance(assoc_req, pdu.AAssociateRqPDU):
+                raise exceptions.AssociationError(
+                    f'Invalid request on associaction: {assoc_req}'
+                )
+
             self.ae.on_association_request(self, assoc_req)
         except exceptions.AssociationRejectedError as exc:
             self.reject(exc.result, exc.source, exc.diagnostic)
             raise
 
-        if isinstance(assoc_req, tuple) or assoc_req.pdu_type != pdu.AAssociateRqPDU.pdu_type:
-            raise exceptions.AssociationError(f'Invalid request on associaction: {assoc_req}')
-
-        self.accept(cast(pdu.AAssociateRqPDU, assoc_req))
+        self.accept(assoc_req)
         self.association_established = True
 
     def _loop(self) -> None:

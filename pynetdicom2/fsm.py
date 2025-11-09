@@ -169,7 +169,7 @@ ASCEType = Union[
 ]
 
 
-IncomingQueue = queue.Queue[Union[tuple[dimsemessages.DIMSEMessage, int], ASCEType]]
+IncomingQueue = queue.Queue[Union[tuple[dimsemessages.DIMSEMessage, int], PDUType]]
 OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
 
 
@@ -430,6 +430,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ae_3(self) -> States:
         """Issue A-ASSOCIATE confirmation (accept) primitive."""
+        if not isinstance(self.primitive, pdu.AAssociateAcPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type {self.primitive}'
+            )
         self.to_service_user.put(self.primitive)
         return States.STA_6
 
@@ -437,6 +441,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """Issue A-ASSOCIATE confirmation (reject) primitive and close transport
         connection.
         """
+        if not isinstance(self.primitive, pdu.AAssociateRjPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type {self.primitive}'
+            )
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
         return States.STA_1
@@ -455,6 +463,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """
         self.timer.stop()
         # Accept
+        if not isinstance(self.primitive, pdu.AAssociateRqPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type {self.primitive}'
+            )
         self.to_service_user.put(self.primitive)
         # TODO Look into why according to standard transition to `Sta13` may occur
         return States.STA_3

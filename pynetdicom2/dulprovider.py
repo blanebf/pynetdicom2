@@ -153,7 +153,7 @@ class DULServiceProvider(threading.Thread):
     def receive(
             self,
             timeout: float
-    ) -> Union[tuple[dimsemessages.DIMSEMessage, int], fsm.ASCEType]:
+    ) -> Union[tuple[dimsemessages.DIMSEMessage, int], fsm.PDUType]:
         """Tries to get PDU from incoming queue.
 
         If timeout is exceeded method

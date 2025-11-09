@@ -58,8 +58,12 @@ class MaximumLengthSubItem:
 
         :return: binary representation of an item
         """
-        return self.item_format.pack(self.item_type, self.reserved, self.item_length,
-                                     self.maximum_length_received)
+        return self.item_format.pack(
+            self.item_type,
+            self.reserved,
+            self.item_length,
+            self.maximum_length_received
+        )
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'MaximumLengthSubItem':

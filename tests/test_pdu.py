@@ -4,107 +4,112 @@
 
 __author__ = 'Blane'
 from io import BytesIO
+from typing import Union
+
 import unittest
-import pynetdicom2.pdu
-import pynetdicom2.userdataitems
+from pydicom import uid
+from pynetdicom2 import fsm, pdu, userdataitems
 
 
 class TestPDUEncoding(unittest.TestCase):
-    def compare_pdu(self, pdu1, pdu2):
+    def compare_pdu(self, pdu1: fsm.PDUType, pdu2: fsm.PDUType) -> None:
         self.assertIsInstance(pdu1, pdu2.__class__)
         self.assertEqual(pdu1.__dict__, pdu2.__dict__)
 
-    def decode_and_compare(self, pdu):
+    def decode_and_compare(self, pdu: fsm.PDUType) -> None:
         self.compare_pdu(pdu, type(pdu).decode(pdu.encode()))
 
-    def test_a_associate_rq_pdu(self):
-        pdu = pynetdicom2.pdu.AAssociateRqPDU(
+    def test_a_associate_rq_pdu(self) -> None:
+        _pdu = pdu.AAssociateRqPDU(
             called_ae_title='aet1',
             calling_ae_title='aet2',
             variable_items=[]
         )
-        self.decode_and_compare(pdu)
+        self.decode_and_compare(_pdu)
 
-    def test_a_associate_ac_pdu(self):
-        pdu = pynetdicom2.pdu.AAssociateAcPDU(
+    def test_a_associate_ac_pdu(self) -> None:
+        _pdu = pdu.AAssociateAcPDU(
             called_ae_title='aet1',
             calling_ae_title='aet2',
             variable_items=[]
         )
-        self.decode_and_compare(pdu)
+        self.decode_and_compare(_pdu)
 
 
 class TestSubItemEncoding(unittest.TestCase):
-    def decode_and_compare_sub_item(self, item):
+    def decode_and_compare_sub_item(
+            self,
+            item: Union[pdu.UserItem, pdu.UserInformationItem, pdu.PresentationDataValueItem]
+    ) -> None:
         encoded = item.encode()
         stream = BytesIO(encoded)
         item2 = type(item).decode(stream)
         self.assertIsInstance(item, item2.__class__)
         self.assertEqual(item.__dict__, item2.__dict__)
 
-    def test_user_information_item(self):
-        item = pynetdicom2.pdu.UserInformationItem(user_data=[])
+    def test_user_information_item(self) -> None:
+        item = pdu.UserInformationItem(user_data=[])
         self.decode_and_compare_sub_item(item)
 
-    def test_data_value_item(self):
+    def test_data_value_item(self) -> None:
         test_string = b'test data'
-        item = pynetdicom2.pdu.PresentationDataValueItem(
+        item = pdu.PresentationDataValueItem(
             context_id=3,
             data_value=test_string
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_generic_user_data_sub_item(self):
+    def test_generic_user_data_sub_item(self) -> None:
         test_string = b'test data'
-        item = pynetdicom2.userdataitems.GenericUserDataSubItem(
+        item = userdataitems.GenericUserDataSubItem(
             item_type=0x5, user_data=test_string
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_maximum_length_sub_item(self):
-        item = pynetdicom2.userdataitems.MaximumLengthSubItem(
+    def test_maximum_length_sub_item(self) -> None:
+        item = userdataitems.MaximumLengthSubItem(
             maximum_length_received=5
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_scp_scu_role_selection_sub_item(self):
-        item = pynetdicom2.userdataitems.ScpScuRoleSelectionSubItem(
-            sop_class_uid='1.2.3.4.5', scp_role=1, scu_role=1
+    def test_scp_scu_role_selection_sub_item(self) -> None:
+        item = userdataitems.ScpScuRoleSelectionSubItem(
+            sop_class_uid=uid.UID('1.2.3.4.5'), scp_role=1, scu_role=1
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_implementation_version_name_sub_item(self):
-        item = pynetdicom2.userdataitems.ImplementationClassUIDSubItem(
+    def test_implementation_version_name_sub_item(self) -> None:
+        item = userdataitems.ImplementationClassUIDSubItem(
             implementation_class_uid='1.2.3.4.5'
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_asynchronous_operations_window_sub_item(self):
-        item = pynetdicom2.userdataitems.AsynchronousOperationsWindowSubItem(
+    def test_asynchronous_operations_window_sub_item(self) -> None:
+        item = userdataitems.AsynchronousOperationsWindowSubItem(
             max_num_ops_invoked=5, max_num_ops_performed=7
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_sop_class_extended_negotiation_sub_item(self):
-        item = pynetdicom2.userdataitems.SOPClassExtendedNegotiationSubItem(
-            sop_class_uid='1.2.3.4.5', app_info=b'test information'
+    def test_sop_class_extended_negotiation_sub_item(self) -> None:
+        item = userdataitems.SOPClassExtendedNegotiationSubItem(
+            sop_class_uid=uid.UID('1.2.3.4.5'), app_info=b'test information'
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_user_identity_negotiation(self):
-        item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItem(
+    def test_user_identity_negotiation(self) -> None:
+        item = userdataitems.UserIdentityNegotiationSubItem(
             u'user', u'password'
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_user_identity_negotiation_name_only(self):
-        item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItem(
+    def test_user_identity_negotiation_name_only(self) -> None:
+        item = userdataitems.UserIdentityNegotiationSubItem(
             u'user', user_identity_type=1
         )
         self.decode_and_compare_sub_item(item)
 
-    def test_user_identity_negotiation_ac(self):
-        item = pynetdicom2.userdataitems.UserIdentityNegotiationSubItemAc(
+    def test_user_identity_negotiation_ac(self) -> None:
+        item = userdataitems.UserIdentityNegotiationSubItemAc(
             u'test_key'
         )
         self.decode_and_compare_sub_item(item)
