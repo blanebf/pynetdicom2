@@ -103,7 +103,7 @@ class CStoreAE(ae.AE):
 
 
 class CStoreTestCase(unittest.TestCase):
-    def test_c_store_positive(self):
+    def test_c_store_positive(self) -> None:
         rq = dataset.Dataset()
         rq.PatientName = 'Patient^Name^Test'
         rq.PatientID = 'TestID'
@@ -122,7 +122,7 @@ class CStoreTestCase(unittest.TestCase):
                 status = service(rq, 1)
                 self.assertTrue(status.is_success)
 
-    def test_c_store_from_file(self):
+    def test_c_store_from_file(self) -> None:
         file_name = os.path.join(BASE_PATH, 'test_sr.dcm')
         rq = pydicom.dcmread(file_name)
 
@@ -172,13 +172,13 @@ class CommitmentAE(ae.AE):
 
 
 class StorageCommitmentTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.event = threading.Event()
         self.remote_ae1 = dict(address='127.0.0.1', port=11113, aet='AET1')
         self.remote_ae2 = dict(address='127.0.0.1', port=11112, aet='AET2')
         self.transaction = uid.generate_uid()
 
-    def test_commitment_positive(self):
+    def test_commitment_positive(self) -> None:
         _uids = [(uids.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()) for _ in range(5)]
 
         ae1 = CommitmentAE(self, self.transaction, _uids, [], self.event,
@@ -200,7 +200,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
                 self.assertTrue(status.is_success)
                 self.event.wait(20)
 
-    def test_commitment_failure(self):
+    def test_commitment_failure(self) -> None:
         _uids = [(uids.COMPREHENSIVE_SR_STORAGE, uid.generate_uid()+str(i)) for i in range(10)]
 
         ae1 = CommitmentAE(self, self.transaction, _uids[:5], _uids[5:],
