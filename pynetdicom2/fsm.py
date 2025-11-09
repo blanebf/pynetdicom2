@@ -175,9 +175,11 @@ OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
 
 class ProviderProto(Protocol):
     dul_socket: socket.socket
+    called_presentation_address: Optional[tuple[str, int]]
     primitive: Optional[PDUType]
     to_service_user: IncomingQueue
     from_service_user: OutgoingQueue
+    is_acceptor: bool
 
 
 class Timer:
@@ -387,7 +389,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return self.provider.primitive
 
     @primitive.setter
-    def primitive(self, value: Optional[PDUType]):
+    def primitive(self, value: Optional[PDUType]) -> None:
         self.provider.primitive = value
 
     @property
@@ -400,7 +402,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         self.provider.dul_socket = value
 
     @property
-    def to_service_user(self):
+    def to_service_user(self) -> IncomingQueue:
         """Outgoing PDU/DIMSE message queue"""
         return self.provider.to_service_user
 
@@ -412,7 +414,11 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ae_1(self) -> States:
         """Issue TransportConnect request primitive to local transport service."""
         self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.dul_socket.connect(self.primitive.called_presentation_address)
+        if not self.provider.called_presentation_address:
+            raise exceptions.NetDICOMError(
+                'Called presentation address is not set'
+            )
+        self.dul_socket.connect(self.provider.called_presentation_address)
         return States.STA_4
 
     def ae_2(self) -> States:
@@ -484,6 +490,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
                 self.store_in_file,
                 self.get_file_cb
             )
+        if not isinstance(self.primitive, pdu.PDataTfPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type: {self.primitive}'
+            )
         self.dimse_decoder.process(self.primitive)
         if not self.dimse_decoder.receiving:
             msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
@@ -528,6 +538,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
                 self.store_in_file,
                 self.get_file_cb
             )
+        if not isinstance(self.primitive, pdu.PDataTfPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type: {self.primitive}'
+            )
         self.dimse_decoder.process(self.primitive)
         if not self.dimse_decoder.receiving:
             msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
@@ -545,7 +559,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ar_8(self) -> States:
         """Issue A-RELEASE indication (release collision)."""
         self.to_service_user.put(self.primitive)
-        if self.provider.requestor == 1:
+        if not self.provider.is_acceptor:
             return States.STA_9
         return States.STA_10
 

@@ -30,7 +30,7 @@ The rest sub-items for User Data Information Item can be found at
 """
 import struct
 from io import BytesIO
-from typing import ClassVar, Iterable, Optional, Type, Union
+from typing import ClassVar, Iterable, Optional, Type, Union, cast
 
 from pydicom import uid
 
@@ -68,7 +68,7 @@ def _next_type(stream: BytesIO) -> Optional[int]:
     if char == b'':
         return None  # we are at the end of the file
     stream.seek(-1, 1)
-    return struct.unpack('B', char)[0]
+    return cast(int, struct.unpack('B', char)[0])
 
 
 class AAssociatePDUBase:
@@ -336,7 +336,7 @@ class PDataTfPDU:
             + b''.join(item.encode() for item in self.data_value_items)
 
     @classmethod
-    def decode(cls, rawstring) -> 'PDataTfPDU':
+    def decode(cls, rawstring: bytes) -> 'PDataTfPDU':
         """Factory method. Decodes P-DATA-TF PDU instance from raw string.
 
         :param rawstring: rawstring containing binary representation of the
@@ -506,7 +506,7 @@ class AAbortPDU:
         """
         stream = BytesIO(rawstring)
         _, reserved1, _, reserved2, reserved3, abort_source, \
-            reason_diag = cls.format.unpack(stream.read(10))  # type: ignore
+            reason_diag = cls.format.unpack(stream.read(10))
         return cls(reserved1=reserved1, reserved2=reserved2,
                    reserved3=reserved3, source=abort_source,
                    reason_diag=reason_diag)
@@ -658,7 +658,7 @@ class PresentationContextItemRQ:
         :param stream: raw data stream
         :return: decoded context item
         """
-        def iter_items():
+        def iter_items() -> Iterable[TransferSyntaxSubItem]:
             while _next_type(stream) == 0x40:
                 yield TransferSyntaxSubItem.decode(stream)
 

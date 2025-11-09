@@ -44,24 +44,38 @@ Arguments have similar meaning to SCP role implementation. First two mandatory
 arguments are provided by association and the rest are expected from service
 user.
 """
-from typing import Any, BinaryIO, Iterable, Optional, Union, cast, overload
+from typing import Any, BinaryIO, Callable, Iterable, Optional, Protocol, Union, cast, overload
 import pydicom
 from pydicom import filereader
 from pydicom import uid
 
-from pynetdicom2 import asceprovider
-
-from . import dimsemessages, dsutils, exceptions, fsm, statuses, uids
+from . import asceprovider, dimsemessages, dsutils, exceptions, fsm, statuses, uids
 
 
-def sop_classes(uids: list[uid.UID]):
+class AugmentedProto(Protocol):
+    @overload
+    def __call__(
+            self,
+            service: asceprovider.SCPService[asceprovider.T]
+    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
+        ...
+
+    @overload
+    def __call__(
+            self,
+            service: asceprovider.SCUService
+    ) -> asceprovider.SCUServiceWithSOPClass:
+        ...
+
+
+def sop_classes(uids: list[uid.UID]) -> AugmentedProto:
     """Simple decorator that adds or extends ``sop_classes`` attribute
     with provided list of UIDs.
     """
     @overload
     def augment(
-            service: asceprovider.SCPService
-    ) -> asceprovider.SCPServiceWithSOPClass:
+            service: asceprovider.SCPService[asceprovider.T]
+    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
         ...
 
     @overload
@@ -70,7 +84,7 @@ def sop_classes(uids: list[uid.UID]):
     ) -> asceprovider.SCUServiceWithSOPClass:
         ...
 
-    def augment(service):
+    def augment(service: Any) -> Any:
         if not hasattr(service, 'sop_classes'):
             service.sop_classes = []
         service.sop_classes.extend(uids)
@@ -80,8 +94,8 @@ def sop_classes(uids: list[uid.UID]):
 
 
 def store_in_file(
-        service: asceprovider.SCPServiceWithSOPClass
-) -> asceprovider.SCPServiceWithSOPClass:
+        service: asceprovider.SCPServiceWithSOPClass[asceprovider.T]
+) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
     """Sets ``store_in_file`` attribute to ``True``"""
     service.store_in_file = True
     return service
@@ -106,14 +120,14 @@ class MessageDispatcher:  # pylint: disable=too-few-public-methods
         0x0150: 'n_delete',
     }
 
-    def get_method(self, msg: dimsemessages.DIMSEMessage):
+    def get_method(self, msg: dimsemessages.DIMSEMessage) -> Callable[..., Any]:
         """Gets object's method based on incoming message type
 
         :param msg: incoming message
         """
         try:
             name = self.message_to_method[msg.command_field]
-            return getattr(self, name)
+            return cast(Callable[..., Any], getattr(self, name))
         except KeyError as exc:
             raise exceptions.DIMSEProcessingError('Unknown message type') from exc
         except AttributeError as exc:
@@ -152,7 +166,7 @@ class MessageDispatcherSCP(MessageDispatcher):
             msg: dimsemessages.DIMSERequestMessage
     ) -> None:
         method = self.get_method(msg)
-        return method(asce, ctx, msg)
+        method(asce, ctx, msg)
 
 
 @sop_classes([uids.VERIFICATION_SOP_CLASS])
@@ -630,7 +644,7 @@ def modality_work_list_scu(
 def modality_work_list_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: fsm.PContextDef,
-        msg: pydicom.Dataset
+        msg: dimsemessages.CFindRQMessage
 ) -> None:
     """Modality WorkList service implementation (SCP).
 
@@ -795,7 +809,7 @@ def storage_commitment_scu(
         asce: asceprovider.AssociationRequester,
         ctx: fsm.PContextDef,
         transaction_uid: uid.UID,
-        uids,
+        uids: Iterable[tuple[uid.UID, uid.UID]],
         msg_id: int
 ) -> statuses.Status:
     """Storage Commitment service implementation (SCU)

@@ -21,9 +21,10 @@ as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     should not worry about any kind of message validation.
 """
 import struct
-from typing import BinaryIO, ClassVar, Iterator, Optional, Type, Union
+from typing import Any, BinaryIO, ClassVar, Iterator, Optional, Type, Union
 
 from pydicom.dataset import Dataset
+from pydicom.dataelem import DataElement, RawDataElement
 
 from . import dsutils
 from . import pdu
@@ -35,7 +36,7 @@ PRIORITY_MEDIUM = 0x0000
 PRIORITY_HIGH = 0x0001
 
 
-def value_or_none(elem):
+def value_or_none(elem: Union[DataElement, RawDataElement]) -> Optional[Any]:
     """Gets element value or returns None, if element is None
 
     :param elem: dataset element or None
@@ -62,7 +63,7 @@ def fragment(
         max_pdu_length: int,
         normal: int,
         last: int
-    ) -> Iterator[tuple[bytes, int]]:
+) -> Iterator[tuple[bytes, int]]:
     """Fragmets dataset byte stream into chunks
 
     :param data_set: dataset bytes stream
@@ -102,14 +103,14 @@ def fragment_file(
         yield chunk, normal if has_next else last
 
 
-def dimse_property(tag):
+def dimse_property(tag: tuple[int, int]) -> property:
     """Creates property for DIMSE message using specified attribute tag
 
     :param tag: tuple with group and element numbers
     :return: property that gets/sets value in command dataset
     """
 
-    def setter(self, value):
+    def setter(self: 'DIMSEMessage', value: Any) -> None:
         self.command_set[tag].value = value
     return property(lambda self: value_or_none(self.command_set.get(tag)), setter)
 
@@ -206,7 +207,7 @@ class DIMSEMessage:
               for v in list(self.command_set.values())[1:])
         self.command_set[(0x0000, 0x0000)].value = sum(it)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.command_set) + '\n'
 
 
