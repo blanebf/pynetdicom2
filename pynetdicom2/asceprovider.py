@@ -326,14 +326,14 @@ class Association:
         raise exceptions.NetDICOMError()
 
     @staticmethod
-    def _handle_errors(dul_msg: fsm.ASCEType) -> None:
-        if dul_msg.pdu_type == pdu.AReleaseRqPDU.pdu_type:
+    def _handle_errors(dul_msg: Union[fsm.PDUType]) -> None:
+        if isinstance(dul_msg, pdu.AReleaseRqPDU):
             raise exceptions.AssociationReleasedError()
-        if dul_msg.pdu_type == pdu.AAbortPDU.pdu_type:
-            dul_msg = cast(pdu.AAbortPDU, dul_msg)
-            raise exceptions.AssociationAbortedError(dul_msg.source, dul_msg.reason_diag)
-        if dul_msg.pdu_type == pdu.AAssociateRjPDU.pdu_type:
-            dul_msg = cast(pdu.AAssociateRjPDU, dul_msg)
+        if isinstance(dul_msg, pdu.AAbortPDU):
+            raise exceptions.AssociationAbortedError(
+                dul_msg.source, dul_msg.reason_diag
+            )
+        if isinstance(dul_msg, pdu.AAssociateRjPDU):
             raise exceptions.AssociationRejectedError(
                 dul_msg.result, dul_msg.source, dul_msg.reason_diag
             )
@@ -398,6 +398,8 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         of the request sends association response based on
         acceptable_pr_contexts"""
         user_items = assoc_req.variable_items[-1]
+        if not isinstance(user_items, pdu.UserInformationItem):
+            raise AssertionError(f'Unexpected sub-item: {user_items}')
         max_pdu_sub_item = user_items.user_data[0]
         if not isinstance(max_pdu_sub_item, userdataitems.MaximumLengthSubItem):
             raise exceptions.AssociationError(
@@ -412,24 +414,37 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         requested = (
             (item.context_id, item.abs_sub_item.name, item.ts_sub_items)
             for item in assoc_req.variable_items[1:-1]
+            if isinstance(item, pdu.PresentationContextItemRQ)
         )
 
         for pc_id, proposed_sop, proposed_ts in requested:
             if proposed_sop not in self.ae.supported_scp:
                 # refuse sop class because of SOP class not supported
-                rsp.append(pdu.PresentationContextItemAC(pc_id, 1, pdu.TransferSyntaxSubItem('')))
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id,
+                        1,
+                        pdu.TransferSyntaxSubItem('')
+                    )
+                )
                 continue
 
             for ts in proposed_ts:
                 if ts.name in self.ae.supported_ts:
                     rsp.append(pdu.PresentationContextItemAC(pc_id, 0, ts))
                     ts_uid = uid.UID(ts.name)
-                    self.sop_classes_as_scp[pc_id] = (pc_id, proposed_sop, ts_uid)
-                    self.accepted_contexts[pc_id] = fsm.PContextDef(pc_id, proposed_sop, ts_uid)
+                    self.sop_classes_as_scp[pc_id] = (
+                        pc_id, uid.UID(proposed_sop), ts_uid
+                    )
+                    self.accepted_contexts[pc_id] = fsm.PContextDef(
+                        pc_id, uid.UID(proposed_sop), ts_uid
+                    )
                     break
             else:  # Refuse sop class because of TS not supported
                 rsp.append(
-                    pdu.PresentationContextItemAC(pc_id, 1, pdu.TransferSyntaxSubItem(''))
+                    pdu.PresentationContextItemAC(
+                        pc_id, 1, pdu.TransferSyntaxSubItem('')
+                    )
                 )
         self.dul.accepted_contexts = self.accepted_contexts
 
@@ -529,9 +544,9 @@ class AssociationRequester(Association):
     def get_scu(self, sop_class: uid.UID) -> Callable[..., Any]:
         """Get SCU function to use (like for making a C-FIND request).
 
-        SCU are generally provided by `sopclass` module. First argument of the service
-        would be bound to current association and second would be bound to current presentation
-        contexnt.
+        SCU are generally provided by `sopclass` module. First argument of the
+        service would be bound to current association and second would be bound
+        to current presentation contexnt.
 
         :param sop_class: SOP Class UID
         :raises exceptions.ClassNotSupportedError: raised if provided SOP Class UID is not
@@ -562,14 +577,21 @@ class AssociationRequester(Association):
             self,
             local_ae: AETParams,
             remote_ae: RemoteAEConfig,
-            users_pdu: Optional[pdu.UserItem] = None
+            users_pdu: Optional[list[pdu.UserItem]] = None
     ) -> pdu.AAssociateAcPDU:
         """Requests an association with a remote AE and waits for association
         response."""
-        max_pdu_length_par = userdataitems.MaximumLengthSubItem(self.max_pdu_length)
-        implementation_uid = userdataitems.ImplementationClassUIDSubItem(IMPLEMENTATION_UID)
-        user_information = [max_pdu_length_par, implementation_uid] + users_pdu \
-            if users_pdu else [max_pdu_length_par, implementation_uid]
+        max_pdu_length_par = userdataitems.MaximumLengthSubItem(
+            self.max_pdu_length
+        )
+        implementation_uid = userdataitems.ImplementationClassUIDSubItem(
+            IMPLEMENTATION_UID
+        )
+        user_information: list[pdu.UserItem] = [
+            max_pdu_length_par, implementation_uid
+        ]
+        if users_pdu:
+            user_information.extend(users_pdu)
         username = remote_ae.username
         password = remote_ae.password
         if username and password:
@@ -614,26 +636,41 @@ class AssociationRequester(Association):
         self.dul.called_presentation_address = (remote_ae.address, remote_ae.port)
         self.dul.send(assoc_rq)
         response = self.dul.receive(self.ae.dcm_timeout)
+        if isinstance(response, tuple):
+            raise exceptions.AssociationError(
+                f'Unexpected response: {response}'
+            )
         self._handle_errors(response)
         if not isinstance(response, pdu.AAssociateAcPDU):
             raise exceptions.AssociationError('Invalid repsonse')
 
         # Get maximum pdu length from answer
-        user_data = response.variable_items[-1].user_data
-        try:
-            max_pdu_length = user_data[0].maximum_length_received
-            if max_pdu_length and self.max_pdu_length > max_pdu_length:
-                self.max_pdu_length = max_pdu_length
-        except IndexError:
-            pass
+        user_item = response.variable_items[-1]
+        if not isinstance(user_item, pdu.UserInformationItem):
+            raise exceptions.AssociationError(
+                f'Unexpected item in place of UserInformation item {user_item}'
+            )
+        max_pdu_sub_item = user_item.user_data[0]
+        if not isinstance(max_pdu_sub_item, userdataitems.MaximumLengthSubItem):
+            raise exceptions.AssociationError(
+                f'First sub-item is not MaximumLengthSubItem: {max_pdu_sub_item}'
+            )
+        max_pdu_length = max_pdu_sub_item.maximum_length_received
+        if max_pdu_length and self.max_pdu_length > max_pdu_length:
+            self.max_pdu_length = max_pdu_length
 
         # Get accepted presentation contexts
-        accepted = (ctx for ctx in response.variable_items[1:-1] if ctx.result_reason == 0)
+        accepted = (
+            ctx for ctx in response.variable_items[1:-1]
+            if isinstance(ctx, pdu.PresentationContextItemAC) and ctx.result_reason == 0
+        )
         for ctx in accepted:
             pc_id = ctx.context_id
             sop_class = self.context_def_list[ctx.context_id].sop_class
             ts_uid = uid.UID(ctx.ts_sub_item.name)
             self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
-            self.accepted_contexts[pc_id] = fsm.PContextDef(pc_id, sop_class, ts_uid)
+            self.accepted_contexts[pc_id] = fsm.PContextDef(
+                pc_id, sop_class, ts_uid
+            )
         self.dul.accepted_contexts = self.accepted_contexts
         return response
