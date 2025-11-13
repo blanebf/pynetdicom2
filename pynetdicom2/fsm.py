@@ -509,6 +509,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         self.dimse_decoder.process(self.primitive)
         if not self.dimse_decoder.receiving:
             msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
+            if not msg or not pc_id:
+                raise exceptions.NetDICOMError(
+                    'Invalid DIMSE decoder state'
+                )
             self.to_service_user.put((msg, pc_id))
             self.dimse_decoder = None
         return States.STA_6
@@ -521,11 +525,15 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ar_2(self) -> States:
         """Send A-RELEASE indication primitive."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
         return States.STA_8
 
     def ar_3(self) -> States:
         """Issue A-RELEASE confirmation primitive and close transport connection."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
         return States.STA_1
@@ -557,6 +565,10 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         self.dimse_decoder.process(self.primitive)
         if not self.dimse_decoder.receiving:
             msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
+            if not msg or not pc_id:
+                raise exceptions.NetDICOMError(
+                    'Invalid DIMSE decoder state'
+                )
             self.to_service_user.put((msg, pc_id))
             self.dimse_decoder = None
         return States.STA_7
@@ -570,6 +582,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ar_8(self) -> States:
         """Issue A-RELEASE indication (release collision)."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
         if not self.provider.is_acceptor:
             return States.STA_9
@@ -583,6 +597,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ar_10(self) -> States:
         """Issue A-RELEASE confirmation primitive."""
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
         return States.STA_12
 
@@ -615,6 +631,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
         This action is triggered by the reception of an A-ABORT PDU.
         """
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
         self.dul_socket.close()
         return States.STA_1

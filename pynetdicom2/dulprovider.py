@@ -22,7 +22,7 @@ import collections
 from collections.abc import Iterator
 
 import threading
-from typing import Optional, Type, Union
+from typing import Optional, Type, Union, cast
 import socket
 import select
 import struct
@@ -236,7 +236,7 @@ class DULServiceProvider(threading.Thread):
                     self.dimse_gen = None
             incoming = self.from_service_user.get(False, None)
             if hasattr(incoming, 'pdu_type'):
-                self.primitive = incoming
+                self.primitive = cast(fsm.PDUType, incoming)
             else:
                 self.dimse_gen = incoming
                 self.primitive = next(self.dimse_gen)
