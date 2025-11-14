@@ -28,7 +28,8 @@ import time
 import socket
 import socketserver
 from typing import (
-    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol, TypeVar, Union, cast
+    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol, TypeVar,
+    Union
 )
 
 import pydicom
@@ -311,12 +312,12 @@ class Association:
             raise exceptions.NetDICOMError(
                 f'Unexpected DIMSE message on release: {rsp}'
             )
-        if rsp.pdu_type != pdu.AReleaseRpPDU.pdu_type:
+        if not isinstance(rsp, pdu.AReleaseRpPDU):
             raise exceptions.NetDICOMError(
                 f'Unexpected PDU on release {rsp}'
             )
         self.kill()
-        return cast(pdu.AReleaseRpPDU, rsp)
+        return rsp
 
     def _get_dul_message(self) -> tuple[dimsemessages.DIMSEMessage, int]:
         dul_msg = self.dul.receive(self.ae.dcm_timeout)
@@ -492,6 +493,10 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
             dimse_msg, pc_id = self.receive()
             _uid = dimse_msg.sop_class_uid
             try:
+                if not isinstance(dimse_msg, dimsemessages.DIMSERequestMessage):
+                    raise exceptions.DIMSEProcessingError(
+                        f'Expected DIMSE Request message but got: {dimse_msg}'
+                    )
                 _, sop_class, ts = self.sop_classes_as_scp[pc_id]
                 service = self.ae.supported_scp[_uid]
             except KeyError as exc:
