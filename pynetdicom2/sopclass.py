@@ -195,9 +195,9 @@ def verification_scu(
 
 @sop_classes([uids.VERIFICATION_SOP_CLASS])
 def verification_scp(
-        asce: asceprovider.AssociationRequester,
+        asce: asceprovider.AssociationAcceptor,
         ctx: fsm.PContextDef,
-        msg: dimsemessages.DIMSERequestMessage
+        msg: dimsemessages.CEchoRQMessage
 ) -> None:
     """Process received C-ECHO.
 
@@ -563,7 +563,8 @@ def qr_move_scp(
         raise exceptions.NetDICOMError('C-MOVE-RQ should contain a dataset')
 
     ds = dsutils.decode(
-        cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+        cast(bytes, msg.data_set),
+        ctx.supported_ts.is_implicit_VR,
         ctx.supported_ts.is_little_endian
     )
 
@@ -666,6 +667,7 @@ class StorageCommitment(MessageDispatcherSCP):
     Handles incoming N-ACTION-RQ and N-EVENT-REPORT-RQ messages.
     """
     sop_classes = [uids.STORAGE_COMMITMENT_SOP_CLASS]
+    store_in_file = False
 
     PROCESSING_FAILURE = 0x0110
     NO_SUCH_OBJECT_INSTANCE = 0x0112
@@ -700,7 +702,8 @@ class StorageCommitment(MessageDispatcherSCP):
             raise exceptions.NetDICOMError('N-EVENT-REPORT-RQ should contain a dataset')
 
         ds = dsutils.decode(
-            cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+            cast(bytes, msg.data_set),
+            ctx.supported_ts.is_implicit_VR,
             ctx.supported_ts.is_little_endian
         )
         transaction_uid = ds.TransactionUID
@@ -755,13 +758,16 @@ class StorageCommitment(MessageDispatcherSCP):
         rsp.sop_class_uid = ctx.sop_class
         rsp.affected_sop_instance_uid = instance_uid
         ds = dsutils.decode(
-            cast(bytes, msg.data_set), ctx.supported_ts.is_implicit_VR,
+            cast(bytes, msg.data_set),
+            ctx.supported_ts.is_implicit_VR,
             ctx.supported_ts.is_little_endian
         )
         uids = ((item.ReferencedSOPClassUID, item.ReferencedSOPInstanceUID)
                 for item in ds.ReferencedSOPSequence)
         try:
-            remote_ae, success, failure = asce.ae.on_commitment_request(asce.remote_ae, uids)
+            remote_ae, success, failure = asce.ae.on_commitment_request(
+                asce.remote_ae, uids
+            )
         except exceptions.EventHandlingError:
             rsp.status = int(statuses.PROCESSING_FAILURE)
             asce.send(rsp, ctx.id)
@@ -795,9 +801,11 @@ class StorageCommitment(MessageDispatcherSCP):
                     seq.append(ref)
                 report_ds.FailedSOPSequence = pydicom.Sequence(seq)
 
-            report.data_set = dsutils.encode(report_ds,
-                                             ctx.supported_ts.is_implicit_VR,
-                                             ctx.supported_ts.is_little_endian)
+            report.data_set = dsutils.encode(
+                report_ds,
+                ctx.supported_ts.is_implicit_VR,
+                ctx.supported_ts.is_little_endian
+            )
 
             with asce.ae.request_association(remote_ae) as assoc:
                 assoc.send(report, ctx.id)

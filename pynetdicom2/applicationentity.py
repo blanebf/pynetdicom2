@@ -28,7 +28,7 @@ import platform
 import copy
 import contextlib
 import os
-from typing import Any, BinaryIO, Iterator, Iterable, Optional, Union
+from typing import Any, BinaryIO, Iterator, Iterable, Optional, Union, cast
 import socketserver
 
 from pydicom import Dataset
@@ -468,7 +468,11 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         :param service: DICOM service.
         """
         self.supported_scp.update({
-            uid: service for uid in service.sop_classes
+            uid: cast(
+                asceprovider.SCPServiceWithSOPClass[dimsemessages.DIMSERequestMessage],
+                service
+            )
+            for uid in service.sop_classes
         })
         store_in_file = (hasattr(service, 'store_in_file') and service.store_in_file)
         self.update_context_def_list(service.sop_classes, store_in_file)

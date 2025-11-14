@@ -219,9 +219,13 @@ class DULServiceProvider(threading.Thread):
             return True
 
         # check if something comes in the client socket
-        if select.select([self.dul_socket], [], [], 0.05)[0]:
-            if self._check_incoming_pdu():
-                return True
+        try:
+            if select.select([self.dul_socket], [], [], 0.05)[0]:
+                if self._check_incoming_pdu():
+                    return True
+        except ValueError:
+            # Invalid socket state, nothing to select
+            return False
 
         return self._process_incoming()
 
