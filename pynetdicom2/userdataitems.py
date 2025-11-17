@@ -20,7 +20,8 @@ class MaximumLengthSubItem:
 
     :ivar reserved: this reserved field shall be sent with a value 00H but not
                     tested to this value when received.
-    :ivar item_length: item length, in the case of this item it's fixed to 0x0004
+    :ivar item_length: item length, in the case of this item it's fixed to
+                       0x0004
     :ivar maximum_length_received: P-DATA-TF PDUs size limit
     """
     item_type = 0x51
@@ -46,9 +47,8 @@ class MaximumLengthSubItem:
     def total_length(self) -> int:
         """Returns item total length.
 
-        This item has a fixed length of 8, so method always returns 8 regardless
-        of specific instance
-        :rtype int
+        This item has a fixed length of 8, so method always returns 8
+        regardless of specific instance
         :return item total length
         """
         return 0x08
@@ -69,23 +69,29 @@ class MaximumLengthSubItem:
     def decode(cls, stream: BytesIO) -> 'MaximumLengthSubItem':
         """Decodes maximum length sub-item from data stream
 
-        :rtype MaximumLengthSubItem
         :param stream: raw data stream
         :return decoded maximum length sub-item
         """
-        _, reserved, item_length, maximum_length_received = cls.item_format.unpack(stream.read(8))
-        return cls(reserved=reserved, item_length=item_length,
-                   maximum_length_received=maximum_length_received)
+        (
+            _, reserved, item_length, maximum_length_received
+        ) = cls.item_format.unpack(stream.read(8))
+        return cls(
+            reserved=reserved,
+            item_length=item_length,
+            maximum_length_received=maximum_length_received
+        )
 
 
 class ImplementationClassUIDSubItem:
-    """Represents sub-item described in PS 3.8 D.3.3.2 Implementation Identification Notification
+    """Represents sub-item described in PS 3.8 D.3.3.2 Implementation
+    Identification Notification
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
 
     :ivar reserved: this reserved field shall be sent with a value 00H but not
                     tested to this value when received.
-    :ivar implementation_class_uid: This variable field shall contain the Implementation-class-uid
+    :ivar implementation_class_uid: This variable field shall contain the
+                                    Implementation-class-uid
     """
     item_type = 0x52
     header = struct.Struct('>B B H')
@@ -99,9 +105,11 @@ class ImplementationClassUIDSubItem:
         self.implementation_class_uid = implementation_class_uid  # string
 
     def __repr__(self) -> str:
-        return f'ImplementationClassUIDSubItem(' \
-               f'implementation_class_uid="{self.implementation_class_uid}", ' \
-               f'reserved={self.reserved})'
+        return (
+            f'ImplementationClassUIDSubItem('
+            f'implementation_class_uid="{self.implementation_class_uid}", '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -124,24 +132,35 @@ class ImplementationClassUIDSubItem:
 
         :return: binary representation of an item
         """
-        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
-                         self.implementation_class_uid.encode()])
+        return b''.join(
+            [
+                self.header.pack(
+                    self.item_type,
+                    self.reserved,
+                    self.item_length
+                ),
+                self.implementation_class_uid.encode()
+            ]
+        )
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'ImplementationClassUIDSubItem':
         """Decodes Implementation Class UID sub-item from data stream
 
-        :rtype ImplementationClassUIDSubItem
         :param stream: raw data stream
         :return decoded maximum length sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
         implementation_class_uid = uid.UID(stream.read(item_length).decode())
-        return cls(reserved=reserved, implementation_class_uid=implementation_class_uid)
+        return cls(
+            reserved=reserved,
+            implementation_class_uid=implementation_class_uid
+        )
 
 
 class ImplementationVersionNameSubItem:
-    """Represents sub-item described in PS 3.8 D.3.3.2 Implementation Identification Notification
+    """Represents sub-item described in PS 3.8 D.3.3.2 Implementation
+    Identification Notification
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
 
@@ -159,7 +178,9 @@ class ImplementationVersionNameSubItem:
             reserved: int = 0x00
     ) -> None:
         self.reserved = reserved  # unsigned byte
-        self.implementation_version_name = implementation_version_name  # string
+
+        # string
+        self.implementation_version_name = implementation_version_name
 
     def __repr__(self) -> str:
         return f'ImplementationVersionNameSubItem(' \
@@ -197,27 +218,31 @@ class ImplementationVersionNameSubItem:
     def decode(cls, stream: BytesIO) -> 'ImplementationVersionNameSubItem':
         """Decodes Implementation Version Name sub-item from data stream
 
-        :rtype ImplementationVersionNameSubItem
         :param stream: raw data stream
         :return decoded Implementation Version Name sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
         implementation_version_name = stream.read(item_length).decode()
-        return cls(implementation_version_name=implementation_version_name,
-                   reserved=reserved)
+        return cls(
+            implementation_version_name=implementation_version_name,
+            reserved=reserved
+        )
 
 
 class AsynchronousOperationsWindowSubItem:
-    """Represents sub-item described in PS 3.8 D.3.3.3 Asynchronous Operations (And Sub-Operations)
-    Window Negotiation
+    """Represents sub-item described in PS 3.8 D.3.3.3 Asynchronous Operations
+    (And Sub-Operations) Window Negotiation
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
 
     :ivar reserved: this reserved field shall be sent with a value 00H but not
                     tested to this value when received.
-    :ivar item_length: item length, in the case of this item it's fixed to 0x0004
-    :ivar max_num_ops_invoked: This field shall contain the Maximum-number-operations-invoked
-    :ivar max_num_ops_performed: This field shall contain the Maximum-number-operations-performed
+    :ivar item_length: item length, in the case of this item it's fixed to
+                       0x0004
+    :ivar max_num_ops_invoked: This field shall contain the
+                               Maximum-number-operations-invoked
+    :ivar max_num_ops_performed: This field shall contain the
+                                 Maximum-number-operations-performed
     """
     item_type = 0x53
     item_format = struct.Struct('>B B H H H')
@@ -254,35 +279,44 @@ class AsynchronousOperationsWindowSubItem:
 
         :return: binary representation of an item
         """
-        return self.item_format.pack(self.item_type, self.reserved,
-                                     self.item_length, self.max_num_ops_invoked,
-                                     self.max_num_ops_performed)
+        return self.item_format.pack(
+            self.item_type,
+            self.reserved,
+            self.item_length,
+            self.max_num_ops_invoked,
+            self.max_num_ops_performed
+        )
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'AsynchronousOperationsWindowSubItem':
         """Decodes Asynchronous Operations Window sub-item from data stream
 
-        :rtype AsynchronousOperationsWindowSubItem
         :param stream: raw data stream
         :return decoded Asynchronous Operations Window sub-item
         """
         _, reserved, item_length, max_num_ops_invoked, \
             max_num_ops_performed = cls.item_format.unpack(stream.read(8))
-        return cls(reserved=reserved, item_length=item_length,
-                   max_num_ops_invoked=max_num_ops_invoked,
-                   max_num_ops_performed=max_num_ops_performed)
+        return cls(
+            reserved=reserved,
+            item_length=item_length,
+            max_num_ops_invoked=max_num_ops_invoked,
+            max_num_ops_performed=max_num_ops_performed
+        )
 
 
 class ScpScuRoleSelectionSubItem:
-    """Represents sub-item described in PS 3.8 D.3.3.4 SCP/SCU Role Selection Negotiation
+    """Represents sub-item described in PS 3.8 D.3.3.4 SCP/SCU Role Selection
+    Negotiation
 
     Note that item is used in both A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs.
 
     :ivar reserved: this reserved field shall be sent with a value 00H but not
                     tested to this value when received.
     :ivar sop_class_uid: SOP Class UID or Meta SOP Class UID
-    :ivar scu_role: 0 - non support of the SCU role, 1 - support of the SCU role
-    :ivar scp_role: 0 - non support of the SCP role, 1 - support of the SCP role.
+    :ivar scu_role: 0 - non support of the SCU role,
+                    1 - support of the SCU role
+    :ivar scp_role: 0 - non support of the SCP role,
+                    1 - support of the SCP role.
     """
     item_type = 0x54
     header = struct.Struct('>B B H H')
@@ -339,7 +373,6 @@ class ScpScuRoleSelectionSubItem:
     def decode(cls, stream: BytesIO) -> 'ScpScuRoleSelectionSubItem':
         """Decodes SCP/SCU Role Selection sub-item from data stream
 
-        :rtype ScpScuRoleSelectionSubItem
         :param stream: raw data stream
         :return decoded SCP/SCU Role Selection sub-item
         """
@@ -409,11 +442,17 @@ class SOPClassExtendedNegotiationSubItem:
         :param stream: binary stream that should be decoded
         :return: new sub-item
         """
-        _, reserved, item_length, uid_length = cls.header.unpack(stream.read(6))
+        _, reserved, item_length, uid_length = cls.header.unpack(
+            stream.read(6)
+        )
         sop_class_uid = uid.UID(stream.read(uid_length).decode())
         app_info_length = item_length - uid_length
         app_info = stream.read(app_info_length)
-        return cls(reserved=reserved, sop_class_uid=sop_class_uid, app_info=app_info)
+        return cls(
+            reserved=reserved,
+            sop_class_uid=sop_class_uid,
+            app_info=app_info
+        )
 
 
 class UserIdentityNegotiationSubItem:
@@ -459,7 +498,6 @@ class UserIdentityNegotiationSubItem:
         Meaning of the value depends on the `user_identity_type` value
 
         :return: primary field value
-        :rtype: str
         """
         return self._primary_field.decode('utf8')
 
@@ -470,7 +508,6 @@ class UserIdentityNegotiationSubItem:
         Meaning of the value depends on the `user_identity_type` value
 
         :return: secondary field value
-        :rtype: str
         """
         return self._secondary_field.decode('utf8')
 
@@ -504,12 +541,20 @@ class UserIdentityNegotiationSubItem:
         :return: binary representation of an item
         """
         return b''.join(
-            [self.header.pack(self.item_type, self.reserved, self.item_length,
-                              self.user_identity_type,
-                              self.positive_response_req,
-                              len(self._primary_field)),
-             self._primary_field, struct.pack('>H', len(self._secondary_field)),
-             self._secondary_field])
+            [
+                self.header.pack(
+                    self.item_type,
+                    self.reserved,
+                    self.item_length,
+                    self.user_identity_type,
+                    self.positive_response_req,
+                    len(self._primary_field)
+                ),
+                self._primary_field,
+                struct.pack('>H', len(self._secondary_field)),
+                self._secondary_field
+            ]
+        )
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'UserIdentityNegotiationSubItem':
@@ -524,8 +569,13 @@ class UserIdentityNegotiationSubItem:
         primary_field = stream.read(primary_field_len)
         secondary_field_len = struct.unpack('>H', stream.read(2))[0]
         secondary_field = stream.read(secondary_field_len)
-        return cls(primary_field.decode('utf8'), secondary_field.decode('utf8'), user_identity_type,
-                   positive_response_req, reserved)
+        return cls(
+            primary_field.decode('utf8'),
+            secondary_field.decode('utf8'),
+            user_identity_type,
+            positive_response_req,
+            reserved
+        )
 
 
 class UserIdentityNegotiationSubItemAc:
@@ -587,7 +637,9 @@ class UserIdentityNegotiationSubItemAc:
         :param stream: binary stream that should be decoded
         :return: new sub-item
         """
-        _, reserved, _, response_len = cls.header.unpack(stream.read(cls.header.size))
+        _, reserved, _, response_len = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         server_response = stream.read(response_len).decode()
         return cls(server_response, reserved)
 
@@ -636,8 +688,14 @@ class GenericUserDataSubItem:
 
         :return: binary representation of an item
         """
-        return b''.join([self.header.pack(self.item_type, self.reserved, self.item_length),
-                         self.user_data])
+        return b''.join([
+            self.header.pack(
+                self.item_type,
+                self.reserved,
+                self.item_length
+            ),
+            self.user_data
+        ])
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'GenericUserDataSubItem':

@@ -312,7 +312,7 @@ description.
 You can add new statuses by using ``statuses.add_status`` function. By using it you will be adding new known status code
 to the global library dictionary of status codes.
 
-"""
+"""  # noqa: E501
 # pylint: enable=line-too-long
 from dataclasses import dataclass
 from typing import Literal, Optional, Type, Union
@@ -323,15 +323,20 @@ __author__ = 'Blane'
 
 StatusType = Literal['Success', 'Pending', 'Failure', 'Warning', 'Cancel']
 
+
 @dataclass(frozen=True)
 class _Status:
     code_type: StatusType
     description: str
 
 
-_general_status_dict: dict[int, _Status] = {}  # pylint: disable=invalid-name
+_general_status_dict: dict[
+    int, _Status
+] = {}  # pylint: disable=invalid-name
 
-_status_dict: dict[tuple[int, int], _Status] = {}  # pylint: disable=invalid-name
+_status_dict: dict[
+    tuple[int, int], _Status
+] = {}  # pylint: disable=invalid-name
 
 
 UNKNOWN = _Status('Failure', 'Unknown Status')
@@ -343,13 +348,16 @@ def add_status(
         description: str,
         end: Optional[int] = None,
         command: Optional[Type[dimse.DIMSEMessage]] = None
-    ) -> None:
+) -> None:
     """Adds new status code to the global library dictionary of known statuses
 
-    :param code: status code or starting value for a range of statuses if ``end`` is provided
-    :param code_type: code type (either Success, Warning, Pending, Cancel or Failure)
+    :param code: status code or starting value for a range of statuses
+                 if ``end`` is provided
+    :param code_type: code type (either Success, Warning, Pending, Cancel or
+                      Failure)
     :param description: status description
-    :param end: optional argument that specifies end value for a range of statuses
+    :param end: optional argument that specifies end value for a range of
+                statuses
     :param command: DIMSE command, if this status is command/service specific
     """
     status = _Status(code_type, description)
@@ -369,15 +377,20 @@ def add_status(
 class Status:
     """Class represents message status.
 
-    This is a helper class that provides convenience methods for printing status codes.
+    This is a helper class that provides convenience methods for printing
+    status codes.
     """
 
-    def __init__(self, value: int, command: Optional[Type[dimse.DIMSEMessage]] = None) -> None:
+    def __init__(
+            self,
+            value: int,
+            command: Optional[Type[dimse.DIMSEMessage]] = None
+    ) -> None:
         """Initializes new Status.
 
         :param value status code
-        :param command: command for which status is created. Some codes depends on the
-                        type of service.
+        :param command: command for which status is created. Some codes
+                        depends on the type of service.
         """
         self._value = value
         status: Optional[_Status] = None
@@ -409,7 +422,14 @@ class Status:
 
 
 # pylint: disable=line-too-long
-KNOWN_STATUSES: list[tuple[Union[int, tuple[int, int]], StatusType, str, Optional[Type[dimse.DIMSEMessage]]]] = [
+KNOWN_STATUSES: list[
+    tuple[
+        Union[int, tuple[int, int]],
+        StatusType,
+        str,
+        Optional[Type[dimse.DIMSEMessage]]
+    ]
+] = [
     (0x0000, 'Success', '', None),
     (0x0105, 'Failure', 'No Such Attribute', None),
     (0x0106, 'Failure', 'Invalid Attribute Value', None),
@@ -440,43 +460,43 @@ KNOWN_STATUSES: list[tuple[Union[int, tuple[int, int]], StatusType, str, Optiona
     (0x0213, 'Failure', 'Resource Limitation', None),
 
     # C-STORE
-    ((0xA700, 0xA7FF), 'Failure', 'Refused: Out of Resources', dimse.CStoreRSPMessage),
-    ((0xA900, 0xA9FF), 'Failure', 'Error: Data Set does not match SOP Class', dimse.CStoreRSPMessage),
-    ((0xC000, 0xCFFF), 'Failure', 'Error: Cannot understand', dimse.CStoreRSPMessage),
-    (0xB000, 'Warning', 'Coercion of Data Elements', dimse.CStoreRSPMessage),
-    (0xB007, 'Warning', 'Data Set does not match SOP Class', dimse.CStoreRSPMessage),
+    ((0xA700, 0xA7FF), 'Failure', 'Refused: Out of Resources', dimse.CStoreRSPMessage),  # noqa: E501
+    ((0xA900, 0xA9FF), 'Failure', 'Error: Data Set does not match SOP Class', dimse.CStoreRSPMessage),  # noqa: E501
+    ((0xC000, 0xCFFF), 'Failure', 'Error: Cannot understand', dimse.CStoreRSPMessage),  # noqa: E501
+    (0xB000, 'Warning', 'Coercion of Data Elements', dimse.CStoreRSPMessage),  # noqa: E501
+    (0xB007, 'Warning', 'Data Set does not match SOP Class', dimse.CStoreRSPMessage),  # noqa: E501
     (0xB006, 'Warning', 'Elements Discarded', dimse.CStoreRSPMessage),
 
     # C-FIND
     (0xA700, 'Failure', 'Refused: Out of Resources', dimse.CFindRSPMessage),
-    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CFindRSPMessage),
-    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CFindRSPMessage),
-    (0xFF00, 'Pending', 'Matches are continuing - Current Match is supplied and any Optional Keys were supported '
-                        'in the same manner as Required Keys.', dimse.CFindRSPMessage),
-    (0xFF01, 'Pending', 'Matches are continuing - Warning that one or more Optional Keys were not '
-                        'supported for existence and/or matching for this Identifier.', dimse.CFindRSPMessage),
+    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CFindRSPMessage),  # noqa: E501
+    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CFindRSPMessage),  # noqa: E501
+    (0xFF00, 'Pending', 'Matches are continuing - Current Match is supplied and any Optional Keys were supported '  # noqa: E501
+                        'in the same manner as Required Keys.', dimse.CFindRSPMessage),  # noqa: E501
+    (0xFF01, 'Pending', 'Matches are continuing - Warning that one or more Optional Keys were not '  # noqa: E501
+                        'supported for existence and/or matching for this Identifier.', dimse.CFindRSPMessage),  # noqa: E501
 
     # C-GET
-    (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CGetRSPMessage),
-    (0xA702, 'Failure', 'Refused: Out of Resources - Unable to perform sub-operations', dimse.CGetRSPMessage),
-    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CGetRSPMessage),
-    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CGetRSPMessage),
-    (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CGetRSPMessage),
+    (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CGetRSPMessage),  # noqa: E501
+    (0xA702, 'Failure', 'Refused: Out of Resources - Unable to perform sub-operations', dimse.CGetRSPMessage),  # noqa: E501
+    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CGetRSPMessage),  # noqa: E501
+    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CGetRSPMessage),  # noqa: E501
+    (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CGetRSPMessage),  # noqa: E501
     (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CGetRSPMessage),
 
     # C-MOVE
-    (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CMoveRSPMessage),
-    (0xA702, 'Failure', 'Refused: Out of Resources - Unable to perform sub-operations', dimse.CMoveRSPMessage),
-    (0xA801, 'Failure', 'Refused: Move Destination unknown', dimse.CMoveRSPMessage),
-    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CMoveRSPMessage),
-    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CMoveRSPMessage),
-    (0xAA00, 'Failure', 'Failed: None of the frames requested were found in the SOP Instance', dimse.CMoveRSPMessage),
-    (0xAA01, 'Failure', 'Failed: Unable to create new object for this SOP class', dimse.CMoveRSPMessage),
-    (0xAA02, 'Failure', 'Failed: Unable to extract frames', dimse.CMoveRSPMessage),
-    (0xAA03, 'Failure', 'Failed: Time-based request received for a non-time-based original SOP Instance.',
+    (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xA702, 'Failure', 'Refused: Out of Resources - Unable to perform sub-operations', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xA801, 'Failure', 'Refused: Move Destination unknown', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xA900, 'Failure', 'Error: Data Set does not match SOP Class', dimse.CMoveRSPMessage),  # noqa: E501
+    ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xAA00, 'Failure', 'Failed: None of the frames requested were found in the SOP Instance', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xAA01, 'Failure', 'Failed: Unable to create new object for this SOP class', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xAA02, 'Failure', 'Failed: Unable to extract frames', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xAA03, 'Failure', 'Failed: Time-based request received for a non-time-based original SOP Instance.',  # noqa: E501
      dimse.CMoveRSPMessage),
     (0xAA04, 'Failure', 'Failed: Invalid Request', dimse.CMoveRSPMessage),
-    (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CMoveRSPMessage),
+    (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CMoveRSPMessage),  # noqa: E501
     (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CMoveRSPMessage)
 ]
 # pylint: enable=line-too-long
@@ -515,8 +535,8 @@ Keys were supported in the same manner as Required Keys. (C-FIND)
 
 C_FIND_PENDING_WARNING = Status(0xFF01, dimse.CFindRSPMessage)
 """
-(0xFF01) Matches are continuing - Warning that one or more Optional Keys were not
-supported for existence and/or matching for this Identifier. (C-FIND)
+(0xFF01) Matches are continuing - Warning that one or more Optional Keys
+were not supported for existence and/or matching for this Identifier. (C-FIND)
 """
 
 #: (0xC000) Failed: Unable to process (C-FIND)

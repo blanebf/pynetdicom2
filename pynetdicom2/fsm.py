@@ -20,10 +20,7 @@ from typing import BinaryIO, Optional, Protocol, Callable, Union
 import pydicom
 import pydicom.uid
 
-from . import dimsemessages
-from . import dsutils
-from . import exceptions
-from . import pdu
+from . import dimsemessages, dsutils, exceptions, pdu
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,7 +68,10 @@ class States(enum.Enum):
     """Awaiting local A-RELEASE response primitive (from local user)"""
 
     STA_9 = 8
-    """Release collision requestor side; awaiting A-RELEASE response (from local user)"""
+    """
+    Release collision requestor side; awaiting A-RELEASE response
+    (from local user)
+    """
 
     STA_10 = 9
     """Release collision acceptor side; awaiting A-RELEASE-RP PDU"""
@@ -80,10 +80,16 @@ class States(enum.Enum):
     """Release collision requestor side; awaiting A-RELEASE-RP PDU"""
 
     STA_12 = 11
-    """Release collision acceptor side; awaiting A-RELEASE response primitive (from local user)"""
+    """
+    Release collision acceptor side; awaiting A-RELEASE response primitive
+    (from local user)
+    """
 
     STA_13 = 12
-    """Awaiting Transport Connection Close Indication (Association no longer exists)"""
+    """
+    Awaiting Transport Connection Close Indication (Association no longer
+    exists)
+    """
 
 
 class Events(enum.Enum):
@@ -169,7 +175,9 @@ ASCEType = Union[
 ]
 
 
-IncomingQueue = queue.Queue[Union[tuple[dimsemessages.DIMSEMessage, int], PDUType]]
+IncomingQueue = queue.Queue[
+    Union[tuple[dimsemessages.DIMSEMessage, int], PDUType]
+]
 OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
 
 
@@ -204,7 +212,8 @@ class Timer:
 
     def check(self) -> bool:
         """Checks if timer has expired"""
-        if self._start_time and (time.time() - self._start_time > self._max_seconds):
+        if (self._start_time and
+                (time.time() - self._start_time > self._max_seconds)):
             return False
         return True
 
@@ -215,12 +224,13 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     :ivar current_state: current state
     :ivar provider: DUL provider
     :ivar timer:
-    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
-                         a file, rather than in-memory
+    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets
+                         should be stored in a file, rather than in-memory
     :ivar get_file_cb: callback for getting a file object for storage
-    :ivar accepted_contexts: accepted presentation contexts in current association
-    :ivar dimse_decoder: decoder for incoming P-DATA-TF PDUs, used to re-create incoming DIMSE
-                         message
+    :ivar accepted_contexts: accepted presentation contexts in current
+                             association
+    :ivar dimse_decoder: decoder for incoming P-DATA-TF PDUs, used to re-create
+                         incoming DIMSE message
     :ivar transition_table: state machine transition table
     """
     def __init__(
@@ -239,7 +249,9 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
         self.dimse_decoder: Optional[DIMSEDecoder] = None
 
-        self.transition_table: dict[tuple[Events, States], Callable[[], States]] = {
+        self.transition_table: dict[
+                tuple[Events, States], Callable[[], States]
+        ] = {
             (Events.EVT_1, States.STA_1): self.ae_1,
 
             (Events.EVT_2, States.STA_4): self.ae_2,
@@ -412,7 +424,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         self.current_state = action()
 
     def ae_1(self) -> States:
-        """Issue TransportConnect request primitive to local transport service."""
+        """Issue TransportConnect request primitive to local transport service.
+        """
         self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not self.provider.called_presentation_address:
             raise exceptions.NetDICOMError(
@@ -438,8 +451,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return States.STA_6
 
     def ae_4(self) -> States:
-        """Issue A-ASSOCIATE confirmation (reject) primitive and close transport
-        connection.
+        """Issue A-ASSOCIATE confirmation (reject) primitive and close
+        transport connection.
         """
         if not isinstance(self.primitive, pdu.AAssociateRjPDU):
             raise exceptions.NetDICOMError(
@@ -458,8 +471,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ae_6(self) -> States:
         """Check A-ASSOCIATE-RQ.
 
-        Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service provider - issue
-        A-ASSOCIATE indication primitive.
+        Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service
+        provider - issue A-ASSOCIATE indication primitive.
         """
         self.timer.stop()
         # Accept
@@ -468,7 +481,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
                 f'Unexpected PDU type {self.primitive}'
             )
         self.to_service_user.put(self.primitive)
-        # TODO Look into why according to standard transition to `Sta13` may occur
+        # TODO Look into why according to standard transition to `Sta13`
+        # may occur
         return States.STA_3
 
     def ae_7(self) -> States:
@@ -531,7 +545,9 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return States.STA_8
 
     def ar_3(self) -> States:
-        """Issue A-RELEASE confirmation primitive and close transport connection."""
+        """Issue A-RELEASE confirmation primitive and close transport
+        connection.
+        """
         if not self.primitive:
             raise exceptions.NetDICOMError('Trying to use unset primitive')
         self.to_service_user.put(self.primitive)
@@ -619,7 +635,8 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return States.STA_1
 
     def aa_3(self) -> States:
-        """Issue A-ABORT or A-P-ABORT indication and close transport connection.
+        """Issue A-ABORT or A-P-ABORT indication and close transport
+        connection.
 
         If (service-user initiated abort):
 
@@ -662,7 +679,9 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return States.STA_13
 
     def aa_8(self) -> States:
-        """Send A-ABORT PDU, issue an A-P-ABORT indication and start ARTIM timer."""
+        """Send A-ABORT PDU, issue an A-P-ABORT indication and start
+        ARTIM timer.
+        """
         self.primitive = pdu.AAbortPDU(source=2, reason_diag=0)
         if self.dul_socket:
             self.dul_socket.sendall(self.primitive.encode())
@@ -678,13 +697,16 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
 
     Decodes incoming P-DATA-TF PDUs into DIMSE message instance.
 
-    :ivar accepted_contexts: accepted presentation contexts in current association
-    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
-                         a file, rather than in-memory
+    :ivar accepted_contexts: accepted presentation contexts in current
+                             association
+    :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets
+                         should be stored in a file, rather than in-memory
     :ivar get_file_cb: callback for getting a file object for storage
-    :ivar receiving: `True` if :class:`~pynetdicom2.fsm.DIMSEDecoder` instnace has not received all
-                     P-DATA-TF PDUs for the current DIMSE message
-    :ivar command_set_received: `True` if Command Set for DIMSE message is received
+    :ivar receiving: `True` if :class:`~pynetdicom2.fsm.DIMSEDecoder` instnace
+                     has not received all P-DATA-TF PDUs for the current DIMSE
+                     message
+    :ivar command_set_received: `True` if Command Set for DIMSE message is
+                                received
     :ivar data_set_received: `True` if Dataset  for DIMSE message is received
     :ivar pc_id: Presentation Context ID
     :ivar msg: decoded DIMSE message
@@ -697,9 +719,11 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
     ) -> None:
         """Initializes DIMSEDecoder instance
 
-        :param accepted_contexts: accepted presentation contexts in current association
-        :param store_in_file: set of SOP Class UIDs, for which incoming datasets should be stored in
-                              a file, rather than in-memory
+        :param accepted_contexts: accepted presentation contexts in current
+                                  association
+        :param store_in_file: set of SOP Class UIDs, for which incoming
+                              datasets should be stored in a file, rather
+                              than in-memory
         :param get_file_cb: callback for getting a file object for storage
         """
         self.accepted_contexts = accepted_contexts
@@ -723,7 +747,8 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
         """Processes new incoming P-DATA-TF PDU
 
         :param p_data: incoming P-DATA-TF PDU
-        :raises exceptions.DIMSEProcessingError: raised if unknown PDV type is encountered
+        :raises exceptions.DIMSEProcessingError: raised if unknown PDV type is
+                                                 encountered
         """
         try:
             for value_item in p_data.data_value_items:
@@ -741,12 +766,18 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
 
                         self.msg = self._command_set_to_message(command_set)
                         no_ds = command_set[(0x0000, 0x0800)].value == 0x0101
-                        use_file = (self.msg.sop_class_uid in self.store_in_file)
+                        use_file = (
+                            self.msg.sop_class_uid in self.store_in_file
+                        )
                         if not no_ds and use_file:
                             ctx = self.accepted_contexts[self.pc_id]
-                            self._dataset_fp, self._start = self.get_file_cb(ctx, command_set)
+                            self._dataset_fp, self._start = self.get_file_cb(
+                                ctx, command_set
+                            )
                             if self._encoded_data_set:
-                                self._dataset_fp.writelines(self._encoded_data_set)
+                                self._dataset_fp.writelines(
+                                    self._encoded_data_set
+                                )
                         if no_ds or self.data_set_received:
                             self.receiving = False  # response: no dataset
                             break
@@ -754,14 +785,18 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
                     if self._dataset_fp:
                         self._dataset_fp.write(value_item.data_value[1:])
                     else:
-                        self._encoded_data_set.append(value_item.data_value[1:])
+                        self._encoded_data_set.append(
+                            value_item.data_value[1:]
+                        )
                     if marker == 2:
                         self.data_set_received = True
                         if self.command_set_received:
                             self.receiving = False
                             break
                 else:
-                    raise exceptions.DIMSEProcessingError('Incorrect first PDV byte')
+                    raise exceptions.DIMSEProcessingError(
+                        'Incorrect first PDV byte'
+                    )
         except Exception:
             if self._dataset_fp:
                 self._dataset_fp.close()
@@ -775,7 +810,9 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
                 self.msg.data_set = b''.join(self._encoded_data_set)
 
     @staticmethod
-    def _command_set_to_message(command_set: pydicom.Dataset) -> dimsemessages.DIMSEMessage:
+    def _command_set_to_message(
+            command_set: pydicom.Dataset
+    ) -> dimsemessages.DIMSEMessage:
         command_field = command_set[(0x0000, 0x0100)].value
         msg_type = dimsemessages.MESSAGE_TYPE[command_field]
         msg = msg_type(command_set)

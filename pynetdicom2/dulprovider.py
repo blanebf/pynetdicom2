@@ -33,7 +33,7 @@ from pydicom import uid
 from . import dimsemessages, fsm, pdu, exceptions
 
 
-PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]]= {
+PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
     0x01: (pdu.AAssociateRqPDU, fsm.Events.EVT_6),
     0x02: (pdu.AAssociateAcPDU, fsm.Events.EVT_3),
     0x03: (pdu.AAssociateRjPDU, fsm.Events.EVT_4),
@@ -44,11 +44,16 @@ PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]]= {
 }
 
 PDU_TO_EVENT = {
-    pdu.AAssociateRqPDU.pdu_type: fsm.Events.EVT_1,  # A-ASSOCIATE Request
-    pdu.AAssociateAcPDU.pdu_type: fsm.Events.EVT_7,  # A-ASSOCIATE Response (accept)
-    pdu.AAssociateRjPDU.pdu_type: fsm.Events.EVT_8,  # A-ASSOCIATE Response (reject)
-    pdu.AReleaseRqPDU.pdu_type: fsm.Events.EVT_11,   # A-Release Request
-    pdu.AReleaseRpPDU.pdu_type: fsm.Events.EVT_14,   # A-Release Response
+    # A-ASSOCIATE Request
+    pdu.AAssociateRqPDU.pdu_type: fsm.Events.EVT_1,
+    # A-ASSOCIATE Response (accept)
+    pdu.AAssociateAcPDU.pdu_type: fsm.Events.EVT_7,
+    # A-ASSOCIATE Response (reject)
+    pdu.AAssociateRjPDU.pdu_type: fsm.Events.EVT_8,
+    # A-Release Request
+    pdu.AReleaseRqPDU.pdu_type: fsm.Events.EVT_11,
+    # A-Release Response
+    pdu.AReleaseRpPDU.pdu_type: fsm.Events.EVT_14,
     pdu.AAbortPDU.pdu_type: fsm.Events.EVT_15,
     pdu.PDataTfPDU.pdu_type: fsm.Events.EVT_9
 }
@@ -65,10 +70,12 @@ class DULServiceProvider(threading.Thread):
     service opens a client socket by itself when sending
     :class:`~pynetdicom2.pdu.AAssociateRqPDU` instance.
 
-    Underlying implementation relies on state machine that is defined in :doc:`fsm`
+    Underlying implementation relies on state machine that is defined in
+    :doc:`fsm`
 
     :ivar primitive: current PDU
-    :ivar dimse_gen: generator, used break current outgoing DIMSE message into P-DATA-TF PDUs
+    :ivar dimse_gen: generator, used break current outgoing DIMSE message into
+                     P-DATA-TF PDUs
     :ivar event: current event
     :ivar max_pdu_length: maximum PDU length for incoming P-DATA-TF PDUs
     :ivar to_service_user: outgoing data queue
@@ -87,12 +94,13 @@ class DULServiceProvider(threading.Thread):
         """Initializes DUL service.
 
         If no socket is provided service will act as 'client' and will open
-        new client socket when sending :class:`~pynetdicom2.pdu.AAssociateRqPDU`
-        instance.
+        new client socket when sending
+        :class:`~pynetdicom2.pdu.AAssociateRqPDU` instance.
 
-        :param store_in_file: set of SOP Class UIDs, for which incoming dataset should be stored
-                              in a file.
-        :param get_file_cb: callback for getting a file to store incoming dataset
+        :param store_in_file: set of SOP Class UIDs, for which incoming dataset
+                              should be stored in a file.
+        :param get_file_cb: callback for getting a file to store incoming
+                            dataset
         :param dul_socket: remote client socket that will be used to send and
                            receive PDUs.
         """
@@ -146,7 +154,8 @@ class DULServiceProvider(threading.Thread):
             PDU is not immediately written into the socket, but rather put into
             queue that is processed by the service event loop.
 
-        :param primitive: outgoing PDU. Possible PDU types are described in :doc:`pdu`
+        :param primitive: outgoing PDU. Possible PDU types are described
+                          in :doc:`pdu`
         """
         self.from_service_user.put(primitive)
 
@@ -159,10 +168,12 @@ class DULServiceProvider(threading.Thread):
         If timeout is exceeded method
         rises :class:`~pynetdicom2.exceptions.DCMTimeoutError` exception.
 
-        :param timeout: the amount of seconds method waits for PDU to appear in incoming queue
-        :return: PDU instance or a tuple containing DIMSE Message and Presentation Context ID.
-                 Possible PDU types are described in :doc:`pdu`. Possible DIMSE messages are
-                 described in :doc:`dimsemessages`.
+        :param timeout: the amount of seconds method waits for PDU to appear
+                        in incoming queue
+        :return: PDU instance or a tuple containing DIMSE Message and
+                 Presentation Context ID. Possible PDU types are described
+                 in :doc:`pdu`. Possible DIMSE messages are described
+                 in :doc:`dimsemessages`.
         :raise exceptions.DCMTimeoutError: If specified timeout is exceeded
         """
         try:
@@ -185,14 +196,19 @@ class DULServiceProvider(threading.Thread):
         return False
 
     def kill(self) -> None:
-        """Sets termination flag for event loop and waits for thread to exit."""
+        """Sets termination flag for event loop and waits for thread to exit.
+        """
         self.is_killed = True
         self._is_killed.wait()
 
     def run(self) -> None:
         try:
             while not self.is_killed:
-                self._check_network() or self._check_outgoing_pdu() or self._check_timer()  # pylint: disable=expression-not-assigned
+                (
+                    self._check_network() or
+                    self._check_outgoing_pdu() or
+                    self._check_timer()
+                )  # pylint: disable=expression-not-assigned
                 try:
                     evt = self.event.popleft()
                 except IndexError:
@@ -296,7 +312,8 @@ class DULServiceProvider(threading.Thread):
         raw_pdu = self.raw_pdu[:full_length]
         self.raw_pdu = self.raw_pdu[full_length:]
 
-        # Determine the type of PDU coming on remote port and set the event accordingly
+        # Determine the type of PDU coming on remote port and set the event
+        # accordingly
         try:
             pdu_type, event = PDU_TYPES[raw_pdu[0]]
             self.primitive = pdu_type.decode(raw_pdu)
