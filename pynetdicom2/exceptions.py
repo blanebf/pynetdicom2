@@ -87,8 +87,8 @@ class AssociationRejectedError(AssociationError):
                           (Presentation related function)
 
     :param diagnostic: This field shall contain an integer value encoded
-                       as an unsigned binary number. If the Source field has the
-                       value
+                       as an unsigned binary number. If the Source field has
+                       the value
                        (1) DICOM UL service-user, it shall take one of the
                        following:
 
@@ -134,7 +134,8 @@ class AssociationRejectedError(AssociationError):
 
 
 class AssociationReleasedError(AssociationError):
-    """Raised when remote application entity has released active association."""
+    """Raised when remote application entity has released active association.
+    """
 
 
 class AssociationAbortedError(AssociationError):

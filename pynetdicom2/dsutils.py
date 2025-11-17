@@ -5,16 +5,14 @@
 #    available at http://pynetdicom.googlecode.com
 #
 """
-Helper module that provides function for converting datasets or dataset elements into
-bytes and back.
+Helper module that provides function for converting datasets or dataset
+elements into bytes and back.
 """
 from io import BytesIO
 from typing import Union
 
 import pydicom
 from pydicom import dataelem, filebase, filereader, filewriter
-
-
 
 
 def decode(
@@ -41,13 +39,9 @@ def encode(
     """Encoded dataset into raw bytes
 
     :param ds: dataset to encode
-    :type ds: pydicom.Dataset
     :param is_implicit_vr: encode using implicit VR
-    :type is_implicit_vr: bool
     :param is_little_endian: encode as little endian
-    :type is_little_endian: bool
     :return: dataset encoded into raw bytes
-    :rtype: bytes
     """
     fp = filebase.DicomBytesIO()
     fp.is_implicit_VR = is_implicit_vr
@@ -66,13 +60,9 @@ def encode_element(
     """Encodes dataset element into raw bytes
 
     :param elem: dataset element to encode
-    :type elem: pydicom.DataElement
     :param is_implicit_vr: encode using implicit VR
-    :type is_implicit_vr: bool
     :param is_little_endian: encode as little endian
-    :type is_little_endian: bool
     :return: dataset element encoded into raw bytes
-    :rtype: bytes
     """
     fp = filebase.DicomBytesIO()
     fp.is_implicit_VR = is_implicit_vr

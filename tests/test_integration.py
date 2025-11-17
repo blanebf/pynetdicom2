@@ -3,7 +3,7 @@ __author__ = 'Blane'
 import os
 import threading
 import unittest
-from typing import Any, BinaryIO, Iterable, Iterator, Union
+from typing import BinaryIO, Iterable, Iterator, Union
 
 import pydicom
 from pydicom import uid

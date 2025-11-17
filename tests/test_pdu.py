@@ -39,7 +39,11 @@ class TestPDUEncoding(unittest.TestCase):
 class TestSubItemEncoding(unittest.TestCase):
     def decode_and_compare_sub_item(
             self,
-            item: Union[pdu.UserItem, pdu.UserInformationItem, pdu.PresentationDataValueItem]
+            item: Union[
+                pdu.UserItem,
+                pdu.UserInformationItem,
+                pdu.PresentationDataValueItem
+            ]
     ) -> None:
         encoded = item.encode()
         stream = BytesIO(encoded)

@@ -4,20 +4,23 @@
 #    See the file license.txt included with this distribution, also
 #    available at http://pynetdicom.googlecode.com
 """
-This module provides two main classes for working with Application Entities. You can think of
-Application Entities as nodes in a DICOM communication, that provide or use a list of services
-(hence SCPs and SCU).
+This module provides two main classes for working with Application Entities.
+You can think of Application Entities as nodes in a DICOM communication, that
+provide or use a list of services (hence SCPs and SCU).
 
 Classes in this module are your starting points when working with this library.
 
-If only you require working as SCU (sending verification or making a find request, for example),
-you should use :class:`~pynetdicom2.applicationentity.ClientAE`.
+If only you require working as SCU (sending verification or making a find
+request, for example), you should use
+:class:`~pynetdicom2.applicationentity.ClientAE`.
 
 In case you would require services in SCP roles, you should go with
 :class:`~pynetdicom2.applicationentity.AE`.
 
-Please refer to base class for each of them (:class:`~pynetdicom2.applicationentity.AEBase`) for
-more detailed information on common principles and options when working with Application Entities.
+Please refer to base class for each of them
+(:class:`~pynetdicom2.applicationentity.AEBase`) for more detailed
+information on common principles and options when working with Application
+Entities.
 """
 from functools import partial
 from itertools import count
@@ -93,8 +96,8 @@ class AEBase:
     :ivar supported_scp: Dictionary that maps Abstract syntax UIDs to
                          specific services that are support in SCP role.
                          This attribute is populated by adding services using
-                         :meth:`~pynetdicom2.applicationentity.AE.add_scp` method
-                         of the full AE class
+                         :meth:`~pynetdicom2.applicationentity.AE.add_scp`
+                         method of the full AE class
                          This attribute is intended for **read-only** use by
                          class clients.
 
@@ -131,7 +134,9 @@ class AEBase:
 
         self.context_def_list: dict[int, asceprovider.PContextDefList] = {}
         self.store_in_file: set[uid.UID] = set()
-        self.supported_scu: dict[uid.UID, asceprovider.SCUServiceWithSOPClass] = {}
+        self.supported_scu: dict[
+            uid.UID, asceprovider.SCUServiceWithSOPClass
+        ] = {}
         self.supported_scp: dict[
             uid.UID,
             asceprovider.SCPServiceWithSOPClass[
@@ -152,11 +157,14 @@ class AEBase:
         chained, so you can add multiple services in one statement.
 
         :param service: DICOM service
-        :param sop_classes: overrides list of SOP Class UIDs provided by the service
+        :param sop_classes: overrides list of SOP Class UIDs provided by the
+                            service
         """
         sop_classes = sop_classes or service.sop_classes
         self.supported_scu.update({uid: service for uid in sop_classes})
-        store_in_file = (hasattr(service, 'store_in_file') and service.store_in_file)
+        store_in_file = (
+            hasattr(service, 'store_in_file') and service.store_in_file
+        )
         self.update_context_def_list(sop_classes, store_in_file)
         return self
 
@@ -170,7 +178,10 @@ class AEBase:
         :param store_in_file: indicates if incoming datasets for these SOP
                               Classes should be stored in file.
         """
-        start = max(self.context_def_list.keys()) + 2 if self.context_def_list else 1
+        start = (
+            max(self.context_def_list.keys()) + 2 if self.context_def_list
+            else 1
+        )
 
         self.context_def_list.update(
             self._build_context_def_list(sop_classes, start, store_in_file)
@@ -208,7 +219,9 @@ class AEBase:
         """
         assoc = None
         try:
-            assoc = asceprovider.AssociationRequester(self, self.max_pdu_length, remote_ae)
+            assoc = asceprovider.AssociationRequester(
+                self, self.max_pdu_length, remote_ae
+            )
             assoc.request()
             yield assoc
             if assoc.association_established:
@@ -296,8 +309,8 @@ class AEBase:
         """Default handling of C-STORE command. Always returns
         ELEMENT_DISCARDED code.
 
-        User should override this method in a sub-class to provide custom handling
-        of the command
+        User should override this method in a sub-class to provide custom
+        handling of the command
 
         :param context: presentation context (contains ID, SOP Class UID and
                         Transfer Syntax)
@@ -316,7 +329,8 @@ class AEBase:
         :param context: presentation context (contains ID, SOP Class UID and
                         Transfer Syntax)
         :param ds: dataset with C-FIND parameters
-        :return: iterator that returns tuples: (<result dataset>, <status code>)
+        :return: iterator that returns tuples: (<result dataset>,
+                 <status code>)
         """
         return iter([])
 
@@ -353,7 +367,8 @@ class AEBase:
             * iterable or None for successfully stored SOP Instance UIDs
             * iterable or None for failed SOP Instance UIDs
 
-        Default implementation is not provided. Method raises `exceptions.EventHandlingError`
+        Default implementation is not provided. Method raises
+        `exceptions.EventHandlingError`
 
         :param remote_ae: remote AE title
         :param uids: iterable of tuples (SOP Class UID, SOP Instance UID)
@@ -386,8 +401,12 @@ class AEBase:
     ) -> dict[int, asceprovider.PContextDefList]:
         if store_in_file:
             self.store_in_file.update(sop_classes)
-        return {pc_id: asceprovider.PContextDefList(pc_id, sop_class, self.supported_ts)
-                for sop_class, pc_id in zip(sop_classes, count(start, 2))}
+        return {
+            pc_id: asceprovider.PContextDefList(
+                pc_id, sop_class, self.supported_ts
+            )
+            for sop_class, pc_id in zip(sop_classes, count(start, 2))
+        }
 
 
 class ClientAE(AEBase):
@@ -448,7 +467,10 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         socketserver.ThreadingTCPServer.__init__(
             self,
             ('', port),
-            partial(asceprovider.AssociationAcceptor, max_pdu_length=self.max_pdu_length),
+            partial(
+                asceprovider.AssociationAcceptor,
+                max_pdu_length=self.max_pdu_length
+            ),
             bind_and_activate
         )
 
@@ -469,12 +491,16 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
         """
         self.supported_scp.update({
             uid: cast(
-                asceprovider.SCPServiceWithSOPClass[dimsemessages.DIMSERequestMessage],
+                asceprovider.SCPServiceWithSOPClass[
+                    dimsemessages.DIMSERequestMessage
+                ],
                 service
             )
             for uid in service.sop_classes
         })
-        store_in_file = (hasattr(service, 'store_in_file') and service.store_in_file)
+        store_in_file = (
+            hasattr(service, 'store_in_file') and service.store_in_file
+        )
         self.update_context_def_list(service.sop_classes, store_in_file)
         return self
 
@@ -488,7 +514,7 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
             try:
                 self.server_bind()
                 self.server_activate()
-            except:
+            except:  # noqa E722
                 self.server_close()
                 raise
         threading.Thread(target=self.serve_forever).start()
@@ -499,10 +525,11 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
 
 
 class FolderStorageMixin:
-    """Mixin that add creating a storage file object, based on incoming command dataset.
+    """Mixin that add creating a storage file object, based on incoming
+    command dataset.
 
-    Provides methods for getting unique filename name in a provided folder and creating
-    storage file.
+    Provides methods for getting unique filename name in a provided folder and
+    creating storage file.
     """
 
     max_iterations: int = 10
@@ -511,14 +538,15 @@ class FolderStorageMixin:
     """
 
     def get_file_name(self, path: str, sop_instance_uid: uid.UID) -> str:
-        """Gets a unique filename in a folder, where incoming dataset should be stored.
+        """Gets a unique filename in a folder, where incoming dataset should
+        be stored.
 
         Method uses SOP Instance UID of incoming dataset
 
         :param path: path to a folder where the storage should be created
         :param sop_instance_uid: incoming SOP Instance UID
-        :raises OSError: raised if method fails to obtain unique filename for storing incoming
-                         dataset
+        :raises OSError: raised if method fails to obtain unique filename for
+                         storing incoming dataset
         :return: unique filename to store incoming dataset
         """
         template = os.path.join(path, sop_instance_uid)
@@ -536,15 +564,18 @@ class FolderStorageMixin:
             context: fsm.PContextDef,
             command_set: Dataset,
             path: str
-    ) -> tuple[BinaryIO,int]:
-        """Gets a bytes IO and starting point in it for storing incoming dataset.
+    ) -> tuple[BinaryIO, int]:
+        """Gets a bytes IO and starting point in it for storing incoming
+        dataset.
 
         :param context: presentation context
         :param command_set: incoming command dataset
         :param path: path to a folder where incoming dataset should be stored
         :return: tuple of bytes IO and starting point in it
         """
-        full_name = self.get_file_name(path, command_set.AffectedSOPInstanceUID)
+        full_name = self.get_file_name(
+            path, command_set.AffectedSOPInstanceUID
+        )
 
         ds = open(full_name, 'w+b')  # pylint: disable=consider-using-with
         start = ds.tell()
@@ -558,7 +589,8 @@ class FolderStorageMixin:
 
 
 class ClientStorageAE(ClientAE, FolderStorageMixin):
-    """Helpful client AE class, that stores incoming dataset over Storage service in a folder.
+    """Helpful client AE class, that stores incoming dataset over Storage
+    service in a folder.
 
     :ivar storage_dir: a folder where incoming datasets should be stored
     """
@@ -579,7 +611,8 @@ class ClientStorageAE(ClientAE, FolderStorageMixin):
 
 
 class StorageAE(AE, FolderStorageMixin):
-    """Helpful AE class, that stores incoming dataset over Storage service in a folder.
+    """Helpful AE class, that stores incoming dataset over Storage service
+    in a folder.
 
     :ivar storage_dir: a folder where incoming datasets should be stored
     """
@@ -592,7 +625,13 @@ class StorageAE(AE, FolderStorageMixin):
             max_pdu_length: int = 65536,
             bind_and_activate: bool = True
     ) -> None:
-        super().__init__(ae_title, port, supported_ts, max_pdu_length, bind_and_activate)
+        super().__init__(
+            ae_title,
+            port,
+            supported_ts,
+            max_pdu_length,
+            bind_and_activate
+        )
         self.storage_dir = storage_dir
 
     def get_file(

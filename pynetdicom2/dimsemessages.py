@@ -6,8 +6,8 @@
 #
 
 """
-In this module you can find classes that implements DIMSE-C and DIMSE-N messages
-as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
+In this module you can find classes that implements DIMSE-C and DIMSE-N
+messages as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
 
 .. note::
 
@@ -26,8 +26,7 @@ from typing import Any, BinaryIO, ClassVar, Iterator, Optional, Type, Union
 from pydicom.dataset import Dataset
 from pydicom.dataelem import DataElement, RawDataElement
 
-from . import dsutils
-from . import pdu
+from . import dsutils, pdu
 
 NO_DATASET = 0x0101
 
@@ -50,8 +49,8 @@ def chunks(seq: bytes, size: int) -> Iterator[tuple[bytes, bool]]:
 
     :param seq: sequence of bytes
     :param size: chunk size
-    :return: generator that yields tuples of sequence chunk and boolean that indicates if chunk is
-             the last one
+    :return: generator that yields tuples of sequence chunk and boolean that
+             indicates if chunk is the last one
     """
     length = len(seq)
     return ((seq[pos:pos + size], (pos + size < length))
@@ -73,8 +72,12 @@ def fragment(
     :yield: tuple of bytes: fragment and its code
     """
     maxsize = max_pdu_length - 6
-    _chunks = ((chunk, has_next) for chunk, has_next in chunks(data_set, maxsize))
-    yield from ((chunk, normal if has_next else last) for chunk, has_next in _chunks)
+    _chunks = (
+        (chunk, has_next) for chunk, has_next in chunks(data_set, maxsize)
+    )
+    yield from (
+        (chunk, normal if has_next else last) for chunk, has_next in _chunks
+    )
 
 
 def fragment_file(
@@ -82,7 +85,7 @@ def fragment_file(
         max_pdu_length: int,
         normal: int,
         last: int
-    ) -> Iterator[tuple[bytes, int]]:
+) -> Iterator[tuple[bytes, int]]:
     """Fragmets dataset from a file-like object into chunks
 
     :param f: file-like object
@@ -112,7 +115,10 @@ def dimse_property(tag: tuple[int, int]) -> property:
 
     def setter(self: 'DIMSEMessage', value: Any) -> None:
         self.command_set[tag].value = value
-    return property(lambda self: value_or_none(self.command_set.get(tag)), setter)
+    return property(
+        lambda self: value_or_none(self.command_set.get(tag)),
+        setter
+    )
 
 
 class PriorityMixin:  # pylint: disable=too-few-public-methods
@@ -127,8 +133,8 @@ class PriorityMixin:  # pylint: disable=too-few-public-methods
 class DIMSEMessage:
     """Base DIMSE message class.
 
-    This class is not used directly, rather its subclasses, that represent specific DIMSE messages
-    are used.
+    This class is not used directly, rather its subclasses, that represent
+    specific DIMSE messages are used.
     """
     command_field: ClassVar[int]
     command_fields: ClassVar[list[str]]
@@ -165,11 +171,8 @@ class DIMSEMessage:
         """Returns the encoded message as a series of P-DATA-TF PDU objects.
 
         :param pc_id: Presentation Context ID
-        :type pc_id: int
         :param max_pdu_length: maximum PDU length
-        :type max_pdu_length: int
         :yield: P-DATA-TF PDUs
-        :rtype: pdu.PDataTfPDU
         """
         encoded_command_set = dsutils.encode(self.command_set, True, True)
 
@@ -286,14 +289,14 @@ class CStoreRQMessage(DIMSERequestMessage, PriorityMixin):
 
     move_originator_aet = dimse_property((0x0000, 0x1030))
     """
-    Contains the DICOM AE Title of the DICOM AE that invoked the C-MOVE operation from
-    which this C-STORE sub-operation is being performed.
+    Contains the DICOM AE Title of the DICOM AE that invoked the C-MOVE
+    operation from which this C-STORE sub-operation is being performed.
     """
 
     move_originator_message_id = dimse_property((0x0000, 0x1031))
     """
-    Contains the Message ID (0000,0110) of the C-MOVE-RQ Message from which this C-STORE
-    sub-operations is being performed.
+    Contains the Message ID (0000,0110) of the C-MOVE-RQ Message
+    from which this C-STORE sub-operations is being performed.
     """
 
 
@@ -305,8 +308,8 @@ class CStoreRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8001
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 8001H for the C-STORE-RSP Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 8001H for the C-STORE-RSP Message.
     """
 
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
@@ -327,8 +330,8 @@ class CFindRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0020
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 0020H for the C-FIND-RQ Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 0020H for the C-FIND-RQ Message.
     """
 
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
@@ -343,8 +346,8 @@ class CFindRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8020
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 8020H for the C-FIND-RSP Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 8020H for the C-FIND-RSP Message.
     """
 
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
@@ -359,8 +362,8 @@ class CGetRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0010
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 0010H for the C-GET-RQ Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 0010H for the C-GET-RQ Message.
     """
 
     command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
@@ -375,37 +378,43 @@ class CGetRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8010
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 0010H for the C-GET-RQ Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 0010H for the C-GET-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'NumberOfRemainingSuboperations',
-                      'NumberOfCompletedSuboperations',
-                      'NumberOfFailedSuboperations',
-                      'NumberOfWarningSuboperations']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'NumberOfRemainingSuboperations',
+        'NumberOfCompletedSuboperations',
+        'NumberOfFailedSuboperations',
+        'NumberOfWarningSuboperations'
+    ]
 
     num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
     """
-    The number of remaining C-STORE sub-operations to be invoked for this C-GET operation.
+    The number of remaining C-STORE sub-operations to be invoked for this
+    C-GET operation.
     """
 
     num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
     """
-    The number of C-STORE sub-operations invoked by this C-GET operation that have completed
-    successfully.
+    The number of C-STORE sub-operations invoked by this C-GET operation that
+    have completed successfully.
     """
 
     num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
     """
-    The number of C-STORE sub-operations invoked by this C-GET operation that have failed.
+    The number of C-STORE sub-operations invoked by this C-GET operation that
+    have failed.
     """
 
     num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
     """
-    The number of C-STORE sub-operations invoked by this C-GET operation that generated warning
-    responses.
+    The number of C-STORE sub-operations invoked by this C-GET operation that
+    generated warning responses.
     """
 
 
@@ -417,17 +426,22 @@ class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
 
     command_field = 0x0021
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 0021H for the C-MOVE-RQ Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 0021H for the C-MOVE-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageID', 'Priority', 'MoveDestination']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageID',
+        'Priority',
+        'MoveDestination'
+    ]
 
     move_destination = dimse_property((0x0000, 0x0600))
     """
-    Shall be set to the DICOM AE Title of the destination DICOM AE to which the C-STORE
-    sub-operations are being performed.
+    Shall be set to the DICOM AE Title of the destination DICOM AE to which
+    the C-STORE sub-operations are being performed.
     """
 
 
@@ -439,37 +453,43 @@ class CMoveRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8021
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 8021H for the C-MOVE-RSP Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 8021H for the C-MOVE-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'NumberOfRemainingSuboperations',
-                      'NumberOfCompletedSuboperations',
-                      'NumberOfFailedSuboperations',
-                      'NumberOfWarningSuboperations']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'NumberOfRemainingSuboperations',
+        'NumberOfCompletedSuboperations',
+        'NumberOfFailedSuboperations',
+        'NumberOfWarningSuboperations'
+    ]
 
     num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
     """
-    The number of remaining sub-operations to be invoked for this C-MOVE operation.
+    The number of remaining sub-operations to be invoked for this C-MOVE
+    operation.
     """
 
     num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
     """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation that have
-    completed successfully.
+    The number of C-STORE sub-operations invoked by this C-MOVE operation
+    that have completed successfully.
     """
 
     num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
     """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation that have failed.
+    The number of C-STORE sub-operations invoked by this C-MOVE operation
+    that have failed.
     """
 
     num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
     """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation that generated
-    warning responses.
+    The number of C-STORE sub-operations invoked by this C-MOVE operation
+    that generated warning responses.
     """
 
 
@@ -484,8 +504,9 @@ class CCancelRQMessage(DIMSEResponseMessage):
     """
     command_field = 0x0FFF
     """
-    This field distinguishes the DIMSE-C operation conveyed by this Message. The value of this
-    field shall be set to 0FFFH for the C-CANCEL-MOVE-RQ Message.
+    This field distinguishes the DIMSE-C operation conveyed by this Message.
+    The value of this field shall be set to 0FFFH for the C-CANCEL-MOVE-RQ
+    Message.
     """
 
     command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo']
@@ -499,12 +520,18 @@ class NEventReportRQMessage(DIMSERequestMessage):
 
     command_field = 0x0100
     """
-    This field distinguishes the DIMSE-N notification conveyed by this Message. The value of this
-    field shall be set to 0100H for the N-EVENT-REPORT-RQ Message.
+    This field distinguishes the DIMSE-N notification conveyed by this Message.
+    The value of this field shall be set to 0100H for the N-EVENT-REPORT-RQ
+    Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
-                      'AffectedSOPInstanceUID', 'EventTypeID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageID',
+        'AffectedSOPInstanceUID',
+        'EventTypeID'
+    ]
 
     event_type_id = dimse_property((0x0000, 0x1002))
     """
@@ -520,18 +547,25 @@ class NEventReportRQMessage(DIMSERequestMessage):
 class NEventReportRSPMessage(DIMSEResponseMessage):
     """N-EVENT-REPORT-RSP Message.
 
-    Complete definition can be found in DICOM PS3.7, 10.3.1.2 N-EVENT-REPORT-RSP
+    Complete definition can be found in DICOM PS3.7, 10.3.1.2
+    N-EVENT-REPORT-RSP
     """
 
     command_field = 0x8100
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8100H for the N-EVENT-REPORT-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8100H for the N-EVENT-REPORT-RSP
+    Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo',
-                      'Status', 'AffectedSOPInstanceUID', 'EventTypeID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID',
+        'EventTypeID'
+    ]
 
     event_type_id = dimse_property((0x0000, 0x1002))
     """
@@ -552,24 +586,30 @@ class NGetRQMessage(DIMSERequestMessage):
 
     command_field = 0x0110
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 0110H for the N-GET-RQ Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 0110H for the N-GET-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
-                      'RequestedSOPInstanceUID', 'AttributeIdentifierList']
+    command_fields = [
+        'CommandGroupLength',
+        'RequestedSOPClassUID',
+        'MessageID',
+        'RequestedSOPInstanceUID',
+        'AttributeIdentifierList'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0003))
 
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
     """
-    Contains the UID of the SOP Instance for which Attribute Values are to be retrieved.
+    Contains the UID of the SOP Instance for which Attribute Values are to
+    be retrieved.
     """
 
     attribute_identifier_list = dimse_property((0x0000, 0x1005))
     """
-    This field contains an Attribute Tag for each of the n Attributes applicable to the
-    N-GET operation.
+    This field contains an Attribute Tag for each of the n Attributes
+    applicable to the N-GET operation.
     """
 
 
@@ -581,16 +621,21 @@ class NGetRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8110
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8110H for the N-GET-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8110H for the N-GET-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'MessageIDBeingRespondedTo',
-                      'Status', 'AffectedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID'
+    ]
 
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
     """
-    Contains the UID of the SOP Instance for which Attribute Values are returned.
+    Contains the UID of the SOP Instance for which Attribute Values are
+    returned.
     """
 
 
@@ -602,18 +647,23 @@ class NSetRQMessage(DIMSERequestMessage):
 
     command_field = 0x0120
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 0120H for the N-SET-RQ Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 0120H for the N-SET-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID',
-                      'MessageID', 'RequestedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'RequestedSOPClassUID',
+        'MessageID',
+        'RequestedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0003))
 
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
     """
-    Contains the UID of the SOP Instance for which Attribute values are to be modified.
+    Contains the UID of the SOP Instance for which Attribute values are to
+    be modified.
     """
 
 
@@ -624,19 +674,24 @@ class NSetRSPMessage(DIMSEResponseMessage):
     """
 
     command_field = 0x8120
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'AffectedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8120H for the N-SET-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8120H for the N-SET-RSP Message.
     """
 
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))
     """
-    Contains the UID of the SOP Instance for which Attribute Values were modified.
+    Contains the UID of the SOP Instance for which Attribute Values were
+    modified.
     """
 
 
@@ -648,18 +703,24 @@ class NActionRQMessage(DIMSERequestMessage):
 
     command_field = 0x0130
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 0130H for the N-ACTION-RQ Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 0130H for the N-ACTION-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
-                      'RequestedSOPInstanceUID', 'ActionTypeID']
+    command_fields = [
+        'CommandGroupLength',
+        'RequestedSOPClassUID',
+        'MessageID',
+        'RequestedSOPInstanceUID',
+        'ActionTypeID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0003))
 
     requested_sop_instance_uid = dimse_property((0x0000, 0x1001))
     """
-    Contains the UID of the SOP Instance for which the action is to be performed.
+    Contains the UID of the SOP Instance for which the action is to be
+    performed.
     """
 
     action_type_id = dimse_property((0x0000, 0x1008))
@@ -676,13 +737,18 @@ class NActionRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8130
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8130H for the N-ACTION-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8130H for the N-ACTION-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'AffectedSOPInstanceUID', 'ActionTypeID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID',
+        'ActionTypeID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
@@ -705,12 +771,16 @@ class NCreateRQMessage(DIMSERequestMessage):
 
     command_field = 0x0140
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 0140H for the N-CREATE-RQ Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 0140H for the N-CREATE-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID', 'MessageID',
-                      'AffectedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageID',
+        'AffectedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
@@ -728,13 +798,17 @@ class NCreateRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8140
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8140H for the N-CREATE-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8140H for the N-CREATE-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'AffectedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
 
@@ -752,12 +826,16 @@ class NDeleteRQMessage(DIMSERequestMessage):
 
     command_field = 0x0150
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 0150H for the N-DELETE-RQ Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 0150H for the N-DELETE-RQ Message.
     """
 
-    command_fields = ['CommandGroupLength', 'RequestedSOPClassUID', 'MessageID',
-                      'RequestedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'RequestedSOPClassUID',
+        'MessageID',
+        'RequestedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0003))
 
@@ -775,13 +853,17 @@ class NDeleteRSPMessage(DIMSEResponseMessage):
 
     command_field = 0x8150
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message. The value of this
-    field shall be set to 8150H for the N-DELETE-RSP Message.
+    This field distinguishes the DIMSE-N operation conveyed by this Message.
+    The value of this field shall be set to 8150H for the N-DELETE-RSP Message.
     """
 
-    command_fields = ['CommandGroupLength', 'AffectedSOPClassUID',
-                      'MessageIDBeingRespondedTo', 'Status',
-                      'AffectedSOPInstanceUID']
+    command_fields = [
+        'CommandGroupLength',
+        'AffectedSOPClassUID',
+        'MessageIDBeingRespondedTo',
+        'Status',
+        'AffectedSOPInstanceUID'
+    ]
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
 

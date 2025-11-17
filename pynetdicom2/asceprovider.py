@@ -7,17 +7,20 @@
 """
 Module contains two key classes for working with DICOM associations:
 
-    * :class:`~pynetdicom2.asceprovider.AssociationAcceptor` for handling incoming association
-      requests.
-    * :class:`~pynetdicom2.asceprovider.AssociationRequester` for requesting association.
+    * :class:`~pynetdicom2.asceprovider.AssociationAcceptor` for handling
+      incoming association requests.
+    * :class:`~pynetdicom2.asceprovider.AssociationRequester` for requesting
+      association.
 
-In most cases you won't have to create AssociationAcceptor or AssociationRequester directly, but
-rather they will be created for you by either :class:`~pynetdicom2.applicationentity.ClientAE`
-or :class:`~pynetdicom2.applicationentity.AE`. Please, refer to documentation on those classes
-on how to request new association or how incoming association are handled.
+In most cases you won't have to create AssociationAcceptor or
+AssociationRequester directly, but rather they will be created for you by
+either :class:`~pynetdicom2.applicationentity.ClientAE` or
+:class:`~pynetdicom2.applicationentity.AE`. Please, refer to documentation
+on those classes on how to request new association or how incoming association
+are handled.
 
-Each association class is not only responsible for initial establishment, but also for all
-association life-cycle until it's either released or aborted.
+Each association class is not only responsible for initial establishment, but
+also for all association life-cycle until it's either released or aborted.
 """
 from abc import abstractmethod
 import contextlib
@@ -37,13 +40,10 @@ from pydicom import uid
 
 from pynetdicom2 import dimsemessages
 
-from . import exceptions
-from . import dulprovider
-from . import fsm
+from . import exceptions, dulprovider, fsm, pdu, statuses, userdataitems
 
-from . import pdu
-from . import statuses
-from . import userdataitems
+# backwards compatability
+from .fsm import PContextDef  # pylint: disable=unused-import. # noqa F401
 
 
 @dataclasses.dataclass(frozen=True)
@@ -138,7 +138,9 @@ class AEBaseProto(Protocol):
     context_def_list: dict[int, PContextDefList]
     store_in_file: set[uid.UID] = set()
     supported_scu: dict[uid.UID, SCUServiceWithSOPClass]
-    supported_scp: dict[uid.UID, SCPServiceWithSOPClass[dimsemessages.DIMSERequestMessage]]
+    supported_scp: dict[
+        uid.UID, SCPServiceWithSOPClass[dimsemessages.DIMSERequestMessage]
+    ]
 
     def add_scu(
             self,
@@ -159,7 +161,7 @@ class AEBaseProto(Protocol):
             self,
             context: fsm.PContextDef,
             command_set: pydicom.Dataset
-    ) -> tuple[BinaryIO,int]:
+    ) -> tuple[BinaryIO, int]:
         ...
 
     @contextlib.contextmanager
@@ -223,7 +225,9 @@ class AEBaseServerProto(AEBaseProto, socketserver.BaseServer):
 
 
 APPLICATION_CONTEXT_NAME = uid.UID('1.2.840.10008.3.1.1.1')
-IMPLEMENTATION_UID = uid.UID('1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000')
+IMPLEMENTATION_UID = uid.UID(
+    '1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000'
+)
 
 
 def build_pres_context_def_list(
@@ -231,8 +235,10 @@ def build_pres_context_def_list(
 ) -> Iterable[pdu.PresentationContextItemRQ]:
     """Builds a list of Presntation Context Items
 
-    :param context_def_list: list of tuples (presentation context ID and PContextDef)
-    :return: generator that yields :class:`pynetdicom2.pdu.PresentationContextItemRQ` instances
+    :param context_def_list: list of tuples (presentation context ID and
+                             PContextDef)
+    :return: generator that yields
+             :class:`pynetdicom2.pdu.PresentationContextItemRQ` instances
     """
     return (
         pdu.PresentationContextItemRQ(
@@ -353,7 +359,8 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
             local_ae: AEBaseServerProto,
             max_pdu_length: int
     ) -> None:
-        """Initializes AssociationAcceptor instance with specified client socket
+        """Initializes AssociationAcceptor instance with specified client
+        socket
 
         :param local_ae: local AE title
         :param request: client socket
@@ -370,8 +377,6 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
 
     def kill(self) -> None:
         """Overrides base class kill method to set stop-flag for running thread
-
-        :rtype : None
         """
         self.is_killed = True
         super().kill()
@@ -379,7 +384,6 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     def abort(self, reason: int) -> None:
         """Aborts association with specified reason
 
-        :rtype : None
         :param reason: abort reason
         """
         self.dul.send(pdu.AAbortPDU(source=2, reason_diag=reason))
@@ -402,9 +406,12 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         if not isinstance(user_items, pdu.UserInformationItem):
             raise AssertionError(f'Unexpected sub-item: {user_items}')
         max_pdu_sub_item = user_items.user_data[0]
-        if not isinstance(max_pdu_sub_item, userdataitems.MaximumLengthSubItem):
+        if not isinstance(
+                max_pdu_sub_item, userdataitems.MaximumLengthSubItem
+        ):
             raise exceptions.AssociationError(
-                f'First sub-item is not MaximumLengthSubItem: {max_pdu_sub_item}'
+                'First sub-item is not MaximumLengthSubItem: '
+                f'{max_pdu_sub_item}'
             )
         if self.max_pdu_length > max_pdu_sub_item.maximum_length_received:
             self.max_pdu_length = max_pdu_sub_item.maximum_length_received
@@ -493,7 +500,9 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
             dimse_msg, pc_id = self.receive()
             _uid = dimse_msg.sop_class_uid
             try:
-                if not isinstance(dimse_msg, dimsemessages.DIMSERequestMessage):
+                if not isinstance(
+                        dimse_msg, dimsemessages.DIMSERequestMessage
+                ):
                     raise exceptions.DIMSEProcessingError(
                         f'Expected DIMSE Request message but got: {dimse_msg}'
                     )
@@ -510,15 +519,18 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
 class AssociationRequester(Association):
     """Class for managing association request.
 
-    Generally you would not need to construct this class directly, rather it would be created
-    for you, when using :class:`~pynetdicom2.applicationentity.AE` or
+    Generally you would not need to construct this class directly, rather it
+    would be created for you, when using
+    :class:`~pynetdicom2.applicationentity.AE` or
     :class:`~pynetdicom2.applicationentity.ClientAE`.
 
     :ivar context_def_list: presentation context definitions in a form of dict
                             (PC ID -> Presentation Context)
-    :ivar remote_ae: dictionary, containing remote AET, address, port and other information
-    :ivar sop_classes_as_scu: dictionary which maps accepted SOP Classes to presentation contexts.
-                              empty, until association is established.
+    :ivar remote_ae: dictionary, containing remote AET, address, port and other
+                     information
+    :ivar sop_classes_as_scu: dictionary which maps accepted SOP Classes
+                              to presentation contexts. empty, until
+                              association is established.
     """
 
     def __init__(
@@ -554,8 +566,9 @@ class AssociationRequester(Association):
         to current presentation contexnt.
 
         :param sop_class: SOP Class UID
-        :raises exceptions.ClassNotSupportedError: raised if provided SOP Class UID is not
-                                                   supported by association.
+        :raises exceptions.ClassNotSupportedError: raised if provided SOP
+                                                   Class UID is not supported
+                                                   by association.
         :return: SCU function
         """
         try:
@@ -601,7 +614,9 @@ class AssociationRequester(Association):
         password = remote_ae.password
         if username and password:
             user_information.append(
-                userdataitems.UserIdentityNegotiationSubItem(username, password)
+                userdataitems.UserIdentityNegotiationSubItem(
+                    username, password
+                )
             )
         elif username:
             user_information.append(
@@ -638,7 +653,9 @@ class AssociationRequester(Association):
             calling_ae_title=local_ae.aet,
             variable_items=variable_items
         )
-        self.dul.called_presentation_address = (remote_ae.address, remote_ae.port)
+        self.dul.called_presentation_address = (
+            remote_ae.address, remote_ae.port
+        )
         self.dul.send(assoc_rq)
         response = self.dul.receive(self.ae.dcm_timeout)
         if isinstance(response, tuple):
@@ -656,9 +673,12 @@ class AssociationRequester(Association):
                 f'Unexpected item in place of UserInformation item {user_item}'
             )
         max_pdu_sub_item = user_item.user_data[0]
-        if not isinstance(max_pdu_sub_item, userdataitems.MaximumLengthSubItem):
+        if not isinstance(
+                max_pdu_sub_item, userdataitems.MaximumLengthSubItem
+        ):
             raise exceptions.AssociationError(
-                f'First sub-item is not MaximumLengthSubItem: {max_pdu_sub_item}'
+                'First sub-item is not MaximumLengthSubItem:'
+                f' {max_pdu_sub_item}'
             )
         max_pdu_length = max_pdu_sub_item.maximum_length_received
         if max_pdu_length and self.max_pdu_length > max_pdu_length:
@@ -667,7 +687,10 @@ class AssociationRequester(Association):
         # Get accepted presentation contexts
         accepted = (
             ctx for ctx in response.variable_items[1:-1]
-            if isinstance(ctx, pdu.PresentationContextItemAC) and ctx.result_reason == 0
+            if (
+                isinstance(ctx, pdu.PresentationContextItemAC) and
+                ctx.result_reason == 0
+            )
         )
         for ctx in accepted:
             pc_id = ctx.context_id
