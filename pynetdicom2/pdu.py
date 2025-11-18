@@ -191,12 +191,14 @@ class AAssociateRqPDU(AAssociatePDUBase):
     """PDU Type"""
 
     def __repr__(self) -> str:
-        return f'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", ' \
-               f'calling_ae_title="{self.calling_ae_title}", ' \
-               f'variable_items={self.variable_items}, ' \
-               f'protocol_version={self.protocol_version}, ' \
-               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               f'reserved3={self.reserved3})'
+        return (
+            f'AAssociateRqPDU(called_ae_title="{self.called_ae_title}", '
+            f'calling_ae_title="{self.calling_ae_title}", '
+            f'variable_items={self.variable_items}, '
+            f'protocol_version={self.protocol_version}, '
+            f'reserved1={self.reserved1}, reserved2={self.reserved2}, '
+            f'reserved3={self.reserved3})'
+        )
 
 
 class AAssociateAcPDU(AAssociatePDUBase):
@@ -208,12 +210,14 @@ class AAssociateAcPDU(AAssociatePDUBase):
     """PDU Type"""
 
     def __repr__(self) -> str:
-        return f'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", ' \
-               f'calling_ae_title="{self.calling_ae_title}", ' \
-               f'variable_items={self.variable_items}, ' \
-               f'protocol_version={self.protocol_version}, ' \
-               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               f'reserved3={self.reserved3})'
+        return (
+            f'AAssociateAcPDU(called_ae_title="{self.called_ae_title}", '
+            f'calling_ae_title="{self.calling_ae_title}", '
+            f'variable_items={self.variable_items}, '
+            f'protocol_version={self.protocol_version}, '
+            f'reserved1={self.reserved1}, reserved2={self.reserved2}, '
+            f'reserved3={self.reserved3})'
+        )
 
 
 class AAssociateRjPDU:
@@ -258,11 +262,13 @@ class AAssociateRjPDU:
         self.reason_diag = reason_diag
 
     def __repr__(self) -> str:
-        return f'AAssociateRjPDU(result={self.result}, '\
-               f'source={self.source}, ' \
-               f'reason_diag={self.reason_diag},'\
-               f' reserved1={self.reserved1}, ' \
-               f'reserved2={self.reserved2})'
+        return (
+            f'AAssociateRjPDU(result={self.result}, '
+            f'source={self.source}, '
+            f'reason_diag={self.reason_diag},'
+            f' reserved1={self.reserved1}, '
+            f'reserved2={self.reserved2})'
+        )
 
     def encode(self) -> bytes:
         """Converts PDU class to its binary representation
@@ -333,10 +339,12 @@ class PDataTfPDU:
         self.data_value_items = data_value_items
 
     def __repr__(self) -> str:
-        return f'PDataTfPDU(pdu_length={self.pdu_length}, ' \
-               f'data_value_items=' \
-               f'{self.data_value_items}, ' \
-               f'reserved={self.reserved})'
+        return (
+            f'PDataTfPDU(pdu_length={self.pdu_length}, '
+            f'data_value_items='
+            f'{self.data_value_items}, '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def pdu_length(self) -> int:
@@ -403,9 +411,11 @@ class AReleasePDUBase:
         self.reserved2 = reserved2  # unsigned int
 
     def __repr__(self) -> str:
-        return 'AReleaseRqPDU('\
-            f'reserved1={self.reserved1}, '\
+        return (
+            'AReleaseRqPDU('
+            f'reserved1={self.reserved1}, '
             f'reserved2={self.reserved2})'
+        )
 
     def encode(self) -> bytes:
         """Encodes PDU into bytes
@@ -452,9 +462,11 @@ class AReleaseRqPDU(AReleasePDUBase):
     """PDU Type"""
 
     def __repr__(self) -> str:
-        return 'AReleaseRqPDU('\
-            f'reserved1={self.reserved1}, '\
+        return (
+            'AReleaseRqPDU('
+            f'reserved1={self.reserved1}, '
             f'reserved2={self.reserved2})'
+        )
 
 
 class AReleaseRpPDU(AReleasePDUBase):
@@ -466,9 +478,11 @@ class AReleaseRpPDU(AReleasePDUBase):
     """PDU Type"""
 
     def __repr__(self) -> str:
-        return 'AReleaseRpPDU('\
-            f'reserved1={self.reserved1}, '\
+        return (
+            'AReleaseRpPDU('\
+            f'reserved1={self.reserved1}, '
             f'reserved2={self.reserved2})'
+        )
 
 
 class AAbortPDU:
@@ -516,11 +530,13 @@ class AAbortPDU:
         self.reason_diag = reason_diag  # unsigned byte
 
     def __repr__(self) -> str:
-        return f'AAbortPDU(source={self.source}, ' \
-               f'reason_diag={self.reason_diag}, '\
-               f'reserved1={self.reserved1}, ' \
-               f'reserved2={self.reserved2}, ' \
-               f'reserved3={self.reserved3})'
+        return (
+            f'AAbortPDU(source={self.source}, '
+            f'reason_diag={self.reason_diag}, '
+            f'reserved1={self.reserved1}, '
+            f'reserved2={self.reserved2}, '
+            f'reserved3={self.reserved3})'
+        )
 
     def encode(self) -> bytes:
         """Encodes AAbortPDU into bytes
@@ -588,8 +604,10 @@ class ApplicationContextItem:
         self.context_name = context_name  # string
 
     def __repr__(self) -> str:
-        return f'ApplicationContextItem(context_name="{self.context_name}", ' \
-               f'reserved={self.reserved})'
+        return (
+            'ApplicationContextItem(context_name="{self.context_name}", '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -666,12 +684,14 @@ class PresentationContextItemRQ:
         self.reserved4 = reserved4  # unsigned byte
 
     def __repr__(self) -> str:
-        return f'PresentationContextItemRQ(context_id={self.context_id}, ' \
-               f'abs_sub_item={self.abs_sub_item}, ' \
-               f'ts_sub_items={self.ts_sub_items}, ' \
-               f'reserved1={self.reserved1}, reserved2={self.reserved2}, ' \
-               f'reserved3={self.reserved3}, ' \
-               f'reserved4={self.reserved4})'
+        return (
+            f'PresentationContextItemRQ(context_id={self.context_id}, '
+            f'abs_sub_item={self.abs_sub_item}, '
+            f'ts_sub_items={self.ts_sub_items}, '
+            f'reserved1={self.reserved1}, reserved2={self.reserved2}, '
+            f'reserved3={self.reserved3}, '
+            f'reserved4={self.reserved4})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -775,13 +795,15 @@ class PresentationContextItemAC:
         self.reserved3 = reserved3  # unsigned byte
 
     def __repr__(self) -> str:
-        return 'PresentationContextItemAC('\
-               f'context_id={self.context_id}, ' \
-               f'result_reason={self.result_reason}, ' \
-               f'ts_sub_item={self.ts_sub_item}, '\
-               f'reserved1={self.reserved1}, ' \
-               f'reserved2={self.reserved2}, ' \
-               f'reserved3={self.reserved3})'
+        return (
+            'PresentationContextItemAC('
+            f'context_id={self.context_id}, '
+            f'result_reason={self.result_reason}, '
+            f'ts_sub_item={self.ts_sub_item}, '
+            f'reserved1={self.reserved1}, '
+            f'reserved2={self.reserved2}, '
+            f'reserved3={self.reserved3})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -912,8 +934,10 @@ class TransferSyntaxSubItem:
         self.name = uid.UID(name)  # string
 
     def __repr__(self) -> str:
-        return 'TransferSyntaxSubItem('\
-               f'name="{self.name}", reserved={self.reserved})'
+        return (
+            'TransferSyntaxSubItem('
+            f'name="{self.name}", reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -978,8 +1002,10 @@ class UserInformationItem:
         self.user_data = user_data
 
     def __repr__(self) -> str:
-        return 'UserInformationItem('\
-               f'user_data={self.user_data}, reserved={self.reserved})'
+        return (
+            'UserInformationItem('
+            f'user_data={self.user_data}, reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -1064,8 +1090,10 @@ class PresentationDataValueItem:
         self.data_value = data_value  # bytes
 
     def __repr__(self) -> str:
-        return f'PresentationDataValueItem(context_id={self.context_id}, ' \
-               f'data_value="{str(self.data_value)}")'
+        return (
+            f'PresentationDataValueItem(context_id={self.context_id}, '
+            f'data_value="{str(self.data_value)}")'
+        )
 
     @property
     def item_length(self) -> int:
