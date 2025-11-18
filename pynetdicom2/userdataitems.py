@@ -38,10 +38,12 @@ class MaximumLengthSubItem:
         self.maximum_length_received = maximum_length_received  # unsigned int
 
     def __repr__(self) -> str:
-        return f'MaximumLengthSubItem(' \
-               f'maximum_length_received={self.maximum_length_received}, ' \
-               f'reserved={self.reserved}, ' \
-               f'item_length={self.item_length})'
+        return (
+            f'MaximumLengthSubItem('
+            f'maximum_length_received={self.maximum_length_received}, '
+            f'reserved={self.reserved}, '
+            f'item_length={self.item_length})'
+        )
 
     @property
     def total_length(self) -> int:
@@ -148,7 +150,7 @@ class ImplementationClassUIDSubItem:
         """Decodes Implementation Class UID sub-item from data stream
 
         :param stream: raw data stream
-        :return decoded maximum length sub-item
+        :return: decoded maximum length sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
         implementation_class_uid = uid.UID(stream.read(item_length).decode())
@@ -183,10 +185,12 @@ class ImplementationVersionNameSubItem:
         self.implementation_version_name = implementation_version_name
 
     def __repr__(self) -> str:
-        return f'ImplementationVersionNameSubItem(' \
-               f'implementation_version_name=' \
-               f'"{self.implementation_version_name}", ' \
-               f'reserved={self.reserved})'
+        return (
+            'ImplementationVersionNameSubItem('
+            f'implementation_version_name='
+            f'"{self.implementation_version_name}", '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -260,11 +264,13 @@ class AsynchronousOperationsWindowSubItem:
         self.max_num_ops_performed = max_num_ops_performed  # unsigned short
 
     def __repr__(self) -> str:
-        return f'AsynchronousOperationsWindowSubItem(' \
-               f'max_num_ops_invoked={self.max_num_ops_invoked}, ' \
-               f'max_num_ops_performed={self.max_num_ops_performed}, ' \
-               f'reserved={self.reserved}, ' \
-               f'item_length={self.item_length})'
+        return (
+            'AsynchronousOperationsWindowSubItem('
+            f'max_num_ops_invoked={self.max_num_ops_invoked}, '
+            f'max_num_ops_performed={self.max_num_ops_performed}, '
+            f'reserved={self.reserved}, '
+            f'item_length={self.item_length})'
+        )
 
     @property
     def total_length(self) -> int:
@@ -334,10 +340,12 @@ class ScpScuRoleSelectionSubItem:
         self.scp_role = scp_role  # unsigned byte
 
     def __repr__(self) -> str:
-        return f'ScpScuRoleSelectionSubItem(' \
-               f'sop_class_uid="{self.sop_class_uid}", ' \
-               f'scu_role={self.scu_role}, scp_role={self.scp_role}, ' \
-               f'reserved={self.reserved})'
+        return (
+            'ScpScuRoleSelectionSubItem('
+            f'sop_class_uid="{self.sop_class_uid}", '
+            f'scu_role={self.scu_role}, scp_role={self.scp_role}, '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -362,7 +370,9 @@ class ScpScuRoleSelectionSubItem:
         """
         return b''.join([
             self.header.pack(
-                self.item_type, self.reserved, self.item_length,
+                self.item_type,
+                self.reserved,
+                self.item_length,
                 len(self.sop_class_uid)
             ),
             self.sop_class_uid.encode(),
@@ -379,8 +389,12 @@ class ScpScuRoleSelectionSubItem:
         _, reserved, _, uid_length = cls.header.unpack(stream.read(6))
         sop_class_uid = uid.UID(stream.read(uid_length).decode())
         scu_role, scp_role = struct.unpack('B B', stream.read(2))
-        return cls(reserved=reserved, sop_class_uid=sop_class_uid,
-                   scu_role=scu_role, scp_role=scp_role)
+        return cls(
+            reserved=reserved,
+            sop_class_uid=sop_class_uid,
+            scu_role=scu_role,
+            scp_role=scp_role
+        )
 
 
 class SOPClassExtendedNegotiationSubItem:
@@ -512,12 +526,14 @@ class UserIdentityNegotiationSubItem:
         return self._secondary_field.decode('utf8')
 
     def __repr__(self) -> str:
-        return f'UserIdentityNegotiationSubItem(' \
-               f'primary_field="{self.primary_field}", ' \
-               f'secondary_field="{self.secondary_field}", ' \
-               f'user_identity_type={self.user_identity_type}, ' \
-               f'positive_response_req={self.positive_response_req}, ' \
-               f'reserved={self.reserved})'
+        return (
+            'UserIdentityNegotiationSubItem('
+            f'primary_field="{self.primary_field}", '
+            f'secondary_field="{self.secondary_field}", '
+            f'user_identity_type={self.user_identity_type}, '
+            f'positive_response_req={self.positive_response_req}, '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -599,9 +615,11 @@ class UserIdentityNegotiationSubItemAc:
         self.server_response = server_response  # string
 
     def __repr__(self) -> str:
-        return f'UserIdentityNegotiationSubItemAc(' \
-               f'server_response="{self.server_response}", ' \
-               f'reserved={self.reserved})'
+        return (
+            f'UserIdentityNegotiationSubItemAc('
+            f'server_response="{self.server_response}", '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -626,9 +644,16 @@ class UserIdentityNegotiationSubItemAc:
         """
         server_response = self.server_response.encode()
         return b''.join(
-            [self.header.pack(self.item_type, self.reserved, self.item_length,
-                              len(server_response)),
-             server_response])
+            [
+                self.header.pack(
+                    self.item_type,
+                    self.reserved,
+                    self.item_length,
+                    len(server_response)
+                ),
+                server_response
+            ]
+        )
 
     @classmethod
     def decode(cls, stream: BytesIO) -> 'UserIdentityNegotiationSubItemAc':
@@ -663,9 +688,11 @@ class GenericUserDataSubItem:
         self.user_data = user_data  # raw string
 
     def __repr__(self) -> str:
-        return f'GenericUserDataSubItem(item_type={self.item_type}, ' \
-               f'user_data="{str(self.user_data)}", ' \
-               f'reserved={self.reserved})'
+        return (
+            f'GenericUserDataSubItem(item_type={self.item_type}, '
+            f'user_data="{str(self.user_data)}", '
+            f'reserved={self.reserved})'
+        )
 
     @property
     def item_length(self) -> int:
@@ -709,4 +736,8 @@ class GenericUserDataSubItem:
         """
         item_type, reserved, item_length = cls.header.unpack(stream.read(4))
         user_data = stream.read(int(item_length))
-        return cls(item_type=item_type, user_data=user_data, reserved=reserved)
+        return cls(
+            item_type=item_type,
+            user_data=user_data,
+            reserved=reserved
+        )
