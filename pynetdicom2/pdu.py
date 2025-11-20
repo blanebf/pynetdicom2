@@ -479,7 +479,7 @@ class AReleaseRpPDU(AReleasePDUBase):
 
     def __repr__(self) -> str:
         return (
-            'AReleaseRpPDU('\
+            'AReleaseRpPDU('
             f'reserved1={self.reserved1}, '
             f'reserved2={self.reserved2})'
         )

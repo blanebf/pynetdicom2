@@ -29,7 +29,6 @@ import functools
 from itertools import chain
 import time
 import socket
-import socketserver
 from typing import (
     Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol, TypeVar,
     Union
@@ -220,10 +219,6 @@ class AEBaseProto(Protocol):
         ...
 
 
-class AEBaseServerProto(AEBaseProto, socketserver.BaseServer):
-    pass
-
-
 APPLICATION_CONTEXT_NAME = uid.UID('1.2.840.10008.3.1.1.1')
 IMPLEMENTATION_UID = uid.UID(
     '1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000'
@@ -346,7 +341,7 @@ class Association:
             )
 
 
-class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
+class AssociationAcceptor(Association):
     """'Server-side' association implementation.
 
     Class is intended for handling incoming association requests.
@@ -355,8 +350,7 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
     def __init__(
             self,
             request: socket.socket,
-            client_address: tuple[str, int],
-            local_ae: AEBaseServerProto,
+            local_ae: AEBaseProto,
             max_pdu_length: int
     ) -> None:
         """Initializes AssociationAcceptor instance with specified client
@@ -370,10 +364,6 @@ class AssociationAcceptor(socketserver.StreamRequestHandler, Association):
         self.sop_classes_as_scp: dict[int, tuple[int, uid.UID, uid.UID]] = {}
         self.remote_ae: str = ''
         self.local_ae: str = ''
-
-        socketserver.StreamRequestHandler.__init__(
-            self, request, client_address, local_ae
-        )
 
     def kill(self) -> None:
         """Overrides base class kill method to set stop-flag for running thread

@@ -143,6 +143,14 @@ class DULServiceProvider(threading.Thread):
     def accepted_contexts(self, value: dict[int, fsm.PContextDef]) -> None:
         self.state_machine.accepted_contexts = value
 
+    def create_socket(self) -> None:
+        self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if not self.called_presentation_address:
+            raise exceptions.NetDICOMError(
+                'Called presentation address is not set'
+            )
+        self.dul_socket.connect(self.called_presentation_address)
+
     def send(
             self,
             primitive: Union[Iterator[pdu.PDataTfPDU], fsm.PDUType]
