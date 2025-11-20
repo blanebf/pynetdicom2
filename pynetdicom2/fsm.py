@@ -183,11 +183,13 @@ OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
 
 class ProviderProto(Protocol):
     dul_socket: socket.socket
-    called_presentation_address: Optional[tuple[str, int]]
     primitive: Optional[PDUType]
     to_service_user: IncomingQueue
     from_service_user: OutgoingQueue
     is_acceptor: bool
+
+    def create_socket(self) -> None:
+        ...
 
 
 class Timer:
@@ -426,12 +428,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ae_1(self) -> States:
         """Issue TransportConnect request primitive to local transport service.
         """
-        self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if not self.provider.called_presentation_address:
-            raise exceptions.NetDICOMError(
-                'Called presentation address is not set'
-            )
-        self.dul_socket.connect(self.provider.called_presentation_address)
+        self.provider.create_socket()
         return States.STA_4
 
     def ae_2(self) -> States:

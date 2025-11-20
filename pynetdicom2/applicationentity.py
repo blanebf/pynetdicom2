@@ -31,6 +31,7 @@ import platform
 import copy
 import contextlib
 import os
+import socket
 from typing import Any, BinaryIO, Iterator, Iterable, Optional, Union, cast
 import socketserver
 
@@ -431,7 +432,25 @@ class ClientAE(AEBase):
         super().__init__(supported_ts, max_pdu_length, ae_title)
 
 
-class AE(AEBase, socketserver.ThreadingTCPServer):
+class RequestHandler(socketserver.StreamRequestHandler):
+    def __init__(
+            self,
+            request: socket.socket,
+            client_address: tuple[str, int],
+            server: socketserver.ThreadingTCPServer,
+            local_ae: asceprovider.AEBaseProto,
+            max_pdu_length: int
+    ) -> None:
+        self.asce = asceprovider.AssociationAcceptor(
+            request, local_ae, max_pdu_length
+        )
+        super().__init__(request, client_address, server)
+
+    def handle(self) -> None:
+        self.asce.handle()
+
+
+class AE(AEBase):
     """Represents a DICOM application entity based on
     ``SocketServer.ThreadingTCPServer``
 
@@ -463,19 +482,19 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
             bind_and_activate: bool = True
     ) -> None:
         """Initializes new AE instance."""
-        AEBase.__init__(self, supported_ts, max_pdu_length, ae_title, port)
-        socketserver.ThreadingTCPServer.__init__(
-            self,
+        super().__init__(supported_ts, max_pdu_length, ae_title, port)
+        self.server = socketserver.ThreadingTCPServer(
             ('', port),
             partial(
-                asceprovider.AssociationAcceptor,
+                RequestHandler,
+                local_ae=self,
                 max_pdu_length=self.max_pdu_length
             ),
             bind_and_activate
         )
 
-        self.daemon_threads = True
-        self.allow_reuse_address = True
+        self.server.daemon_threads = True
+        self.server.allow_reuse_address = True
         self.activted = bind_and_activate
 
     def add_scp(
@@ -506,18 +525,18 @@ class AE(AEBase, socketserver.ThreadingTCPServer):
 
     def quit(self) -> None:
         """Stops AE from accepting any more connections."""
-        self.shutdown()
-        self.server_close()
+        self.server.shutdown()
+        self.server.server_close()
 
     def __enter__(self) -> 'AE':
         if not self.activted:
             try:
-                self.server_bind()
-                self.server_activate()
+                self.server.server_bind()
+                self.server.server_activate()
             except:  # noqa E722
-                self.server_close()
+                self.server.server_close()
                 raise
-        threading.Thread(target=self.serve_forever).start()
+        threading.Thread(target=self.server.serve_forever).start()
         return self
 
     def __exit__(self, *args: Any) -> None:
