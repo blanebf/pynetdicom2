@@ -1,6 +1,7 @@
 __author__ = 'Blane'
-
 import os
+import pathlib
+import ssl
 import threading
 import unittest
 from typing import BinaryIO, Iterable, Iterator, Union
@@ -11,9 +12,10 @@ from pydicom import dataset
 
 import pynetdicom2.applicationentity as ae
 import pynetdicom2.sopclass as sc
-from pynetdicom2 import asceprovider, fsm, statuses, commands, uids
+from pynetdicom2 import asceprovider, fsm, statuses, ssl_ae, commands, uids
 
-BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+BASE_PATH = pathlib.Path(__file__).absolute().parent
 
 
 class CEchoTestCase(unittest.TestCase):
@@ -34,6 +36,38 @@ class CEchoTestCase(unittest.TestCase):
                 service = assoc.get_scu(uids.VERIFICATION_SOP_CLASS)
                 self.assertIsNotNone(service)
                 result = service(1)
+                self.assertTrue(result.is_success)
+
+    def test_ssl_c_echo_positive(self) -> None:
+        client_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        client_context.load_verify_locations(BASE_PATH / 'cert.pem')
+        client_context.check_hostname = False
+        client_ae = ssl_ae.SSLClientAE(client_context, 'AET1')
+        client_ae.add_scu(sc.verification_scu)
+
+        server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_context.load_cert_chain(
+            BASE_PATH / 'cert.pem', BASE_PATH / 'key.pem', password='12345'
+        )
+        server_ae = ssl_ae.SSLApplicationEntity(
+            server_context,
+            'AET2',
+            2762,
+            bind_and_activate=False
+        )
+        server_ae.add_scp(sc.verification_scp)
+        with server_ae:
+            remote_ae = asceprovider.RemoteAEConfig(
+                address='127.0.0.1',
+                port=2762,
+                aet='AET2',
+                username='admin',
+                password='123'
+            )
+            with client_ae.request_association(remote_ae) as assoc:
+                service = assoc.get_scu(uids.VERIFICATION_SOP_CLASS)
+                result = service(1)
+                self.assertIsInstance(result, statuses.Status)
                 self.assertTrue(result.is_success)
 
 

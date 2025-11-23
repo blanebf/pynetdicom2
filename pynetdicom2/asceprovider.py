@@ -30,8 +30,8 @@ from itertools import chain
 import time
 import socket
 from typing import (
-    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol, TypeVar,
-    Union
+    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol,
+    TypeVar, Union
 )
 
 import pydicom
@@ -250,7 +250,6 @@ class Association:
     Class is not intended for direct usage and meant to be sub-classed.
     Class provides basic association interface: creation, release and abort.
     """
-
     def __init__(
             self,
             local_ae: AEBaseProto,
@@ -265,9 +264,7 @@ class Association:
         :param max_pdu_length: Maximum PDU length
         """
         self.ae = local_ae
-        self.dul = dulprovider.DULServiceProvider(
-            self.ae.store_in_file, self.ae.get_file, dul_socket, max_pdu_length
-        )
+        self.dul = self._create_dul(self.ae, dul_socket, max_pdu_length)
         self.association_established: bool = False
         self.max_pdu_length = max_pdu_length
         self.accepted_contexts: dict[int, fsm.PContextDef] = {}
@@ -319,6 +316,19 @@ class Association:
             )
         self.kill()
         return rsp
+
+    def _create_dul(
+            self,
+            local_ae: AEBaseProto,
+            dul_socket: Optional[socket.socket],
+            max_pdu_length: int
+    ) -> dulprovider.DULServiceProvider:
+        return dulprovider.DULServiceProvider(
+            local_ae.store_in_file,
+            local_ae.get_file,
+            dul_socket,
+            max_pdu_length
+        )
 
     def _get_dul_message(self) -> tuple[dimsemessages.DIMSEMessage, int]:
         dul_msg = self.dul.receive(self.ae.dcm_timeout)
