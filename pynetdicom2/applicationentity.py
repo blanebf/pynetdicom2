@@ -483,18 +483,9 @@ class AE(AEBase):
     ) -> None:
         """Initializes new AE instance."""
         super().__init__(supported_ts, max_pdu_length, ae_title, port)
-        self.server = socketserver.ThreadingTCPServer(
-            ('', port),
-            partial(
-                RequestHandler,
-                local_ae=self,
-                max_pdu_length=self.max_pdu_length
-            ),
-            bind_and_activate
+        self.server = self._create_server(
+            port, bind_and_activate, max_pdu_length
         )
-
-        self.server.daemon_threads = True
-        self.server.allow_reuse_address = True
         self.activted = bind_and_activate
 
     def add_scp(
@@ -527,6 +518,25 @@ class AE(AEBase):
         """Stops AE from accepting any more connections."""
         self.server.shutdown()
         self.server.server_close()
+
+    def _create_server(
+            self,
+            port: int,
+            bind_and_activate: bool,
+            max_pdu_length: int
+    ) -> socketserver.TCPServer:
+        server = socketserver.ThreadingTCPServer(
+            ('', port),
+            partial(
+                RequestHandler,
+                local_ae=self,
+                max_pdu_length=max_pdu_length
+            ),
+            bind_and_activate
+        )
+        server.daemon_threads = True
+        server.allow_reuse_address = True
+        return server
 
     def __enter__(self) -> 'AE':
         if not self.activted:
