@@ -89,7 +89,8 @@ class DULServiceProvider(threading.Thread):
             store_in_file: set[uid.UID],
             get_file_cb: fsm.GetFileCB,
             dul_socket: Optional[socket.socket] = None,
-            max_pdu_length: int = 65536
+            max_pdu_length: int = 65536,
+            artim_timeout: int = 10,
     ) -> None:
         """Initializes DUL service.
 
@@ -115,7 +116,7 @@ class DULServiceProvider(threading.Thread):
         self.from_service_user: fsm.OutgoingQueue = queue.Queue()
 
         # Setup the timer and finite state machines
-        self.timer = fsm.Timer(10)
+        self.timer = fsm.Timer(artim_timeout)
         self.state_machine = fsm.StateMachine(
             self, self.timer, store_in_file, get_file_cb
         )
