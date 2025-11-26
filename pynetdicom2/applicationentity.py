@@ -220,9 +220,7 @@ class AEBase:
         """
         assoc = None
         try:
-            assoc = asceprovider.AssociationRequester(
-                self, self.max_pdu_length, remote_ae
-            )
+            assoc = self._create_association(remote_ae)
             assoc.request()
             yield assoc
             if assoc.association_established:
@@ -393,6 +391,14 @@ class AEBase:
                         Failure Reason)
         """
         raise exceptions.EventHandlingError('Not implemented')
+
+    def _create_association(
+            self,
+            remote_ae: Union[asceprovider.RemoteAEConfig, dict[str, Any]]
+    ) -> asceprovider.AssociationRequester:
+        return asceprovider.AssociationRequester(
+            self, self.max_pdu_length, remote_ae
+        )
 
     def _build_context_def_list(
             self,
