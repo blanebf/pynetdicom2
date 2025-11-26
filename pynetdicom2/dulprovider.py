@@ -144,6 +144,7 @@ class DULServiceProvider(threading.Thread):
         self.state_machine.accepted_contexts = value
 
     def create_socket(self) -> None:
+        """Creates a client socket and establishes a connection"""
         self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not self.called_presentation_address:
             raise exceptions.NetDICOMError(

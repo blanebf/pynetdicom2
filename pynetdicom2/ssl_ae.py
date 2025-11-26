@@ -1,9 +1,14 @@
-import contextlib
+"""
+This module provides classes that add SSL support to DICOM network connections
+As `ssl` module is optional in the python standard library this module is
+considered optional too and won't work if your python distribution doesn't
+contain an `ssl` module.
+"""
 from functools import partial
 import ssl
 import socket
 import socketserver
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Optional, Union
 
 from pydicom import uid
 
@@ -11,6 +16,7 @@ from . import applicationentity, asceprovider, dulprovider, exceptions, fsm
 
 
 class SSLDULProvider(dulprovider.DULServiceProvider):
+    """DUL Provider implementation that wraps its socket with `SSLContext`"""
     def __init__(
             self,
             context: ssl.SSLContext,
@@ -35,6 +41,10 @@ class SSLDULProvider(dulprovider.DULServiceProvider):
 
 
 class SSLAssociationRequester(asceprovider.AssociationRequester):
+    """
+    AssociationRequester implementation that uses SSL in its DUL Provider
+    implementation.
+    """
     def __init__(
             self,
             context: ssl.SSLContext,
@@ -61,6 +71,10 @@ class SSLAssociationRequester(asceprovider.AssociationRequester):
 
 
 class SSLClientAE(applicationentity.ClientAE):
+    """Just like its parent class provides a simple SCU-only application
+    entity, but it also takes in an `SSLContext` to wrap all its network
+    communication with it.
+    """
     def __init__(
             self,
             context: ssl.SSLContext,
@@ -72,31 +86,16 @@ class SSLClientAE(applicationentity.ClientAE):
         super().__init__(ae_title, supported_ts, max_pdu_length)
         self.context = context
 
-    @contextlib.contextmanager
-    def request_association(
+    def _create_association(
             self,
             remote_ae: Union[asceprovider.RemoteAEConfig, dict[str, Any]]
-    ) -> Iterator[asceprovider.AssociationRequester]:
-        assoc = None
-        try:
-            assoc = SSLAssociationRequester(
-                self.context, self, self.max_pdu_length, remote_ae
-            )
-            assoc.request()
-            yield assoc
-            if assoc.association_established:
-                assoc.release()
-            else:
-                assoc.kill()
-        except Exception:
-            if assoc and assoc.association_established:
-                assoc.abort()
-            elif assoc:
-                assoc.kill()
-            raise
+    ) -> asceprovider.AssociationRequester:
+        return SSLAssociationRequester(
+            self.context, self, self.max_pdu_length, remote_ae
+        )
 
 
-class SSLCPServer(socketserver.TCPServer):
+class _SSLCPServer(socketserver.TCPServer):
     def __init__(
             self,
             context: ssl.SSLContext,
@@ -117,11 +116,14 @@ class SSLCPServer(socketserver.TCPServer):
         return connstream, fromaddr
 
 
-class SSLThreadingTCPServer(socketserver.ThreadingMixIn, SSLCPServer):
+class _SSLThreadingTCPServer(socketserver.ThreadingMixIn, _SSLCPServer):
     pass
 
 
 class SSLApplicationEntity(applicationentity.AE):
+    """The same as its parent class, but with added `SSLContext` parameter
+    that it uses to wrap all network connections with.
+    """
     def __init__(
             self,
             context: ssl.SSLContext,
@@ -142,7 +144,7 @@ class SSLApplicationEntity(applicationentity.AE):
             bind_and_activate: bool,
             max_pdu_length: int
     ) -> socketserver.TCPServer:
-        server = SSLThreadingTCPServer(
+        server = _SSLThreadingTCPServer(
             self.context,
             ('', port),
             partial(
