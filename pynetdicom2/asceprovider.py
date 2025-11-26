@@ -132,6 +132,7 @@ class AEBaseProto(Protocol):
     local_ae: AETParams
     supported_ts: frozenset[uid.UID]
     dcm_timeout: int
+    artim_timeout: int
     max_pdu_length: int
 
     context_def_list: dict[int, PContextDefList]
@@ -327,7 +328,8 @@ class Association:
             local_ae.store_in_file,
             local_ae.get_file,
             dul_socket,
-            max_pdu_length
+            max_pdu_length,
+            self.ae.artim_timeout
         )
 
     def _get_dul_message(self) -> tuple[dimsemessages.DIMSEMessage, int]:

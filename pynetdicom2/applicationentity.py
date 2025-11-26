@@ -131,6 +131,7 @@ class AEBase:
 
         self.supported_ts = frozenset(supported_ts)
         self.dcm_timeout: int = 15
+        self.artim_timeout: int = 10
         self.max_pdu_length = max_pdu_length
 
         self.context_def_list: dict[int, asceprovider.PContextDefList] = {}
