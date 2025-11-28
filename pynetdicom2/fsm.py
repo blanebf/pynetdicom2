@@ -25,6 +25,7 @@ from . import dimsemessages, dsutils, exceptions, pdu
 
 @dataclasses.dataclass(frozen=True)
 class PContextDef:
+    """Presentation Context Definition."""
     id: int
     sop_class: pydicom.uid.UID
     supported_ts: pydicom.uid.UID
@@ -182,6 +183,7 @@ OutgoingQueue = queue.Queue[Union[Iterator[pdu.PDataTfPDU], PDUType]]
 
 
 class ProviderProto(Protocol):
+    """DUL Provider protocol"""
     dul_socket: socket.socket
     primitive: Optional[PDUType]
     to_service_user: IncomingQueue
@@ -189,7 +191,7 @@ class ProviderProto(Protocol):
     is_acceptor: bool
 
     def create_socket(self) -> None:
-        ...
+        """Creates and connects a new TCP socket"""
 
 
 class Timer:
