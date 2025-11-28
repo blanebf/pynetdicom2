@@ -54,16 +54,18 @@ from pydicom import filereader
 from pydicom import uid
 
 from . import (
-    asceprovider, dimsemessages, dsutils, exceptions, fsm, statuses, uids
+    asceprovider, dimsemessages, dsutils, exceptions, fsm, statuses,
+    uids as _uids
 )
 
 
 class AugmentedProto(Protocol):
+    """Protocol for a callable that has been augmented with SOP Class UIDs"""
     @overload
     def __call__(
             self,
-            service: asceprovider.SCPService[asceprovider.T]
-    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
+            service: asceprovider.SCPService[asceprovider.T_contra]
+    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T_contra]:
         ...
 
     @overload
@@ -80,8 +82,8 @@ def sop_classes(uids: list[uid.UID]) -> AugmentedProto:
     """
     @overload
     def augment(
-            service: asceprovider.SCPService[asceprovider.T]
-    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
+            service: asceprovider.SCPService[asceprovider.T_contra]
+    ) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T_contra]:
         ...
 
     @overload
@@ -100,8 +102,8 @@ def sop_classes(uids: list[uid.UID]) -> AugmentedProto:
 
 
 def store_in_file(
-        service: asceprovider.SCPServiceWithSOPClass[asceprovider.T]
-) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T]:
+        service: asceprovider.SCPServiceWithSOPClass[asceprovider.T_contra]
+) -> asceprovider.SCPServiceWithSOPClass[asceprovider.T_contra]:
     """Sets ``store_in_file`` attribute to ``True``"""
     service.store_in_file = True
     return service
@@ -179,7 +181,7 @@ class MessageDispatcherSCP(MessageDispatcher):
         method(asce, ctx, msg)
 
 
-@sop_classes([uids.VERIFICATION_SOP_CLASS])
+@sop_classes([_uids.VERIFICATION_SOP_CLASS])
 def verification_scu(
         asce: asceprovider.AssociationRequester,
         ctx: fsm.PContextDef,
@@ -203,7 +205,7 @@ def verification_scu(
     return statuses.Status(response.status, dimsemessages.CEchoRSPMessage)
 
 
-@sop_classes([uids.VERIFICATION_SOP_CLASS])
+@sop_classes([_uids.VERIFICATION_SOP_CLASS])
 def verification_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: fsm.PContextDef,
@@ -292,7 +294,7 @@ def storage_scu(
 
 
 @store_in_file
-@sop_classes(uids.STORAGE_SOP_CLASSES)
+@sop_classes(_uids.STORAGE_SOP_CLASSES)
 def storage_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: fsm.PContextDef,
@@ -328,7 +330,7 @@ def storage_scp(
 
 
 FIND_SOP_CLASSES = [
-    uids.PATIENT_ROOT_FIND_SOP_CLASS, uids.STUDY_ROOT_FIND_SOP_CLASS
+    _uids.PATIENT_ROOT_FIND_SOP_CLASS, _uids.STUDY_ROOT_FIND_SOP_CLASS
 ]
 
 
@@ -428,9 +430,9 @@ def qr_find_scp(
 
 
 GET_SOP_CLASSES = [
-    uids.PATIENT_ROOT_GET_SOP_CLASS,
-    uids.STUDY_ROOT_GET_SOP_CLASS,
-    uids.PATIENT_STUDY_ONLY_GET_SOP_CLASS
+    _uids.PATIENT_ROOT_GET_SOP_CLASS,
+    _uids.STUDY_ROOT_GET_SOP_CLASS,
+    _uids.PATIENT_STUDY_ONLY_GET_SOP_CLASS
 ]
 
 
@@ -513,9 +515,9 @@ def qr_get_scu(
 
 
 MOVE_SOP_CLASSES = [
-    uids.PATIENT_ROOT_MOVE_SOP_CLASS,
-    uids.STUDY_ROOT_MOVE_SOP_CLASS,
-    uids.PATIENT_STUDY_ONLY_MOVE_SOP_CLASS
+    _uids.PATIENT_ROOT_MOVE_SOP_CLASS,
+    _uids.STUDY_ROOT_MOVE_SOP_CLASS,
+    _uids.PATIENT_STUDY_ONLY_MOVE_SOP_CLASS
 ]
 
 
@@ -645,7 +647,7 @@ def _send_response(
     asce.send(rsp, ctx.id)
 
 
-@sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
+@sop_classes([_uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scu(
         asce: asceprovider.AssociationRequester,
         ctx: fsm.PContextDef,
@@ -665,7 +667,7 @@ def modality_work_list_scu(
     yield from qr_find_scu(asce, ctx, ds, msg_id)
 
 
-@sop_classes([uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
+@sop_classes([_uids.MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS])
 def modality_work_list_scp(
         asce: asceprovider.AssociationAcceptor,
         ctx: fsm.PContextDef,
@@ -690,7 +692,7 @@ class StorageCommitment(MessageDispatcherSCP):
 
     Handles incoming N-ACTION-RQ and N-EVENT-REPORT-RQ messages.
     """
-    sop_classes = [uids.STORAGE_COMMITMENT_SOP_CLASS]
+    sop_classes = [_uids.STORAGE_COMMITMENT_SOP_CLASS]
     store_in_file = False
 
     PROCESSING_FAILURE = 0x0110
@@ -848,7 +850,7 @@ class StorageCommitment(MessageDispatcherSCP):
                 assoc.receive()
 
 
-@sop_classes([uids.STORAGE_COMMITMENT_SOP_CLASS])
+@sop_classes([_uids.STORAGE_COMMITMENT_SOP_CLASS])
 def storage_commitment_scu(
         asce: asceprovider.AssociationRequester,
         ctx: fsm.PContextDef,

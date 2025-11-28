@@ -262,8 +262,7 @@ class AEBase:
         except Exception:
             tmp.close()
             raise
-        else:
-            return tmp, start
+        return tmp, start
 
     def on_association_request(
             self,
@@ -289,7 +288,10 @@ class AEBase:
         :param response: response received from remote AE
         """
 
-    def on_receive_echo(self, context: fsm.PContextDef) -> statuses.Status:
+    def on_receive_echo(  # pylint: disable=unused-argument
+            self,
+            context: fsm.PContextDef
+    ) -> statuses.Status:
         """Default handling of C-ECHO command. Always returns SUCCESS code
 
         User should override this method in a sub-class to provide custom
@@ -301,7 +303,7 @@ class AEBase:
         """
         return statuses.SUCCESS
 
-    def on_receive_store(
+    def on_receive_store(  # pylint: disable=unused-argument
             self,
             context: fsm.PContextDef,
             ds: Union[BinaryIO, bytes]
@@ -319,7 +321,7 @@ class AEBase:
         """
         return statuses.C_STORE_ELEMENTS_DISCARDED
 
-    def on_receive_find(
+    def on_receive_find(  # pylint: disable=unused-argument
             self,
             context: fsm.PContextDef,
             ds: Dataset
@@ -440,6 +442,9 @@ class ClientAE(AEBase):
 
 
 class RequestHandler(socketserver.StreamRequestHandler):
+    """Request handler for incoming TCP connections. Used to establish
+    association and is not inteded to be used directly.
+    """
     def __init__(
             self,
             request: socket.socket,
@@ -497,7 +502,7 @@ class AE(AEBase):
 
     def add_scp(
             self,
-            service: asceprovider.SCPServiceWithSOPClass[asceprovider.T]
+            service: asceprovider.SCPServiceWithSOPClass[asceprovider.T_contra]
     ) -> 'AE':
         """Adds service as SCP to the AE.
 
@@ -620,8 +625,7 @@ class FolderStorageMixin:
         except Exception:
             ds.close()
             raise
-        else:
-            return ds, start
+        return ds, start
 
 
 class ClientStorageAE(ClientAE, FolderStorageMixin):

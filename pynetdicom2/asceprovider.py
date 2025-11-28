@@ -47,6 +47,7 @@ from .fsm import PContextDef  # pylint: disable=unused-import. # noqa F401
 
 @dataclasses.dataclass(frozen=True)
 class RemoteAEConfig:
+    """Connection settings for establishing remote association"""
     aet: str
     address: str
     port: int
@@ -60,6 +61,7 @@ class RemoteAEConfig:
 
 @dataclasses.dataclass(frozen=True)
 class AETParams:
+    """AE Title parameters such as address, AE title itself and port"""
     address: str
     aet: str
     port: Optional[int] = None
@@ -67,15 +69,22 @@ class AETParams:
 
 @dataclasses.dataclass(frozen=True)
 class PContextDefList:
+    """Presentation Context Definition list item"""
     id: int
     sop_class: uid.UID
     supported_ts: frozenset[uid.UID]
 
 
-T = TypeVar('T', bound=dimsemessages.DIMSERequestMessage, contravariant=True)
+T_contra = TypeVar(
+    'T_contra', bound=dimsemessages.DIMSERequestMessage, contravariant=True
+)
 
 
-class SCPServiceWithSOPClass(Protocol[T]):
+class SCPServiceWithSOPClass(Protocol[T_contra]):
+    """Service Content Provider Protocol augemnted with supported SOP
+    Class UIDs.
+    """
+
     sop_classes: list[uid.UID]
     store_in_file: bool
 
@@ -84,23 +93,25 @@ class SCPServiceWithSOPClass(Protocol[T]):
             self,
             asce: 'AssociationAcceptor',
             ctx: fsm.PContextDef,
-            msg: T
+            msg: T_contra
     ) -> None:
         ...
 
 
-class SCPService(Protocol[T]):
+class SCPService(Protocol[T_contra]):
+    """Service Content Provider Protocol."""
     @abstractmethod
     def __call__(
             self,
             asce: 'AssociationAcceptor',
             ctx: fsm.PContextDef,
-            msg: T
+            msg: T_contra
      ) -> None:
         ...
 
 
 class SCUService(Protocol):
+    """Service Content User protocol."""
     def __call__(
             self,
             asce: 'AssociationRequester',
@@ -112,6 +123,9 @@ class SCUService(Protocol):
 
 
 class SCUServiceWithSOPClass(Protocol):
+    """Service Content User protocol augemented with supported
+    SOP Class UIDs.
+    """
     sop_classes: list[uid.UID]
     store_in_file: bool
 
@@ -127,6 +141,9 @@ class SCUServiceWithSOPClass(Protocol):
 
 
 class AEBaseProto(Protocol):
+    """Application Entity Protocol. Main implementation are in another module
+    :module:`~pynetdicom2.applicationentity`
+    """
     default_ts: list[uid.UID]
 
     local_ae: AETParams
@@ -147,50 +164,51 @@ class AEBaseProto(Protocol):
             service: SCUServiceWithSOPClass,
             sop_classes: Optional[list[uid.UID]] = None
     ) -> 'AEBaseProto':
-        ...
+        """Adds service as SCU to the AE."""
 
     def update_context_def_list(
             self, sop_classes: Iterable[uid.UID], store_in_file: bool = False
     ) -> None:
-        ...
+        """Updates presentation context definition list."""
 
     def copy_context_def_list(self) -> dict[int, PContextDefList]:
-        ...
+        """Makes a shallow copy of presentation context definition list."""
 
     def get_file(
             self,
             context: fsm.PContextDef,
             command_set: pydicom.Dataset
     ) -> tuple[BinaryIO, int]:
-        ...
+        """Method is used by association to get file-like object to store
+        dataset."""
 
     @contextlib.contextmanager
     def request_association(
             self,
             remote_ae: Union[RemoteAEConfig, dict[str, Any]]
     ) -> Iterator['AssociationRequester']:
-        ...
+        """Requests association to a remote application entity."""
 
     def on_association_request(
             self, asce: 'AssociationAcceptor', assoc: pdu.AAssociateRqPDU
     ) -> None:
-        ...
+        """Extra processing of an association request."""
 
     def on_association_response(self, response: pdu.AAssociateAcPDU) -> None:
-        ...
+        """Extra processing for an association response."""
 
     def on_receive_echo(self, context: fsm.PContextDef) -> statuses.Status:
-        ...
+        """Handling of a C-ECHO command."""
 
     def on_receive_store(
             self, context: fsm.PContextDef, ds: Union[BinaryIO, bytes]
     ) -> statuses.Status:
-        ...
+        """Handling of a C-STORE command."""
 
     def on_receive_find(
             self, context: fsm.PContextDef, ds: pydicom.Dataset
     ) -> Iterator[tuple[pydicom.Dataset, statuses.Status]]:
-        ...
+        """Handling of a C-FIND command."""
 
     def on_receive_move(
             self,
@@ -198,7 +216,7 @@ class AEBaseProto(Protocol):
             ds: pydicom.Dataset,
             destination: str
      ) -> tuple[RemoteAEConfig, int, Iterator[pydicom.Dataset]]:
-        ...
+        """Handling of a C-MOVE command."""
 
     def on_commitment_request(
             self,
@@ -209,7 +227,7 @@ class AEBaseProto(Protocol):
         Iterable[tuple[uid.UID, uid.UID]],
         Iterable[tuple[uid.UID, uid.UID, int]]
     ]:
-        ...
+        """Handle storage commitment request."""
 
     def on_commitment_response(
             self,
@@ -217,7 +235,7 @@ class AEBaseProto(Protocol):
             success: Iterable[tuple[uid.UID, uid.UID]],
             failure: Iterable[tuple[uid.UID, uid.UID, int]]
     ) -> None:
-        ...
+        """Handle storage commitment response."""
 
 
 APPLICATION_CONTEXT_NAME = uid.UID('1.2.840.10008.3.1.1.1')
@@ -469,6 +487,9 @@ class AssociationAcceptor(Association):
         self.local_ae = assoc_req.called_ae_title
 
     def handle(self) -> None:
+        """Handles the incoming connection to accepting or rejecting the
+        association and then handling incoming commands.
+        """
         try:
             self._establish()
             self._loop()
@@ -514,8 +535,7 @@ class AssociationAcceptor(Association):
                 raise exceptions.ClassNotSupportedError(
                     f'SOP Class {_uid} not supported as SCP'
                 ) from exc
-            else:
-                service(self, fsm.PContextDef(pc_id, sop_class, ts), dimse_msg)
+            service(self, fsm.PContextDef(pc_id, sop_class, ts), dimse_msg)
 
 
 class AssociationRequester(Association):
@@ -580,10 +600,9 @@ class AssociationRequester(Association):
             raise exceptions.ClassNotSupportedError(
                 f'SOP Class {sop_class} not supported as SCU'
             ) from exc
-        else:
-            return functools.partial(
-                service, self, fsm.PContextDef(pc_id, sop_class, ts)
-            )
+        return functools.partial(
+            service, self, fsm.PContextDef(pc_id, sop_class, ts)
+        )
 
     def abort(self, reason: int = 0) -> None:
         """Aborts association with specified reason

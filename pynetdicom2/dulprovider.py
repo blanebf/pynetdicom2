@@ -214,11 +214,11 @@ class DULServiceProvider(threading.Thread):
     def run(self) -> None:
         try:
             while not self.is_killed:
-                (
+                (  # pylint: disable=expression-not-assigned
                     self._check_network() or
                     self._check_outgoing_pdu() or
                     self._check_timer()
-                )  # pylint: disable=expression-not-assigned
+                )
                 try:
                     evt = self.event.popleft()
                 except IndexError:
