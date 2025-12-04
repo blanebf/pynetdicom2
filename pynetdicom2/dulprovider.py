@@ -20,17 +20,20 @@ use higher level objects like sub-classes of
 """
 import collections
 from collections.abc import Iterator
-
-import threading
-from typing import Optional, Type, Union, cast
-import socket
+import logging
 import select
+import socket
 import struct
+import threading
 import queue
+from typing import Optional, Type, Union, cast
 
 from pydicom import uid
 
 from . import dimsemessages, fsm, pdu, exceptions
+
+
+logger = logging.getLogger(__file__)
 
 
 PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
@@ -224,7 +227,8 @@ class DULServiceProvider(threading.Thread):
                 except IndexError:
                     continue
                 self.state_machine.action(evt)
-        except Exception:
+        except Exception as exc:
+            logger.exception('DUL failure: %s', exc)
             self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
             raise
         finally:
@@ -293,7 +297,8 @@ class DULServiceProvider(threading.Thread):
 
         try:
             data = self.dul_socket.recv(self.max_pdu_length)
-        except socket.error:
+        except socket.error as exc:
+            logger.exception('DUL socket failure: %s', exc)
             self.event.append(fsm.Events.EVT_17)
             self.dul_socket.close()
             self.dul_socket = None

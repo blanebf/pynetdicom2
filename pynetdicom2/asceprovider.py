@@ -27,6 +27,7 @@ import contextlib
 import dataclasses
 import functools
 from itertools import chain
+import logging
 import time
 import socket
 from typing import (
@@ -43,6 +44,9 @@ from . import exceptions, dulprovider, fsm, pdu, statuses, userdataitems
 
 # backwards compatability
 from .fsm import PContextDef  # pylint: disable=unused-import. # noqa F401
+
+
+logger = logging.getLogger(__file__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -196,6 +200,22 @@ class AEBaseProto(Protocol):
 
     def on_association_response(self, response: pdu.AAssociateAcPDU) -> None:
         """Extra processing for an association response."""
+
+    def on_abort(
+            self,
+            asce: 'Association',
+            exc: exceptions.AssociationAbortedError
+    ) -> None:
+        """Called to handle
+        :class:`~pynetdicom2.exceptions.AssociationAbortedError`
+        """
+
+    def on_dcm_timeout(
+            self,
+            asce: 'Association',
+            exc: exceptions.DCMTimeoutError
+    ) -> None:
+        """Called to handle :class:`~pynetdicom2.exceptions.DCMTimeoutError`"""
 
     def on_receive_echo(self, context: fsm.PContextDef) -> statuses.Status:
         """Handling of a C-ECHO command."""
@@ -495,10 +515,20 @@ class AssociationAcceptor(Association):
             self._loop()
         except exceptions.AssociationReleasedError:
             self.dul.send(pdu.AReleaseRpPDU())
-        except exceptions.AssociationAbortedError:
-            pass  # TODO: Log abort
-        except exceptions.DCMTimeoutError:
-            pass  # TODO: Handle timeout error
+        except exceptions.AssociationAbortedError as exc:
+            self.ae.on_abort(self, exc)
+        except exceptions.AssociationRejectedError as exc:
+            logger.info('Association[%d] is rejected: %s', id(self), exc)
+        except exceptions.AssociationError as exc:
+            logger.exception(
+                'Association[%d] handling error: %s', id(self), exc
+            )
+        except exceptions.DCMTimeoutError as exc:
+            self.ae.on_dcm_timeout(self, exc)
+        except Exception as exc:
+            logger.exception(
+                'Assocation[%d] unexpected handling error: %s', id(self), exc
+            )
         finally:
             self.kill()
 
@@ -510,6 +540,12 @@ class AssociationAcceptor(Association):
                     f'Invalid request on associaction: {assoc_req}'
                 )
 
+            logger.info(
+                'Incoming Association[%d] %s <- %s',
+                id(self),
+                assoc_req.called_ae_title,
+                assoc_req.calling_ae_title
+            )
             self.ae.on_association_request(self, assoc_req)
         except exceptions.AssociationRejectedError as exc:
             self.reject(exc.result, exc.source, exc.diagnostic)
@@ -576,6 +612,12 @@ class AssociationRequester(Association):
         custom_items = self.remote_ae.user_data
         response = self._request(
             self.ae.local_ae, self.remote_ae, users_pdu=ext+custom_items
+        )
+        logger.info(
+            'Outgoing Association[%d] established: %s -> %s',
+            id(self),
+            response.calling_ae_title,
+            response.called_ae_title
         )
         self.ae.on_association_response(response)
         self.association_established = True
