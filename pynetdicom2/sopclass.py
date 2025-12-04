@@ -50,8 +50,7 @@ from typing import (
     overload
 )
 import pydicom
-from pydicom import filereader
-from pydicom import uid
+from pydicom import filereader, uid
 
 from . import (
     asceprovider, dimsemessages, dsutils, exceptions, fsm, statuses,
