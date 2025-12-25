@@ -135,10 +135,8 @@ class CFindWrapperTestCase(unittest.TestCase):
         ae2 = CFindServerAE(test_name, self, 'AET2', 11112)
         ae2.add_scp(sc.qr_find_scp)
         with ae2:
-            for result, status in commands.find('AET1', remote_ae, ds):
-                if result:
-                    self.assertEqual(result.PatientName, test_name)
-                    self.assertTrue(status.is_pending)
+            for result in commands.find('AET1', remote_ae, ds):
+                self.assertEqual(result.PatientName, test_name)
 
 
 class CStoreAE(ae.AE):
