@@ -28,7 +28,7 @@ import threading
 import copy
 import contextlib
 import logging
-import os
+import pathlib
 import platform
 import tempfile
 import socket
@@ -597,7 +597,11 @@ class FolderStorageMixin:
     Maximum iteration for looking for a unique filename
     """
 
-    def get_file_name(self, path: str, sop_instance_uid: uid.UID) -> str:
+    def get_file_name(
+            self,
+            path: pathlib.Path,
+            sop_instance_uid: uid.UID
+    ) -> pathlib.Path:
         """Gets a unique filename in a folder, where incoming dataset should
         be stored.
 
@@ -609,21 +613,20 @@ class FolderStorageMixin:
                          storing incoming dataset
         :return: unique filename to store incoming dataset
         """
-        template = os.path.join(path, sop_instance_uid)
         i = 0
-        full_name = f'{template}.dcm'
-        while os.path.exists(full_name):
+        full_name = path / f'{sop_instance_uid}.dcm'
+        while full_name.exists():
             i += 1
             if i > self.max_iterations:
                 raise OSError('Max iteration for free filename reached')
-            full_name = f'{template}_{i}.dcm'
+            full_name = path / f'{sop_instance_uid}_{i}.dcm'
         return full_name
 
     def get_storage_file(
             self,
             context: fsm.PContextDef,
             command_set: Dataset,
-            path: str
+            path: pathlib.Path
     ) -> tuple[BinaryIO, int]:
         """Gets a bytes IO and starting point in it for storing incoming
         dataset.
@@ -655,7 +658,7 @@ class ClientStorageAE(ClientAE, FolderStorageMixin):
     """
     def __init__(
             self,
-            storage_dir: str,
+            storage_dir: pathlib.Path,
             ae_title: str,
             supported_ts: Optional[list[uid.UID]] = None,
             max_pdu_length: int = 65536
@@ -677,7 +680,7 @@ class StorageAE(AE, FolderStorageMixin):
     """
     def __init__(
             self,
-            storage_dir: str,
+            storage_dir: pathlib.Path,
             ae_title: str,
             port: int,
             supported_ts: Optional[list[uid.UID]] = None,
