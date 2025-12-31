@@ -411,7 +411,10 @@ class Status:
         return int(self._value)
 
     def __str__(self) -> str:
-        return f'(0x{int(self):0X}) {self.status_type}: {self.description}'
+        return (
+            f'(0x{int(self):0X}) {self.status_type}: '
+            f'{self.description or "-"}'
+        )
 
     def __repr__(self) -> str:
         """Returns status string representation

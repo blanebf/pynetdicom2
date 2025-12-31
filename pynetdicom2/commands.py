@@ -87,7 +87,7 @@ def store(
     """
     file_meta = filereader.read_file_meta_info(ds)
     sop_class = file_meta.MediaStorageSOPClassUID
-    transfer_syntax = file_meta.TransferSyntax
+    transfer_syntax = file_meta.TransferSyntaxUID
     ae = applicationentity.ClientAE(local_aet, supported_ts=[transfer_syntax])
     ae.add_scu(sopclass.storage_scu, [sop_class])
     with ae.request_association(remote_ae) as assoc:
@@ -103,7 +103,7 @@ def storage(
         port: int,
         supported_ts: Optional[list[uid.UID]] = None
 ) -> Iterator[None]:
-    """Simple context manager to start a Storage SCP to recieve datasets to
+    """Simple context manager to start a Storage SCP and receive datasets to
     a folder.
 
     :param storage_dir: where to store incoming datasets
