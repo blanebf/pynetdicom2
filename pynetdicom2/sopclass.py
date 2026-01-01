@@ -844,7 +844,15 @@ class StorageCommitment(MessageDispatcherSCP):
             )
 
             with asce.ae.request_association(remote_ae) as assoc:
-                assoc.send(report, ctx.id)
+                for ctx_id, pc_def in assoc.accepted_contexts.items():
+                    if pc_def.sop_class == _uids.STORAGE_COMMITMENT_SOP_CLASS:
+                        break
+                else:
+                    raise exceptions.NetDICOMError(
+                        'Unable to find acceptable context to send storage '
+                        'commitment report'
+                    )
+                assoc.send(report, ctx_id)
                 # Get response. Current implementation ignores it
                 assoc.receive()
 

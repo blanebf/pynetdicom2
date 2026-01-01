@@ -1,5 +1,4 @@
 __author__ = 'Blane'
-import os
 import pathlib
 import ssl
 import threading
@@ -192,7 +191,7 @@ class CStoreTestCase(unittest.TestCase):
                 self.assertTrue(status.is_success)
 
     def test_c_store_from_file(self) -> None:
-        file_name = os.path.join(BASE_PATH, 'test_sr.dcm')
+        file_name = BASE_PATH / 'test_sr.dcm'
         rq = pydicom.dcmread(file_name)
 
         ae1 = ae.ClientAE(
@@ -206,7 +205,7 @@ class CStoreTestCase(unittest.TestCase):
             )
             with ae1.request_association(remote_ae) as assoc:
                 service = assoc.get_scu(uids.COMPREHENSIVE_SR_STORAGE)
-                status = service(file_name, 1)
+                status = service(str(file_name), 1)
                 self.assertTrue(status.is_success)
 
 
@@ -315,13 +314,13 @@ class StorageCommitmentTestCase(unittest.TestCase):
             with ae1.request_association(self.remote_ae2) as assoc:
                 service = assoc.get_scu(uids.STORAGE_COMMITMENT_SOP_CLASS)
 
-                status = service(self.transaction, uids, 1)
+                status = service(self.transaction, _uids, 1)
                 self.assertTrue(status.is_success)
                 self.event.wait(20)
 
     def test_commitment_failure(self) -> None:
         _uids = [
-            (uids.COMPREHENSIVE_SR_STORAGE, uid.UID(uid.generate_uid()+str(i)))
+            (uids.COMPREHENSIVE_SR_STORAGE, uid.generate_uid())
             for i in range(10)
         ]
 
