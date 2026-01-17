@@ -14,6 +14,7 @@ from . import asceprovider, commands, uids
 
 
 def main() -> None:
+    """Main CLI routine"""
     parser = get_parser()
     args = parse_args(parser, sys.argv[1:])
     if not args.func:
@@ -25,6 +26,7 @@ def main() -> None:
 
 @dataclasses.dataclass
 class Args:
+    """Dataclass for storing parsed arguments"""
     func: Optional[Callable[['Args'], Iterable[str]]] = None
 
     # Connection parameters
@@ -60,12 +62,22 @@ class Args:
 
 
 def verify(args: Args) -> Iterable[str]:
+    """Make a verification request sending a C-ECHO command
+
+    :param args: parsed arguments
+    :yield: verification output
+    """
     remote_ae = _args_to_remote_ae(args)
     status = commands.verify(args.local_aet, remote_ae)
     yield f'Verification result {status}'
 
 
 def find(args: Args) -> Iterable[str]:
+    """Make a find request sending a C-FIND command
+
+    :param args: parsed arguments
+    :yield: find request output (resulting datasets)
+    """
     remote_ae = _args_to_remote_ae(args)
     request = _parse_attrs(args.attr)
     request.QueryRetrieveLevel = args.level.upper()
@@ -79,6 +91,12 @@ def find(args: Args) -> Iterable[str]:
 
 
 def store(args: Args) -> Iterable[str]:
+    """Store a dataset or datasets from a directory (and its sub-directories)
+    Files that can't be read as proper DICOM datasets are skipped
+
+    :param args: parsed arguments
+    :yield: store result(s)
+    """
     remote_ae = _args_to_remote_ae(args)
     file_or_dir = pathlib.Path(args.file_or_dir)
     if not file_or_dir.is_dir():
