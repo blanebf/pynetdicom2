@@ -4,9 +4,10 @@ pynetdicom2
 |docs|
 
 pynetdicom2 is a pure python package implementing the DICOM network protocol.
-This library is a fork/rewrite of the original pynetdicom that can be found here
-http://pynetdicom.googlecode.com. Library is not backwards compatible with
-original pynetdicom.
+This library is a fork/rewrite of the original pynetdicom (formerly hosted on
+the now-defunct Google Code, succeeded by
+https://github.com/pydicom/pynetdicom). Library is not backwards compatible
+with original pynetdicom.
 
 Library is build on top of pydicom, which is used for reading/writing DICOM
 datasets. Pynetdicom2 provides implementation for commonly used DICOM services

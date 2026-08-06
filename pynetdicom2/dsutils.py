@@ -2,7 +2,7 @@
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
-#    available at http://pynetdicom.googlecode.com
+#    available at https://github.com/blanebf/pynetdicom2
 #
 """
 Helper module that provides function for converting datasets or dataset

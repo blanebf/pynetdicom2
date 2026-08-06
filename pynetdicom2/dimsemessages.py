@@ -2,7 +2,7 @@
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
-#    available at http://pynetdicom.googlecode.com
+#    available at https://github.com/blanebf/pynetdicom2
 #
 
 """
@@ -25,14 +25,32 @@ from typing import Any, BinaryIO, ClassVar, Iterator, Optional, Type, Union
 
 from pydicom.dataset import Dataset
 from pydicom.dataelem import DataElement, RawDataElement
+from pydicom.tag import Tag
 
 from . import dsutils, pdu
 
+#: Command Data Set Type value indicating that no dataset follows the command.
 NO_DATASET = 0x0101
+#: Command Data Set Type value indicating that a dataset follows the command.
+HAS_DATASET = 0x0001
 
 PRIORITY_LOW = 0x0002
 PRIORITY_MEDIUM = 0x0000
 PRIORITY_HIGH = 0x0001
+
+#: Number of bytes consumed by the P-DATA-TF PDU/PDV header. A single PDV item
+#: carries this much framing overhead, so fragments must leave room for it.
+PDV_HEADER_LENGTH = 6
+
+#: Message Control Header bit values for a PDV fragment (PS3.8 E.2). Bit 0
+#: distinguishes command (1) from data set (0); bit 1 marks the last fragment.
+COMMAND_FRAGMENT = 1
+COMMAND_LAST_FRAGMENT = 3
+DATA_FRAGMENT = 0
+DATA_LAST_FRAGMENT = 2
+
+#: Command Group Length element tag (0000,0000).
+COMMAND_GROUP_LENGTH_TAG = (0x0000, 0x0000)
 
 
 def value_or_none(elem: Union[DataElement, RawDataElement]) -> Optional[Any]:
@@ -71,12 +89,10 @@ def fragment(
     :param last: last chunk code
     :yield: tuple of bytes: fragment and its code
     """
-    maxsize = max_pdu_length - 6
-    _chunks = (
-        (chunk, has_next) for chunk, has_next in chunks(data_set, maxsize)
-    )
+    maxsize = max_pdu_length - PDV_HEADER_LENGTH
     yield from (
-        (chunk, normal if has_next else last) for chunk, has_next in _chunks
+        (chunk, normal if has_next else last)
+        for chunk, has_next in chunks(data_set, maxsize)
     )
 
 
@@ -94,7 +110,7 @@ def fragment_file(
     :param last: last chunk code
     :yield: tuple of bytes: fragment and its code
     """
-    maxsize = max_pdu_length - 6
+    maxsize = max_pdu_length - PDV_HEADER_LENGTH
     while True:
         chunk = fp.read(maxsize)
         if not chunk:
@@ -130,6 +146,23 @@ class PriorityMixin:  # pylint: disable=too-few-public-methods
     priority = dimse_property((0x0000, 0x0700))
 
 
+class SubOpsCountMixin:  # pylint: disable=too-few-public-methods
+    """Helper mixin that defines the sub-operation counter properties shared by
+    C-GET-RSP and C-MOVE-RSP messages (PS3.7 9.3.3.2 / 9.3.4.2)."""
+
+    num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
+    """The number of remaining C-STORE sub-operations to be invoked."""
+
+    num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
+    """The number of C-STORE sub-operations that completed successfully."""
+
+    num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
+    """The number of C-STORE sub-operations that failed."""
+
+    num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
+    """The number of C-STORE sub-operations that generated warnings."""
+
+
 class DIMSEMessage:
     """Base DIMSE message class.
 
@@ -160,7 +193,7 @@ class DIMSEMessage:
     @data_set.setter
     def data_set(self, value: Optional[Union[BinaryIO, bytes]]) -> None:
         if value:
-            self.command_set.CommandDataSetType = 0x0001
+            self.command_set.CommandDataSetType = HAS_DATASET
         self._data_set = value
 
     def encode(
@@ -177,7 +210,10 @@ class DIMSEMessage:
         encoded_command_set = dsutils.encode(self.command_set, True, True)
 
         # fragment command set
-        for item, bit in fragment(encoded_command_set, max_pdu_length, 1, 3):
+        for item, bit in fragment(
+                encoded_command_set, max_pdu_length,
+                COMMAND_FRAGMENT, COMMAND_LAST_FRAGMENT
+        ):
             # send only one pdv per p-data primitive
             value_item = pdu.PresentationDataValueItem(
                 pc_id, struct.pack('b', bit) + item
@@ -189,11 +225,17 @@ class DIMSEMessage:
             if isinstance(self.data_set, bytes):
                 # got dataset as byte array
                 is_file = False
-                gen = fragment(self.data_set, max_pdu_length, 0, 2)
+                gen = fragment(
+                    self.data_set, max_pdu_length,
+                    DATA_FRAGMENT, DATA_LAST_FRAGMENT
+                )
             else:
                 # assume that dataset is in file-like object
                 is_file = True
-                gen = fragment_file(self.data_set, max_pdu_length, 0, 2)
+                gen = fragment_file(
+                    self.data_set, max_pdu_length,
+                    DATA_FRAGMENT, DATA_LAST_FRAGMENT
+                )
             try:
                 for item, bit in gen:
                     value_item = pdu.PresentationDataValueItem(
@@ -205,10 +247,19 @@ class DIMSEMessage:
                     self.data_set.close()  # type: ignore
 
     def set_length(self) -> None:
-        """Sets DIMSE message length attribute in command dataset"""
-        it = (len(dsutils.encode_element(v, True, True))
-              for v in list(self.command_set.values())[1:])
-        self.command_set[(0x0000, 0x0000)].value = sum(it)
+        """Sets DIMSE message length attribute in command dataset.
+
+        The Command Group Length element (0000,0000) itself is excluded from
+        the sum. The element is identified explicitly by its tag rather than by
+        position so the computation does not depend on element ordering.
+        """
+        length_tag = Tag(COMMAND_GROUP_LENGTH_TAG)
+        it = (
+            len(dsutils.encode_element(elem, True, True))
+            for tag, elem in self.command_set.items()
+            if tag != length_tag
+        )
+        self.command_set[COMMAND_GROUP_LENGTH_TAG].value = sum(it)
 
     def __repr__(self) -> str:
         return str(self.command_set) + '\n'
@@ -370,7 +421,7 @@ class CGetRQMessage(DIMSERequestMessage, PriorityMixin):
                       'Priority']
 
 
-class CGetRSPMessage(DIMSEResponseMessage):
+class CGetRSPMessage(DIMSEResponseMessage, SubOpsCountMixin):
     """C-GET-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.3.2 C-GET-RSP
@@ -379,7 +430,7 @@ class CGetRSPMessage(DIMSEResponseMessage):
     command_field = 0x8010
     """
     This field distinguishes the DIMSE-C operation conveyed by this Message.
-    The value of this field shall be set to 0010H for the C-GET-RQ Message.
+    The value of this field shall be set to 8010H for the C-GET-RSP Message.
     """
 
     command_fields = [
@@ -392,30 +443,6 @@ class CGetRSPMessage(DIMSEResponseMessage):
         'NumberOfFailedSuboperations',
         'NumberOfWarningSuboperations'
     ]
-
-    num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
-    """
-    The number of remaining C-STORE sub-operations to be invoked for this
-    C-GET operation.
-    """
-
-    num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
-    """
-    The number of C-STORE sub-operations invoked by this C-GET operation that
-    have completed successfully.
-    """
-
-    num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
-    """
-    The number of C-STORE sub-operations invoked by this C-GET operation that
-    have failed.
-    """
-
-    num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
-    """
-    The number of C-STORE sub-operations invoked by this C-GET operation that
-    generated warning responses.
-    """
 
 
 class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
@@ -445,7 +472,7 @@ class CMoveRQMessage(DIMSERequestMessage, PriorityMixin):
     """
 
 
-class CMoveRSPMessage(DIMSEResponseMessage):
+class CMoveRSPMessage(DIMSEResponseMessage, SubOpsCountMixin):
     """C-MOVE-RSP Message.
 
     Complete definition can be found in DICOM PS3.7, 9.3.4.2 C-MOVE-RSP
@@ -467,30 +494,6 @@ class CMoveRSPMessage(DIMSEResponseMessage):
         'NumberOfFailedSuboperations',
         'NumberOfWarningSuboperations'
     ]
-
-    num_of_remaining_sub_ops = dimse_property((0x0000, 0x1020))
-    """
-    The number of remaining sub-operations to be invoked for this C-MOVE
-    operation.
-    """
-
-    num_of_completed_sub_ops = dimse_property((0x0000, 0x1021))
-    """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation
-    that have completed successfully.
-    """
-
-    num_of_failed_sub_ops = dimse_property((0x0000, 0x1022))
-    """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation
-    that have failed.
-    """
-
-    num_of_warning_sub_ops = dimse_property((0x0000, 0x1023))
-    """
-    The number of C-STORE sub-operations invoked by this C-MOVE operation
-    that generated warning responses.
-    """
 
 
 class CCancelRQMessage(DIMSEResponseMessage):
@@ -684,8 +687,8 @@ class NSetRSPMessage(DIMSEResponseMessage):
 
     sop_class_uid = dimse_property((0x0000, 0x0002))
     """
-    This field distinguishes the DIMSE-N operation conveyed by this Message.
-    The value of this field shall be set to 8120H for the N-SET-RSP Message.
+    Affected SOP Class UID: the SOP Class of the SOP Instance for which
+    Attribute Values were modified.
     """
 
     affected_sop_instance_uid = dimse_property((0x0000, 0x1000))

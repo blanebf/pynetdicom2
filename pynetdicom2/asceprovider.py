@@ -2,7 +2,7 @@
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
-#    available at http://pynetdicom.googlecode.com
+#    available at https://github.com/blanebf/pynetdicom2
 #
 """
 Module contains two key classes for working with DICOM associations:
@@ -46,7 +46,7 @@ from . import exceptions, dulprovider, fsm, pdu, statuses, userdataitems
 from .fsm import PContextDef  # pylint: disable=unused-import. # noqa F401
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)

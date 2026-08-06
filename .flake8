@@ -1,2 +1,3 @@
 [flake8]
-exclude = .git,dist,docs
+max-line-length = 79
+exclude = .git,dist,docs,.mypy_cache,.venv

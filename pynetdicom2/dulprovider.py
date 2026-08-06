@@ -2,7 +2,7 @@
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
-#    available at http://pynetdicom.googlecode.com
+#    available at https://github.com/blanebf/pynetdicom2
 #
 
 """
@@ -33,7 +33,13 @@ from pydicom import uid
 from . import dimsemessages, fsm, pdu, exceptions
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
+
+
+#: Maximum time (in seconds) to wait for the remote peer to close its side of
+#: the connection during :meth:`DULServiceProvider._close`. Without a bound a
+#: half-open or misbehaving peer would block the DUL thread indefinitely.
+CLOSE_TIMEOUT = 10
 
 
 PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
@@ -218,8 +224,8 @@ class DULServiceProvider(threading.Thread):
         try:
             while not self.is_killed:
                 (  # pylint: disable=expression-not-assigned
-                    self._check_network() or
                     self._check_outgoing_pdu() or
+                    self._check_network() or
                     self._check_timer()
                 )
                 try:
@@ -259,30 +265,41 @@ class DULServiceProvider(threading.Thread):
 
         return self._process_incoming()
 
-    def _check_outgoing_pdu(self) -> bool:
+    def _queue_pdu_event(self, primitive: fsm.PDUType) -> None:
+        """Maps a PDU to its FSM event and appends it to the event queue.
+
+        :raises exceptions.PDUProcessingError: if the PDU type is unknown.
+        """
         try:
-            if self.dimse_gen:
-                try:
-                    self.primitive = next(self.dimse_gen)
-                    self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
-                    return True
-                except StopIteration:
-                    self.dimse_gen = None
-            incoming = self.from_service_user.get(False, None)
-            if hasattr(incoming, 'pdu_type'):
-                self.primitive = cast(fsm.PDUType, incoming)
-            else:
-                self.dimse_gen = incoming
-                self.primitive = next(self.dimse_gen)
-            self.event.append(PDU_TO_EVENT[self.primitive.pdu_type])
-            return True
+            event = PDU_TO_EVENT[primitive.pdu_type]
         except KeyError as exc:
-            pdu_type = self.primitive.pdu_type if self.primitive else ''
             raise exceptions.PDUProcessingError(
-                f'Unknown PDU {self.primitive} with type {pdu_type}'
+                f'Unknown PDU {primitive} with type {primitive.pdu_type}'
             ) from exc
+        self.event.append(event)
+
+    def _check_outgoing_pdu(self) -> bool:
+        if self.dimse_gen:
+            try:
+                self.primitive = next(self.dimse_gen)
+            except StopIteration:
+                self.dimse_gen = None
+            else:
+                self._queue_pdu_event(self.primitive)
+                return True
+
+        try:
+            incoming = self.from_service_user.get(block=False)
         except queue.Empty:
             return False
+
+        if isinstance(incoming, Iterator):
+            self.dimse_gen = incoming
+            self.primitive = next(self.dimse_gen)
+        else:
+            self.primitive = incoming
+        self._queue_pdu_event(self.primitive)
+        return True
 
     def _check_timer(self) -> bool:
         if self.timer.check() is False:
@@ -342,12 +359,23 @@ class DULServiceProvider(threading.Thread):
         if self.dul_socket is None:
             return False
 
-        # wait for remote connection to close
+        # Wait for the remote connection to close, but never block the DUL
+        # thread forever: a bounded timeout is applied so a half-open or
+        # misbehaving peer that never closes its side cannot hang the provider.
+        previous_timeout = self.dul_socket.gettimeout()
         try:
+            self.dul_socket.settimeout(CLOSE_TIMEOUT)
             while self.dul_socket.recv(1) != b'':
                 continue
-        except socket.error:
-            return False
+        except (socket.timeout, socket.error):
+            # Timed out or the socket errored out: treat as "peer did not
+            # cleanly close" and fall through to close it ourselves.
+            pass
+        finally:
+            try:
+                self.dul_socket.settimeout(previous_timeout)
+            except socket.error:
+                pass
 
         self.dul_socket.close()
         self.dul_socket = None
