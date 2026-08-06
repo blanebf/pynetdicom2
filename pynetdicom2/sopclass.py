@@ -2,7 +2,7 @@
 # Copyright (c) 2012 Patrice Munger
 # This file is part of pynetdicom, released under a modified MIT license.
 #    See the file license.txt included with this distribution, also
-#    available at http://pynetdicom.googlecode.com
+#    available at https://github.com/blanebf/pynetdicom2
 """
 Module contains implementation of the DICOM service classes. Module
 also contains useful constants for message statuses and service
@@ -311,11 +311,11 @@ def storage_scp(
     """
     try:
         if not msg.data_set:
-            status = statuses.C_STORE_CANNON_UNDERSTAND
+            status = statuses.C_STORE_CANNOT_UNDERSTAND
         else:
             status = asce.ae.on_receive_store(ctx, msg.data_set)
     except exceptions.EventHandlingError:
-        status = statuses.C_STORE_CANNON_UNDERSTAND
+        status = statuses.C_STORE_CANNOT_UNDERSTAND
     finally:
         if msg.data_set and hasattr(msg.data_set, 'close'):
             msg.data_set.close()
@@ -397,19 +397,24 @@ def qr_find_scp(
 
     :param msg: received C-FIND message
     """
+    # make response
+    rsp = dimsemessages.CFindRSPMessage()
+    rsp.message_id_being_responded_to = msg.message_id
+    rsp.sop_class_uid = msg.sop_class_uid
+
     if not msg.data_set:
-        raise exceptions.NetDICOMError('C-FIND-RQ should contain a dataset')
+        # A C-FIND-RQ without an Identifier cannot be processed. Rather than
+        # abandoning the association, respond with a failure status so the SCU
+        # is informed (see PS3.4 C.4.1.1.4).
+        rsp.status = int(statuses.C_FIND_UNABLE_TO_PROCESS)
+        asce.send(rsp, ctx.id)
+        return
 
     ds = dsutils.decode(
         cast(bytes, msg.data_set),
         ctx.supported_ts.is_implicit_VR,
         ctx.supported_ts.is_little_endian
     )
-
-    # make response
-    rsp = dimsemessages.CFindRSPMessage()
-    rsp.message_id_being_responded_to = msg.message_id
-    rsp.sop_class_uid = msg.sop_class_uid
 
     gen = asce.ae.on_receive_find(ctx, ds)
     for data_set, status in gen:
@@ -582,8 +587,21 @@ def qr_move_scp(
     :param ctx: presentation context
     :param msg: received C-MOVE message
     """
+    # make response
+    rsp = dimsemessages.CMoveRSPMessage()
+    rsp.message_id_being_responded_to = msg.message_id
+    rsp.sop_class_uid = msg.sop_class_uid
+
     if not msg.data_set:
-        raise exceptions.NetDICOMError('C-MOVE-RQ should contain a dataset')
+        # A C-MOVE-RQ without an Identifier cannot be processed. Respond with a
+        # failure status instead of tearing down the association.
+        rsp.status = int(statuses.C_MOVE_UNABLE_TO_PROCESS)
+        rsp.num_of_remaining_sub_ops = 0
+        rsp.num_of_completed_sub_ops = 0
+        rsp.num_of_failed_sub_ops = 0
+        rsp.num_of_warning_sub_ops = 0
+        asce.send(rsp, ctx.id)
+        return
 
     ds = dsutils.decode(
         cast(bytes, msg.data_set),
@@ -591,16 +609,13 @@ def qr_move_scp(
         ctx.supported_ts.is_little_endian
     )
 
-    # make response
-    rsp = dimsemessages.CMoveRSPMessage()
-    rsp.message_id_being_responded_to = msg.message_id
-    rsp.sop_class_uid = msg.sop_class_uid
     remote_ae, nop, gen = asce.ae.on_receive_move(
         ctx, ds, msg.move_destination
     )
     if not nop:
         # nothing to move
         _send_response(asce, ctx, msg, 0, 0, 0, 0)
+        return
 
     with asce.ae.request_association(remote_ae) as assoc:
         failed: int = 0
@@ -725,9 +740,11 @@ class StorageCommitment(MessageDispatcherSCP):
         rsp.affected_sop_instance_uid = msg.affected_sop_instance_uid
 
         if not msg.data_set:
-            raise exceptions.NetDICOMError(
-                'N-EVENT-REPORT-RQ should contain a dataset'
-            )
+            # No dataset means the report cannot be processed. Respond with a
+            # failure status rather than aborting the association.
+            rsp.status = int(statuses.PROCESSING_FAILURE)
+            asce.send(rsp, ctx.id)
+            return
 
         ds = dsutils.decode(
             cast(bytes, msg.data_set),
@@ -758,8 +775,7 @@ class StorageCommitment(MessageDispatcherSCP):
             asce.ae.on_commitment_response(transaction_uid, success, failure)
         except exceptions.EventHandlingError:
             rsp.status = int(statuses.PROCESSING_FAILURE)
-        else:
-            asce.send(rsp, ctx.id)
+        asce.send(rsp, ctx.id)
 
     @staticmethod
     def n_action(
@@ -782,17 +798,20 @@ class StorageCommitment(MessageDispatcherSCP):
         :param ctx: presentation context
         :param msg: incoming N-ACTION message
         """
-        if not msg.data_set:
-            raise exceptions.NetDICOMError(
-                'N-ACTION-RQ should contain a dataset'
-            )
-
         instance_uid = STORAGE_COMMITMENT_PUSH_MODEL_SOP_CLASS
         rsp = dimsemessages.NActionRSPMessage()
         rsp.message_id_being_responded_to = msg.message_id
         rsp.action_type_id = 1
         rsp.sop_class_uid = ctx.sop_class
         rsp.affected_sop_instance_uid = instance_uid
+
+        if not msg.data_set:
+            # No dataset means the action cannot be processed. Respond with a
+            # failure status rather than aborting the association.
+            rsp.status = int(statuses.PROCESSING_FAILURE)
+            asce.send(rsp, ctx.id)
+            return
+
         ds = dsutils.decode(
             cast(bytes, msg.data_set),
             ctx.supported_ts.is_implicit_VR,

@@ -524,7 +524,10 @@ SUCCESS = Status(0x0000)
 PROCESSING_FAILURE = Status(0x0110)
 
 #: (0xC000) Error: Cannot understand (C-STORE)
-C_STORE_CANNON_UNDERSTAND = Status(0xC000, dimse.CStoreRSPMessage)
+C_STORE_CANNOT_UNDERSTAND = Status(0xC000, dimse.CStoreRSPMessage)
+#: Deprecated misspelled alias of :data:`C_STORE_CANNOT_UNDERSTAND`. Kept for
+#: backwards compatibility; use :data:`C_STORE_CANNOT_UNDERSTAND` instead.
+C_STORE_CANNON_UNDERSTAND = C_STORE_CANNOT_UNDERSTAND
 #: (0xA700) Refused: Out of Resources (C-STORE)
 C_STORE_OUT_OF_RESOURCES = Status(0xA700, dimse.CStoreRSPMessage)
 #: (0xB006) Elements Discarded (C-STORE)
