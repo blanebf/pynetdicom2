@@ -4,7 +4,7 @@ import time
 import unittest
 from typing import Any, Optional
 
-from pynetdicom2 import fsm
+from pynetdicom2 import exceptions, fsm
 from pynetdicom2 import pdu
 
 
@@ -69,11 +69,26 @@ class StateMachineDispatchTestCase(unittest.TestCase):
         sm.action(fsm.Events.EVT_5)
         self.assertEqual(sm.current_state, fsm.States.STA_2)
 
-    def test_unknown_transition_raises_keyerror(self) -> None:
+    def test_unknown_local_transition_raises_descriptive_error(self) -> None:
         sm = _make_sm()
-        # EVT_9 has no mapping from STA_1.
-        with self.assertRaises(KeyError):
+        # EVT_9 (local P-DATA request) has no mapping from STA_1.
+        with self.assertRaises(exceptions.NetDICOMError) as ctx:
             sm.action(fsm.Events.EVT_9)
+        self.assertIn('EVT_9', str(ctx.exception))
+        self.assertIn('STA_1', str(ctx.exception))
+
+    def test_unexpected_peer_pdu_aborts_instead_of_raising(self) -> None:
+        # An A-ASSOCIATE-RQ arriving while the transport connection is still
+        # being opened is a peer protocol violation: abort it instead of
+        # letting a KeyError crash the DUL thread.
+        sm = _make_sm()
+        sm.current_state = fsm.States.STA_4
+
+        sm.action(fsm.Events.EVT_6)  # A-ASSOCIATE-RQ in STA_4
+
+        self.assertEqual(sm.current_state, fsm.States.STA_13)
+        self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
+        self.assertEqual(sm.primitive.source, 2)
 
 
 class ReleaseCollisionTestCase(unittest.TestCase):
@@ -110,6 +125,50 @@ class AbortAndCloseTestCase(unittest.TestCase):
         result = sm.aa_1()
         self.assertEqual(result, fsm.States.STA_13)
         self.assertTrue(sock.sent)
+
+    def test_aa_4_issues_provider_origin_abort(self) -> None:
+        # An unexpected transport close is a DICOM UL service-provider
+        # initiated abort (source 2), not a service-user one (source 0).
+        sm = _make_sm()
+        result = sm.aa_4()
+        self.assertEqual(result, fsm.States.STA_1)
+        self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
+        self.assertEqual(sm.primitive.source, 2)
+        indication = sm.provider.to_service_user.get_nowait()
+        self.assertIs(indication, sm.primitive)
+
+
+class UnrecognizedPduAbortTestCase(unittest.TestCase):
+    """EVT_19 is raised for an unrecognized/invalid PDU, at which point no
+    decoded primitive exists. The machine must respond with an explicit
+    provider-initiated A-ABORT instead of re-using whatever primitive it
+    currently holds (which may be ``None`` or a stale, unrelated PDU)."""
+
+    def test_evt19_in_sta2_sends_provider_abort(self) -> None:
+        sm = _make_sm()
+        sm.action(fsm.Events.EVT_5)  # STA_1 -> STA_2
+        self.assertEqual(sm.current_state, fsm.States.STA_2)
+        sm.primitive = None  # no decoded PDU exists
+
+        sm.action(fsm.Events.EVT_19)
+
+        self.assertEqual(sm.current_state, fsm.States.STA_13)
+        self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
+        self.assertEqual(sm.primitive.source, 2)
+        self.assertTrue(sm.provider.dul_socket.sent)
+        # The A-P-ABORT indication is issued to the service user too.
+        self.assertFalse(sm.provider.to_service_user.empty())
+
+    def test_evt19_in_sta13_sends_provider_abort(self) -> None:
+        sm = _make_sm()
+        sm.current_state = fsm.States.STA_13
+        sm.primitive = None
+
+        sm.action(fsm.Events.EVT_19)
+
+        self.assertEqual(sm.current_state, fsm.States.STA_13)
+        self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
+        self.assertEqual(sm.primitive.source, 2)
 
 
 if __name__ == '__main__':

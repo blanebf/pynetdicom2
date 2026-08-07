@@ -25,8 +25,9 @@ import select
 import socket
 import struct
 import threading
+import time
 import queue
-from typing import Optional, Type, Union, cast
+from typing import Optional, Type, Union
 
 from pydicom import uid
 
@@ -40,6 +41,32 @@ logger = logging.getLogger(__name__)
 #: the connection during :meth:`DULServiceProvider._close`. Without a bound a
 #: half-open or misbehaving peer would block the DUL thread indefinitely.
 CLOSE_TIMEOUT = 10
+
+#: Upper bound (in bytes) for the body of received association PDUs.
+#: Association PDUs are exchanged before the Maximum Length negotiation takes
+#: effect, so a fixed limit is applied: 64 KiB comfortably accommodates the
+#: largest sane association PDU (e.g. one carrying 128 presentation contexts)
+#: while still protecting the provider from a peer that declares an absurd
+#: length (up to 4 GiB) in order to exhaust memory.
+MAX_ASSOCIATION_PDU_LENGTH = 65536
+
+#: PDU type bytes of the association PDUs: A-ASSOCIATE-RQ, A-ASSOCIATE-AC
+#: and A-ASSOCIATE-RJ.
+ASSOCIATION_PDU_TYPES = frozenset((0x01, 0x02, 0x03))
+
+#: Interval (in seconds) at which the DUL event loop polls the socket for
+#: incoming data. The same interval is used to pace the loop while no socket
+#: exists so an idle provider does not spin at 100% CPU.
+POLL_INTERVAL = 0.05
+
+#: Timeout (in seconds) applied to all operations on the DUL socket. Without
+#: a bound a stalled peer (e.g. one that has stopped reading) would block
+#: sends indefinitely, hanging the DUL thread and deadlocking ``kill()``.
+SOCKET_TIMEOUT = 30
+
+#: Maximum time (in seconds) :meth:`DULServiceProvider.kill` waits for the
+#: DUL thread to terminate.
+KILL_TIMEOUT = 5
 
 
 PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
@@ -133,6 +160,7 @@ class DULServiceProvider(threading.Thread):
         self.called_presentation_address: Optional[tuple[str, int]] = None
 
         if dul_socket:  # A client socket has been given. Generate an event 5
+            dul_socket.settimeout(SOCKET_TIMEOUT)
             self.event.append(fsm.Events.EVT_5)
             self.is_acceptor = True
         else:
@@ -154,13 +182,27 @@ class DULServiceProvider(threading.Thread):
         self.state_machine.accepted_contexts = value
 
     def create_socket(self) -> None:
-        """Creates a client socket and establishes a connection"""
-        self.dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        """Creates a client socket and establishes a connection.
+
+        The connection attempt is bounded by :data:`SOCKET_TIMEOUT` and no
+        socket is leaked if the connection cannot be established.
+        """
         if not self.called_presentation_address:
             raise exceptions.NetDICOMError(
                 'Called presentation address is not set'
             )
-        self.dul_socket.connect(self.called_presentation_address)
+        try:
+            # create_connection resolves the address (IPv4/IPv6), bounds the
+            # connect attempt with the timeout and closes the socket if the
+            # connection fails; it leaves the timeout set on the socket.
+            self.dul_socket = socket.create_connection(
+                self.called_presentation_address, timeout=SOCKET_TIMEOUT
+            )
+        except socket.error as exc:
+            raise exceptions.NetDICOMError(
+                'Failed to connect to '
+                f'{self.called_presentation_address}: {exc}'
+            ) from exc
 
     def send(
             self,
@@ -216,9 +258,18 @@ class DULServiceProvider(threading.Thread):
 
     def kill(self) -> None:
         """Sets termination flag for event loop and waits for thread to exit.
+
+        Waits at most :data:`KILL_TIMEOUT` seconds: if a socket operation is
+        blocked on a stalled peer the thread may take a little longer to wind
+        down, in which case it is left to finish on its own rather than
+        blocking the caller indefinitely.
         """
         self.is_killed = True
-        self._is_killed.wait()
+        if not self._is_killed.wait(KILL_TIMEOUT):
+            logger.warning(
+                'DUL service provider did not terminate within %s seconds',
+                KILL_TIMEOUT
+            )
 
     def run(self) -> None:
         try:
@@ -235,17 +286,28 @@ class DULServiceProvider(threading.Thread):
                 self.state_machine.action(evt)
         except Exception as exc:
             logger.exception('DUL failure: %s', exc)
-            self.to_service_user.put(pdu.AAbortPDU(source=0, reason_diag=0))
+            self.to_service_user.put(pdu.AAbortPDU(source=2, reason_diag=0))
             raise
         finally:
+            if self.dul_socket:
+                try:
+                    self.dul_socket.close()
+                except socket.error:
+                    pass
+                self.dul_socket = None
             self._is_killed.set()
 
     def _check_network(self) -> bool:
+        if not self.dul_socket:
+            # No connection has been established (yet) or it has already been
+            # closed: there is nothing to poll. Sleep briefly so the event
+            # loop does not spin at 100% CPU while waiting for work to
+            # arrive via the queues.
+            time.sleep(POLL_INTERVAL)
+            return False
+
         if self.state_machine.current_state == fsm.States.STA_13:
             return self._close()
-
-        if not self.dul_socket:
-            return False
 
         if self.state_machine.current_state == fsm.States.STA_4:
             self.event.append(fsm.Events.EVT_2)
@@ -256,7 +318,7 @@ class DULServiceProvider(threading.Thread):
 
         # check if something comes in the client socket
         try:
-            if select.select([self.dul_socket], [], [], 0.05)[0]:
+            if select.select([self.dul_socket], [], [], POLL_INTERVAL)[0]:
                 if self._check_incoming_pdu():
                     return True
         except ValueError:
@@ -331,12 +393,39 @@ class DULServiceProvider(threading.Thread):
         self.raw_pdu += data
         return False
 
+    def _max_received_pdu_length(self, pdu_type: int) -> int:
+        """Returns maximum allowed length of a received PDU body.
+
+        Association PDUs are exchanged before the PDU length negotiation
+        takes effect, so a fixed generous limit is applied to them. All other
+        PDUs must fit into the negotiated maximum PDU length.
+
+        :param pdu_type: PDU type byte of the incoming PDU
+        :return: maximum allowed length of the PDU body in bytes
+        """
+        if pdu_type in ASSOCIATION_PDU_TYPES:
+            return MAX_ASSOCIATION_PDU_LENGTH
+        return self.max_pdu_length or MAX_ASSOCIATION_PDU_LENGTH
+
     def _process_incoming(self) -> bool:
         if len(self.raw_pdu) < 6:
             return False
 
-        length = self.raw_pdu[2:6]
-        _length = struct.unpack('>L', length)[0]
+        pdu_type_byte = self.raw_pdu[0]
+        _length = struct.unpack('>L', self.raw_pdu[2:6])[0]
+        limit = self._max_received_pdu_length(pdu_type_byte)
+        if _length > limit:
+            # A peer must never declare a PDU larger than the negotiated
+            # maximum length: honouring it would allow an attacker to make
+            # the provider buffer up to 4 GiB. Abort instead of waiting for
+            # data that violates the protocol.
+            logger.error(
+                'Peer declared a PDU of %d bytes which exceeds the limit '
+                'of %d bytes, aborting association', _length, limit
+            )
+            self.raw_pdu = b''
+            self.event.append(fsm.Events.EVT_19)
+            return True
         full_length = _length + 6
         if len(self.raw_pdu) < full_length:
             return False
@@ -349,9 +438,23 @@ class DULServiceProvider(threading.Thread):
         try:
             pdu_type, event = PDU_TYPES[raw_pdu[0]]
             self.primitive = pdu_type.decode(raw_pdu)
-            self.event.append(event)
         except KeyError:
             self.event.append(fsm.Events.EVT_19)
+        except (
+            exceptions.PDUProcessingError,
+            EOFError,
+            IndexError,
+            ValueError,
+            struct.error
+        ) as exc:
+            # Malformed PDU: the declared structure could not be parsed. Per
+            # PS3.8 an unrecognized PDU leads to an abort (EVT_19), it must
+            # never crash the DUL service thread. UnicodeDecodeError is a
+            # subclass of ValueError.
+            logger.warning('Invalid PDU received: %s', exc)
+            self.event.append(fsm.Events.EVT_19)
+        else:
+            self.event.append(event)
         return True
 
     def _close(self) -> bool:

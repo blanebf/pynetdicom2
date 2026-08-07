@@ -70,6 +70,49 @@ def _next_type(stream: BytesIO) -> Optional[int]:
     return cast(int, struct.unpack('B', char)[0])
 
 
+def _read_exact(stream: BytesIO, length: int) -> bytes:
+    """Reads exactly ``length`` bytes from a data stream.
+
+    Length fields of received items are untrusted peer data: reading without
+    verifying the result would silently accept truncated items and shift the
+    parsing of everything that follows.
+
+    :param stream: raw data stream
+    :param length: number of bytes to read
+    :return: read bytes
+    :raises exceptions.PDUProcessingError: if the stream is truncated and
+        does not contain the requested amount of data
+    """
+    data = stream.read(length)
+    if len(data) != length:
+        raise exceptions.PDUProcessingError(
+            f'PDU is truncated: expected {length} bytes, got {len(data)}'
+        )
+    return data
+
+
+def _decode_ae_title(raw: bytes) -> str:
+    """Decodes a fixed 16-byte AE title field (PS3.8 9.3.2).
+
+    AE titles are padded with spaces (some implementations pad with NULL
+    bytes) and shall consist of characters from the default character
+    repertoire (ISO IR 6 / printable ASCII).
+
+    :param raw: raw 16-byte field
+    :return: decoded AE title without padding
+    :raises exceptions.PDUProcessingError: if the title contains characters
+        outside the default character repertoire
+    """
+    title = raw.strip(b' \0')
+    for char in title:
+        if not 0x20 <= char <= 0x7e:
+            raise exceptions.PDUProcessingError(
+                'Invalid AE title: contains characters outside the '
+                f'default character repertoire: {title!r}'
+            )
+    return title.decode('ascii')
+
+
 class AAssociatePDUBase:
     """Base class for A-ASSOCIATE-RQ and A-ASSOCIATE-AC PDUs
 
@@ -161,8 +204,8 @@ class AAssociatePDUBase:
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
         reserved3 = values[7:]
-        called_ae_title = called_ae_title.strip(b'\0').decode()
-        calling_ae_title = calling_ae_title.strip(b'\0').decode()
+        called_ae_title = _decode_ae_title(called_ae_title)
+        calling_ae_title = _decode_ae_title(calling_ae_title)
         variable_items = list(iter_items())
         return cls(
             called_ae_title=called_ae_title,
@@ -636,7 +679,7 @@ class ApplicationContextItem:
         :return: decoded item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        context_name = stream.read(item_length).decode()
+        context_name = _read_exact(stream, item_length).decode()
         return cls(reserved=reserved, context_name=context_name)
 
     def total_length(self) -> int:
@@ -906,7 +949,7 @@ class AbstractSyntaxSubItem:
         :return: decoded abstract syntax sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        name = uid.UID(stream.read(item_length).decode())
+        name = uid.UID(_read_exact(stream, item_length).decode())
         return cls(name=name, reserved=reserved)
 
     def total_length(self) -> int:
@@ -965,7 +1008,7 @@ class TransferSyntaxSubItem:
         :return: decoded transfer syntax sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        name = stream.read(item_length)
+        name = _read_exact(stream, item_length)
         return cls(name=name.decode(), reserved=reserved)
 
     def total_length(self) -> int:
@@ -1123,8 +1166,17 @@ class PresentationDataValueItem:
         :param stream: raw data stream
         :return: decoded presentation data value item
         """
-        item_length, context_id = cls.header.unpack(stream.read(5))
-        data_value = stream.read(int(item_length) - 1)
+        item_length, context_id = cls.header.unpack(
+            _read_exact(stream, cls.header.size)
+        )
+        if item_length < 1:
+            # Per PS3.8 9.3.5.1 the item length covers at least the
+            # presentation context ID byte. A value of 0 is invalid and
+            # would make the read below consume the whole remaining stream.
+            raise exceptions.PDUProcessingError(
+                f'Invalid presentation data value item length {item_length}'
+            )
+        data_value = _read_exact(stream, item_length - 1)
         return cls(context_id, data_value)
 
     def total_length(self) -> int:

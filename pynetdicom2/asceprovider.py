@@ -57,9 +57,11 @@ class RemoteAEConfig:
     port: int
     username: Optional[str] = None
     password: Optional[str] = None
-    kerberos: Optional[str] = None
-    saml: Optional[str] = None
-    jwt: Optional[str] = None
+    #: Kerberos, SAML and JWT credentials may be opaque binary data, so both
+    #: ``str`` and ``bytes`` are accepted.
+    kerberos: Union[None, str, bytes] = None
+    saml: Union[None, str, bytes] = None
+    jwt: Union[None, str, bytes] = None
     user_data: list[pdu.UserItem] = dataclasses.field(default_factory=list)
 
 
@@ -330,9 +332,12 @@ class Association:
         In most cases you won't need to use this method directly. Refer to
         release and abort instead.
         """
+        # Try stopping the provider gracefully while the association is
+        # idle; if it does not become idle within roughly a second, fall
+        # through and force termination.
         for _ in range(1000):
             if self.dul.stop():
-                continue
+                break
             time.sleep(0.001)
         self.dul.kill()
         self.association_established = False

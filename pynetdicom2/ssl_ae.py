@@ -31,13 +31,21 @@ class SSLDULProvider(dulprovider.DULServiceProvider):
         self.context = context
 
     def create_socket(self) -> None:
-        dul_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not self.called_presentation_address:
             raise exceptions.NetDICOMError(
                 'Called presentation address is not set'
             )
-        dul_socket.connect(self.called_presentation_address)
-        self.dul_socket = self.context.wrap_socket(dul_socket)
+        dul_socket = socket.create_connection(
+            self.called_presentation_address,
+            timeout=dulprovider.SOCKET_TIMEOUT
+        )
+        try:
+            self.dul_socket = self.context.wrap_socket(dul_socket)
+        except OSError:
+            # The SSL handshake failed: release the underlying socket so it
+            # does not leak.
+            dul_socket.close()
+            raise
 
 
 class SSLAssociationRequester(asceprovider.AssociationRequester):
