@@ -154,6 +154,21 @@ class Events(enum.Enum):
     """Unrecognized/invalid PDU"""
 
 
+#: Events triggered by PDUs received from the peer. If one of these occurs in
+#: a state that defines no transition for it, the peer violated the protocol
+#: and the association is aborted instead of raising a local error.
+PEER_PDU_EVENTS = frozenset((
+    Events.EVT_3,    # A-ASSOCIATE-AC
+    Events.EVT_4,    # A-ASSOCIATE-RJ
+    Events.EVT_6,    # A-ASSOCIATE-RQ
+    Events.EVT_10,   # P-DATA-TF
+    Events.EVT_12,   # A-RELEASE-RQ
+    Events.EVT_13,   # A-RELEASE-RP
+    Events.EVT_16,   # A-ABORT
+    Events.EVT_19    # Unrecognized/invalid PDU
+))
+
+
 PDUType = Union[
     pdu.AAssociatePDUBase,
     pdu.AAssociateRqPDU,
@@ -386,7 +401,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             (Events.EVT_18, States.STA_2): self.aa_2,
             (Events.EVT_18, States.STA_13): self.aa_2,
 
-            (Events.EVT_19, States.STA_2): self.aa_1,
+            (Events.EVT_19, States.STA_2): self.aa_8,
             (Events.EVT_19, States.STA_3): self.aa_8,
             (Events.EVT_19, States.STA_5): self.aa_8,
             (Events.EVT_19, States.STA_6): self.aa_8,
@@ -396,7 +411,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             (Events.EVT_19, States.STA_10): self.aa_8,
             (Events.EVT_19, States.STA_11): self.aa_8,
             (Events.EVT_19, States.STA_12): self.aa_8,
-            (Events.EVT_19, States.STA_13): self.aa_7
+            (Events.EVT_19, States.STA_13): self.aa_8
         }
 
     @property
@@ -423,8 +438,26 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return self.provider.to_service_user
 
     def action(self, event: Events) -> None:
-        """Execute the action triggered by event"""
-        action = self.transition_table[(event, self.current_state)]
+        """Execute the action triggered by event.
+
+        If the event has no defined transition for the current state, an
+        unexpected PDU received from the peer results in an abort being sent
+        (per PS3.8), while any other event raises a descriptive error.
+
+        :param event: event to be handled
+        :raises exceptions.NetDICOMError: if the event is not a peer PDU and
+            has no defined transition for the current state
+        """
+        try:
+            action = self.transition_table[(event, self.current_state)]
+        except KeyError as exc:
+            if event in PEER_PDU_EVENTS:
+                self.current_state = self.aa_8()
+                return
+            raise exceptions.NetDICOMError(
+                f'Undefined transition: event {event.name} in state '
+                f'{self.current_state.name}'
+            ) from exc
         self.current_state = action()
 
     def ae_1(self) -> States:
@@ -654,9 +687,13 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         return States.STA_1
 
     def aa_4(self) -> States:
-        """Issue A-P-ABORT indication primitive."""
-        # TODO look into this action
-        self.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
+        """Issue A-P-ABORT indication primitive.
+
+        This action is triggered when the transport connection is closed
+        unexpectedly: the abort is initiated by the DICOM UL service
+        provider, not by the service user (PS3.8 9.3.8).
+        """
+        self.primitive = pdu.AAbortPDU(source=2, reason_diag=0)
         self.to_service_user.put(self.primitive)
         return States.STA_1
 

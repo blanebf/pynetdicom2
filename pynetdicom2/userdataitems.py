@@ -9,8 +9,32 @@ to and from binary formats as specified in PS 3.7 of DICOM standard.
 
 from io import BytesIO
 import struct
+from typing import Union
 
 from pydicom import uid
+
+from . import exceptions
+
+
+def _read_exact(stream: BytesIO, length: int) -> bytes:
+    """Reads exactly ``length`` bytes from a data stream.
+
+    Length fields of received sub-items are untrusted peer data: reading
+    without verifying the result would silently accept truncated sub-items
+    and shift the parsing of everything that follows.
+
+    :param stream: raw data stream
+    :param length: number of bytes to read
+    :return: read bytes
+    :raises exceptions.PDUProcessingError: if the stream is truncated and
+        does not contain the requested amount of data
+    """
+    data = stream.read(length)
+    if len(data) != length:
+        raise exceptions.PDUProcessingError(
+            f'PDU is truncated: expected {length} bytes, got {len(data)}'
+        )
+    return data
 
 
 class MaximumLengthSubItem:
@@ -153,7 +177,9 @@ class ImplementationClassUIDSubItem:
         :return: decoded maximum length sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        implementation_class_uid = uid.UID(stream.read(item_length).decode())
+        implementation_class_uid = uid.UID(
+            _read_exact(stream, item_length).decode()
+        )
         return cls(
             reserved=reserved,
             implementation_class_uid=implementation_class_uid
@@ -226,7 +252,9 @@ class ImplementationVersionNameSubItem:
         :return decoded Implementation Version Name sub-item
         """
         _, reserved, item_length = cls.header.unpack(stream.read(4))
-        implementation_version_name = stream.read(item_length).decode()
+        implementation_version_name = _read_exact(
+            stream, item_length
+        ).decode()
         return cls(
             implementation_version_name=implementation_version_name,
             reserved=reserved
@@ -386,9 +414,18 @@ class ScpScuRoleSelectionSubItem:
         :param stream: raw data stream
         :return decoded SCP/SCU Role Selection sub-item
         """
-        _, reserved, _, uid_length = cls.header.unpack(stream.read(6))
-        sop_class_uid = uid.UID(stream.read(uid_length).decode())
-        scu_role, scp_role = struct.unpack('B B', stream.read(2))
+        _, reserved, item_length, uid_length = cls.header.unpack(
+            stream.read(6)
+        )
+        # Per PS3.8 D.3.3.4 the item length covers the 2-byte UID length
+        # field, the UID itself and the two role bytes.
+        if item_length != uid_length + 4:
+            raise exceptions.PDUProcessingError(
+                'Invalid SCP/SCU role selection sub-item: item length '
+                f'{item_length} does not match UID length {uid_length}'
+            )
+        sop_class_uid = uid.UID(_read_exact(stream, uid_length).decode())
+        scu_role, scp_role = struct.unpack('B B', _read_exact(stream, 2))
         return cls(
             reserved=reserved,
             sop_class_uid=sop_class_uid,
@@ -459,9 +496,19 @@ class SOPClassExtendedNegotiationSubItem:
         _, reserved, item_length, uid_length = cls.header.unpack(
             stream.read(6)
         )
-        sop_class_uid = uid.UID(stream.read(uid_length).decode())
-        app_info_length = item_length - uid_length
-        app_info = stream.read(app_info_length)
+        # Per PS3.8 D.3.3.5 the item length covers the 2-byte UID length
+        # field, the UID itself and the application information. A UID
+        # length that does not fit into the item length is invalid and
+        # would make the read below consume the whole remaining stream.
+        if item_length < uid_length + 2:
+            raise exceptions.PDUProcessingError(
+                'Invalid SOP class extended negotiation sub-item: item '
+                f'length {item_length} does not fit UID length '
+                f'{uid_length}'
+            )
+        sop_class_uid = uid.UID(_read_exact(stream, uid_length).decode())
+        app_info_length = item_length - uid_length - 2
+        app_info = _read_exact(stream, app_info_length)
         return cls(
             reserved=reserved,
             sop_class_uid=sop_class_uid,
@@ -492,44 +539,77 @@ class UserIdentityNegotiationSubItem:
 
     def __init__(
             self,
-            primary_field: str,
-            secondary_field: str = '',
+            primary_field: Union[str, bytes],
+            secondary_field: Union[str, bytes] = '',
             user_identity_type: int = 2,
             positive_response_req: int = 0,
             reserved: int = 0x00
     ) -> None:
-        """Initializes new sub item instance"""
+        """Initializes new sub item instance
+
+        Both fields accept ``str`` (encoded as UTF-8) or raw ``bytes``.
+        Username/password identity types carry text; Kerberos, SAML and JWT
+        types carry opaque binary credentials that must be passed as
+        ``bytes``.
+        """
         self.reserved = reserved  # byte
         self.user_identity_type = user_identity_type  # byte
         self.positive_response_req = positive_response_req
-        self._primary_field = primary_field.encode('utf8')  # string
-        self._secondary_field = secondary_field.encode('utf8')  # string
+        if isinstance(primary_field, str):
+            primary_field = primary_field.encode('utf8')
+        if isinstance(secondary_field, str):
+            secondary_field = secondary_field.encode('utf8')
+        self._primary_field = primary_field  # bytes
+        self._secondary_field = secondary_field  # bytes
 
     @property
-    def primary_field(self) -> str:
+    def primary_field(self) -> Union[str, bytes]:
         """Sub-item primary field value.
 
         Meaning of the value depends on the `user_identity_type` value
 
-        :return: primary field value
+        :return: primary field value: ``str`` when the field is valid UTF-8
+                 (user name), otherwise raw ``bytes`` (Kerberos ticket, SAML
+                 assertion or JWT)
         """
-        return self._primary_field.decode('utf8')
+        try:
+            return self._primary_field.decode('utf8')
+        except UnicodeDecodeError:
+            return self._primary_field
 
     @property
-    def secondary_field(self) -> str:
+    def secondary_field(self) -> Union[str, bytes]:
         """Sub-item secondary field value.
 
         Meaning of the value depends on the `user_identity_type` value
 
-        :return: secondary field value
+        :return: secondary field value: ``str`` when the field is valid
+                 UTF-8, otherwise raw ``bytes``
         """
-        return self._secondary_field.decode('utf8')
+        try:
+            return self._secondary_field.decode('utf8')
+        except UnicodeDecodeError:
+            return self._secondary_field
+
+    #: User identity types that carry secret material in the primary field:
+    #: 3 - Kerberos service ticket, 4 - SAML assertion, 5 - JSON Web Token.
+    #: The username-based types (1, 2) do not.
+    _SECRET_PRIMARY_FIELD_TYPES = frozenset((3, 4, 5))
 
     def __repr__(self) -> str:
+        # Never leak credentials. The secondary field carries the password
+        # (type 2) and the primary field carries secret tokens for the
+        # Kerberos, SAML and JWT types; both are masked when populated.
+        if self.user_identity_type in self._SECRET_PRIMARY_FIELD_TYPES:
+            primary = '<hidden>'
+        else:
+            value = self.primary_field
+            primary = '<hidden>' if isinstance(value, bytes) else value
+        secondary = '<hidden>' if self._secondary_field else ''
         return (
             'UserIdentityNegotiationSubItem('
-            f'primary_field="{self.primary_field}", '
-            f'secondary_field="{self.secondary_field}", '
+            f'primary_field="{primary}", '
+            f'secondary_field="{secondary}", '
             f'user_identity_type={self.user_identity_type}, '
             f'positive_response_req={self.positive_response_req}, '
             f'reserved={self.reserved})'
@@ -582,12 +662,16 @@ class UserIdentityNegotiationSubItem:
         _, reserved, _, user_identity_type, \
             positive_response_req, \
             primary_field_len = cls.header.unpack(stream.read(cls.header.size))
-        primary_field = stream.read(primary_field_len)
-        secondary_field_len = struct.unpack('>H', stream.read(2))[0]
-        secondary_field = stream.read(secondary_field_len)
+        primary_field = _read_exact(stream, primary_field_len)
+        secondary_field_len = struct.unpack(
+            '>H', _read_exact(stream, 2)
+        )[0]
+        secondary_field = _read_exact(stream, secondary_field_len)
+        # Kerberos, SAML and JWT identity types carry opaque binary data:
+        # the fields must not be forced through a UTF-8 decode.
         return cls(
-            primary_field.decode('utf8'),
-            secondary_field.decode('utf8'),
+            primary_field,
+            secondary_field,
             user_identity_type,
             positive_response_req,
             reserved
@@ -609,15 +693,38 @@ class UserIdentityNegotiationSubItemAc:
     item_type = 0x59
     header = struct.Struct('>B B H H')
 
-    def __init__(self, server_response: str, reserved: int = 0x00) -> None:
+    def __init__(
+            self,
+            server_response: Union[str, bytes],
+            reserved: int = 0x00
+    ) -> None:
         """Initializes new response sub-item"""
         self.reserved = reserved  # byte
-        self.server_response = server_response  # string
+        if isinstance(server_response, str):
+            server_response = server_response.encode('utf8')
+        self._server_response = server_response  # bytes
+
+    @property
+    def server_response(self) -> Union[str, bytes]:
+        """Server response value.
+
+        :return: server response: ``str`` when the field is valid UTF-8,
+                 otherwise raw ``bytes`` (Kerberos ticket or SAML response)
+        """
+        try:
+            return self._server_response.decode('utf8')
+        except UnicodeDecodeError:
+            return self._server_response
 
     def __repr__(self) -> str:
+        response = self.server_response
+        if isinstance(response, bytes):
+            # Kerberos/SAML server responses are credentials; do not leak
+            # them into logs.
+            response = '<hidden>'
         return (
             f'UserIdentityNegotiationSubItemAc('
-            f'server_response="{self.server_response}", '
+            f'server_response="{response}", '
             f'reserved={self.reserved})'
         )
 
@@ -627,7 +734,7 @@ class UserIdentityNegotiationSubItemAc:
 
         :return: item length
         """
-        return 2 + len(self.server_response)
+        return 2 + len(self._server_response)
 
     @property
     def total_length(self) -> int:
@@ -642,16 +749,15 @@ class UserIdentityNegotiationSubItemAc:
 
         :return: binary representation of an item
         """
-        server_response = self.server_response.encode()
         return b''.join(
             [
                 self.header.pack(
                     self.item_type,
                     self.reserved,
                     self.item_length,
-                    len(server_response)
+                    len(self._server_response)
                 ),
-                server_response
+                self._server_response
             ]
         )
 
@@ -665,7 +771,9 @@ class UserIdentityNegotiationSubItemAc:
         _, reserved, _, response_len = cls.header.unpack(
             stream.read(cls.header.size)
         )
-        server_response = stream.read(response_len).decode()
+        # Kerberos and SAML server responses are opaque binary data: the
+        # field must not be forced through a UTF-8 decode.
+        server_response = _read_exact(stream, response_len)
         return cls(server_response, reserved)
 
 
@@ -735,7 +843,7 @@ class GenericUserDataSubItem:
         :return: decoded generic data sub-item
         """
         item_type, reserved, item_length = cls.header.unpack(stream.read(4))
-        user_data = stream.read(int(item_length))
+        user_data = _read_exact(stream, item_length)
         return cls(
             item_type=item_type,
             user_data=user_data,

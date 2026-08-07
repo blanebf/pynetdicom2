@@ -7,11 +7,16 @@ background thread, so the tests build a bare instance with
 under test.
 """
 import collections
+import queue
 import socket
+import struct
+import threading
 import time
 import unittest
+from unittest import mock
 
 from pynetdicom2 import dulprovider
+from pynetdicom2 import exceptions
 from pynetdicom2 import fsm
 from pynetdicom2 import pdu
 
@@ -24,6 +29,7 @@ def _make_bare_provider() -> dulprovider.DULServiceProvider:
     provider.raw_pdu = b''
     provider.primitive = None
     provider.dimse_gen = None
+    provider.max_pdu_length = 65536
     return provider
 
 
@@ -87,6 +93,171 @@ class PduDispatchTestCase(unittest.TestCase):
         result = provider._process_incoming()
         self.assertTrue(result)
         self.assertIn(fsm.Events.EVT_19, provider.event)
+
+    def test_process_incoming_malformed_pdu_maps_to_evt_19(self) -> None:
+        provider = _make_bare_provider()
+        # A-ASSOCIATE-RQ (type 0x01) declaring a 4-byte body while the fixed
+        # header alone is 68 bytes: decoding raises struct.error, which must
+        # be reported as EVT_19 instead of crashing the DUL thread.
+        provider.raw_pdu = b'\x01\x00\x00\x00\x00\x04\x00\x00\x00\x00'
+        result = provider._process_incoming()
+        self.assertTrue(result)
+        self.assertIn(fsm.Events.EVT_19, provider.event)
+
+
+class PduLengthCapTestCase(unittest.TestCase):
+    """A peer must never be able to make the provider buffer an unbounded
+    amount of data by declaring an absurd PDU length."""
+
+    def _pdu_header(self, pdu_type: int, length: int) -> bytes:
+        return bytes([pdu_type, 0x00]) + struct.pack('>L', length)
+
+    def test_data_pdu_over_max_length_aborts(self) -> None:
+        provider = _make_bare_provider()
+        provider.max_pdu_length = 100
+        # P-DATA-TF (0x04) declaring 101 bytes, over the negotiated max.
+        provider.raw_pdu = self._pdu_header(0x04, 101) + b'\x00' * 101
+        result = provider._process_incoming()
+        self.assertTrue(result)
+        self.assertIn(fsm.Events.EVT_19, provider.event)
+        self.assertEqual(provider.raw_pdu, b'')
+
+    def test_association_pdu_over_fixed_cap_aborts(self) -> None:
+        provider = _make_bare_provider()
+        cap = dulprovider.MAX_ASSOCIATION_PDU_LENGTH
+        # A-ASSOCIATE-RQ (0x01) declaring over the fixed association cap.
+        provider.raw_pdu = self._pdu_header(0x01, cap + 1)
+        result = provider._process_incoming()
+        self.assertTrue(result)
+        self.assertIn(fsm.Events.EVT_19, provider.event)
+        self.assertEqual(provider.raw_pdu, b'')
+
+    def test_pdu_within_limits_not_aborted(self) -> None:
+        provider = _make_bare_provider()
+        provider.max_pdu_length = 100
+        # Declares a length within the cap but provides only the header so
+        # far: provider must keep waiting for the rest, not abort.
+        provider.raw_pdu = self._pdu_header(0x04, 100)
+        result = provider._process_incoming()
+        self.assertFalse(result)
+        self.assertNotIn(fsm.Events.EVT_19, provider.event)
+
+
+class CheckNetworkPacingTestCase(unittest.TestCase):
+    """While no socket exists (client mode before connect, or after the
+    connection has been torn down) the event loop must not busy-spin at 100%
+    CPU."""
+
+    def test_check_network_paces_when_no_socket(self) -> None:
+        provider = _make_bare_provider()
+        provider.dul_socket = None
+        with mock.patch.object(dulprovider.time, 'sleep') as sleep_mock:
+            result = provider._check_network()
+        self.assertFalse(result)
+        sleep_mock.assert_called_once_with(dulprovider.POLL_INTERVAL)
+
+
+class RunFailureTestCase(unittest.TestCase):
+    def test_run_reports_provider_origin_abort_on_failure(self) -> None:
+        # An internal DUL failure is a DICOM UL service-provider initiated
+        # abort (source 2), not a service-user one (source 0).
+        provider = _make_bare_provider()
+        provider.is_killed = False
+        provider._is_killed = threading.Event()
+        provider.to_service_user = queue.Queue()
+        # Bypass the event-loop helpers so the only thing that can raise is
+        # the state machine action.
+        provider._check_outgoing_pdu = lambda: False
+        provider._check_network = lambda: False
+        provider._check_timer = lambda: False
+        provider.state_machine = mock.MagicMock()
+        provider.state_machine.action.side_effect = RuntimeError('boom')
+        provider.event.append(fsm.Events.EVT_5)
+
+        with self.assertRaises(RuntimeError):
+            provider.run()
+
+        abort = provider.to_service_user.get_nowait()
+        self.assertIsInstance(abort, pdu.AAbortPDU)
+        self.assertEqual(abort.source, 2)
+        self.assertTrue(provider._is_killed.is_set())
+
+
+class KillTimeoutTestCase(unittest.TestCase):
+    """``kill()`` must not block forever if the DUL thread is stuck on a
+    stalled peer."""
+
+    def test_kill_returns_when_thread_terminates(self) -> None:
+        provider = _make_bare_provider()
+        provider.is_killed = False
+        provider._is_killed = threading.Event()
+        provider._is_killed.set()  # thread has already terminated
+        provider.kill()
+        self.assertTrue(provider.is_killed)
+
+    def test_kill_does_not_block_past_timeout(self) -> None:
+        provider = _make_bare_provider()
+        provider.is_killed = False
+        # Event never set: simulates a thread stuck on a stalled peer.
+        provider._is_killed = threading.Event()
+        start = time.monotonic()
+        with mock.patch.object(dulprovider, 'KILL_TIMEOUT', 0.2):
+            provider.kill()
+        elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 1.0)
+        self.assertTrue(provider.is_killed)
+
+
+class CreateSocketTestCase(unittest.TestCase):
+    def test_create_socket_uses_bounded_connect(self) -> None:
+        # The client socket must be created with a bounded connect timeout
+        # so a stalled remote host cannot block forever.
+        provider = _make_bare_provider()
+        provider.called_presentation_address = ('localhost', 11112)
+        fake_socket = mock.MagicMock()
+        with mock.patch.object(
+            dulprovider.socket, 'create_connection',
+            return_value=fake_socket
+        ) as connect_mock:
+            provider.create_socket()
+        connect_mock.assert_called_once_with(
+            ('localhost', 11112), timeout=dulprovider.SOCKET_TIMEOUT
+        )
+        self.assertIs(provider.dul_socket, fake_socket)
+
+    def test_create_socket_without_address_raises(self) -> None:
+        provider = _make_bare_provider()
+        provider.called_presentation_address = None
+        with self.assertRaises(exceptions.NetDICOMError):
+            provider.create_socket()
+
+    def test_create_socket_wraps_connect_errors(self) -> None:
+        # A failed connection attempt must not leak a socket and must
+        # surface as NetDICOMError.
+        provider = _make_bare_provider()
+        provider.called_presentation_address = ('localhost', 11112)
+        with mock.patch.object(
+            dulprovider.socket, 'create_connection',
+            side_effect=ConnectionRefusedError('refused')
+        ):
+            with self.assertRaises(exceptions.NetDICOMError):
+                provider.create_socket()
+
+    def test_init_sets_timeout_on_provided_socket(self) -> None:
+        # A socket handed to the provider (acceptor path) must also carry a
+        # bounded timeout.
+        left, right = socket.socketpair()
+        try:
+            provider = dulprovider.DULServiceProvider(
+                set(), lambda ctx, ds: (None, 0), dul_socket=left
+            )
+            try:
+                self.assertEqual(left.gettimeout(), dulprovider.SOCKET_TIMEOUT)
+            finally:
+                provider.kill()
+        finally:
+            left.close()
+            right.close()
 
 
 if __name__ == '__main__':
