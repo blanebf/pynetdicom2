@@ -481,6 +481,17 @@ class RequestHandler(socketserver.StreamRequestHandler):
         self.asce.handle()
 
 
+class _ThreadingTCPServer(socketserver.ThreadingTCPServer):
+    """Threading TCP server with the defaults used by DICOM SCPs.
+
+    ``allow_reuse_address`` must be set before the socket is bound. As the
+    binding happens inside ``__init__`` (when ``bind_and_activate`` is true),
+    both attributes are defined on the class rather than set on the instance.
+    """
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class AE(AEBase):
     """Represents a DICOM application entity based on
     ``SocketServer.ThreadingTCPServer``
@@ -556,7 +567,7 @@ class AE(AEBase):
             bind_and_activate: bool,
             max_pdu_length: int
     ) -> socketserver.TCPServer:
-        server = socketserver.ThreadingTCPServer(
+        return _ThreadingTCPServer(
             ('', port),
             partial(
                 RequestHandler,
@@ -565,9 +576,6 @@ class AE(AEBase):
             ),
             bind_and_activate
         )
-        server.daemon_threads = True
-        server.allow_reuse_address = True
-        return server
 
     def __enter__(self) -> 'AE':
         if not self.activted:

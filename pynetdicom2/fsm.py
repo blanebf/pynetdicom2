@@ -360,6 +360,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
             (Events.EVT_14, States.STA_8): self.ar_4,
             (Events.EVT_14, States.STA_9): self.ar_9,
+            (Events.EVT_14, States.STA_10): self.ar_9,
             (Events.EVT_14, States.STA_12): self.ar_4,
 
             (Events.EVT_15, States.STA_3): self.aa_1,

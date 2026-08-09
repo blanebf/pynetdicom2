@@ -104,6 +104,18 @@ class ReleaseCollisionTestCase(unittest.TestCase):
         sm.primitive = pdu.AReleaseRqPDU()
         self.assertEqual(sm.ar_8(), fsm.States.STA_10)
 
+    def test_evt14_approved_in_both_collision_states(self) -> None:
+        # PS3.7 7.2.4: the local A-RELEASE response primitive sends
+        # A-RELEASE-RP in both collision states (requestor and acceptor
+        # side).
+        for state in (fsm.States.STA_9, fsm.States.STA_10):
+            with self.subTest(state=state):
+                sm = _make_sm()
+                sm.current_state = state
+                sm.action(fsm.Events.EVT_14)
+                self.assertEqual(sm.current_state, fsm.States.STA_11)
+                self.assertTrue(sm.provider.dul_socket.sent)
+
 
 class AbortAndCloseTestCase(unittest.TestCase):
     def test_aa_2_stops_and_closes(self) -> None:

@@ -478,6 +478,7 @@ KNOWN_STATUSES: list[
                         'in the same manner as Required Keys.', dimse.CFindRSPMessage),  # noqa: E501
     (0xFF01, 'Pending', 'Matches are continuing - Warning that one or more Optional Keys were not '  # noqa: E501
                         'supported for existence and/or matching for this Identifier.', dimse.CFindRSPMessage),  # noqa: E501
+    (0xFE00, 'Cancel', 'Matching terminated due to Cancel request', dimse.CFindRSPMessage),  # noqa: E501
 
     # C-GET
     (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CGetRSPMessage),  # noqa: E501
@@ -486,6 +487,7 @@ KNOWN_STATUSES: list[
     ((0xC000, 0xCFFF), 'Failure', 'Failed: Unable to process', dimse.CGetRSPMessage),  # noqa: E501
     (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CGetRSPMessage),  # noqa: E501
     (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CGetRSPMessage),
+    (0xFE00, 'Cancel', 'Sub-operations terminated due to Cancel Indication', dimse.CGetRSPMessage),  # noqa: E501
 
     # C-MOVE
     (0xA701, 'Failure', 'Refused: Out of Resources - Unable to calculate number of matches', dimse.CMoveRSPMessage),  # noqa: E501
@@ -500,7 +502,8 @@ KNOWN_STATUSES: list[
      dimse.CMoveRSPMessage),
     (0xAA04, 'Failure', 'Failed: Invalid Request', dimse.CMoveRSPMessage),
     (0xB000, 'Warning', 'Sub-operations Complete - One or more Failures or Warnings', dimse.CMoveRSPMessage),  # noqa: E501
-    (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CMoveRSPMessage)
+    (0xFF00, 'Pending', 'Sub-operations are continuing', dimse.CMoveRSPMessage),  # noqa: E501
+    (0xFE00, 'Cancel', 'Sub-operations terminated due to Cancel Indication', dimse.CMoveRSPMessage)  # noqa: E501
 ]
 # pylint: enable=line-too-long
 
@@ -549,6 +552,8 @@ were not supported for existence and/or matching for this Identifier. (C-FIND)
 C_FIND_UNABLE_TO_PROCESS = Status(0xC000, dimse.CFindRSPMessage)
 #: (0xA700) Refused: Out of Resources (C-FIND)
 C_FIND_OUT_OF_RESOURCES = Status(0xA700, dimse.CFindRSPMessage)
+#: (0xFE00) Matching terminated due to Cancel request (C-FIND)
+C_FIND_CANCEL = Status(0xFE00, dimse.CFindRSPMessage)
 
 #: (0xFF00) Sub-operations are continuing (C-GET)
 C_GET_PENDING = Status(0xFF00, dimse.CGetRSPMessage)
@@ -556,6 +561,8 @@ C_GET_PENDING = Status(0xFF00, dimse.CGetRSPMessage)
 C_GET_WARNING = Status(0xB000, dimse.CGetRSPMessage)
 #: (0xC000) Failed: Unable to process (C-GET)
 C_GET_UNABLE_TO_PROCESS = Status(0xC000, dimse.CGetRSPMessage)
+#: (0xFE00) Sub-operations terminated due to Cancel Indication (C-GET)
+C_GET_CANCEL = Status(0xFE00, dimse.CGetRSPMessage)
 
 #: (0xFF00) Sub-operations are continuing (C-MOVE)
 C_MOVE_PENDING = Status(0xFF00, dimse.CMoveRSPMessage)
@@ -565,3 +572,5 @@ C_MOVE_WARNING = Status(0xB000, dimse.CMoveRSPMessage)
 C_MOVE_UNABLE_TO_PROCESS = Status(0xC000, dimse.CMoveRSPMessage)
 #: (0xA801) Refused: Move Destination unknown
 C_MOVE_DESTINATION_UNKNOWN = Status(0xA801, dimse.CMoveRSPMessage)
+#: (0xFE00) Sub-operations terminated due to Cancel Indication (C-MOVE)
+C_MOVE_CANCEL = Status(0xFE00, dimse.CMoveRSPMessage)

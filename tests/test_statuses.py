@@ -61,5 +61,27 @@ class TypoAliasTestCase(unittest.TestCase):
         self.assertTrue(statuses.C_STORE_CANNOT_UNDERSTAND.is_failure)
 
 
+class CancelStatusTestCase(unittest.TestCase):
+    """0xFE00 must be registered as a Cancel status for the query/retrieve
+    services so ``Status.is_cancel`` can be True."""
+
+    def test_c_find_cancel(self) -> None:
+        status = statuses.Status(0xFE00, dimse.CFindRSPMessage)
+        self.assertTrue(status.is_cancel)
+        self.assertFalse(status.is_success)
+        self.assertFalse(status.is_failure)
+        self.assertIs(statuses.C_FIND_CANCEL.is_cancel, True)
+
+    def test_c_get_cancel(self) -> None:
+        status = statuses.Status(0xFE00, dimse.CGetRSPMessage)
+        self.assertTrue(status.is_cancel)
+        self.assertIs(statuses.C_GET_CANCEL.is_cancel, True)
+
+    def test_c_move_cancel(self) -> None:
+        status = statuses.Status(0xFE00, dimse.CMoveRSPMessage)
+        self.assertTrue(status.is_cancel)
+        self.assertIs(statuses.C_MOVE_CANCEL.is_cancel, True)
+
+
 if __name__ == '__main__':
     unittest.main()
