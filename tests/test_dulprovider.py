@@ -30,6 +30,7 @@ def _make_bare_provider() -> dulprovider.DULServiceProvider:
     provider.primitive = None
     provider.dimse_gen = None
     provider.max_pdu_length = 65536
+    provider._close_deadline = None
     return provider
 
 
@@ -45,7 +46,26 @@ class CloseTimeoutTestCase(unittest.TestCase):
 
     def test_close_returns_when_peer_never_closes(self) -> None:
         # The peer keeps its side open and never sends EOF. _close must not
-        # block forever: it should time out, close the socket and emit EVT_17.
+        # block forever: one non-blocking step is performed per call, and
+        # after CLOSE_TIMEOUT elapses the socket is closed and EVT_17 is
+        # emitted.
+        left, right = socket.socketpair()
+        self.addCleanup(right.close)
+        provider = _make_bare_provider()
+        provider.dul_socket = left
+
+        start = time.monotonic()
+        while not provider._close():
+            pass
+        elapsed = time.monotonic() - start
+
+        self.assertLess(elapsed, 5, 'close() blocked far longer than timeout')
+        self.assertIsNone(provider.dul_socket)
+        self.assertIn(fsm.Events.EVT_17, provider.event)
+
+    def test_close_steps_are_non_blocking(self) -> None:
+        # A single _close call must not block for the whole CLOSE_TIMEOUT
+        # while the peer keeps its side open: it performs one short step.
         left, right = socket.socketpair()
         self.addCleanup(right.close)
         provider = _make_bare_provider()
@@ -55,8 +75,29 @@ class CloseTimeoutTestCase(unittest.TestCase):
         result = provider._close()
         elapsed = time.monotonic() - start
 
-        self.assertTrue(result)
-        self.assertLess(elapsed, 5, 'close() blocked far longer than timeout')
+        self.assertFalse(result)
+        self.assertLess(
+            elapsed, dulprovider.POLL_INTERVAL * 4,
+            'a single _close() step blocked far longer than POLL_INTERVAL'
+        )
+
+    def test_close_processes_remaining_pdus(self) -> None:
+        # Bytes still in flight when the association enters STA_13 may
+        # contain complete PDUs: they must be processed, not discarded.
+        left, right = socket.socketpair()
+        self.addCleanup(right.close)
+        provider = _make_bare_provider()
+        provider.dul_socket = left
+        right.sendall(pdu.AAbortPDU(source=0, reason_diag=0).encode())
+
+        self.assertTrue(provider._close())
+        self.assertIn(fsm.Events.EVT_16, provider.event)
+        # Socket is still open: the provider keeps waiting for the peer.
+        self.assertIsNotNone(provider.dul_socket)
+
+        right.close()
+        while not provider._close():
+            pass
         self.assertIsNone(provider.dul_socket)
         self.assertIn(fsm.Events.EVT_17, provider.event)
 
@@ -253,6 +294,23 @@ class CreateSocketTestCase(unittest.TestCase):
             )
             try:
                 self.assertEqual(left.gettimeout(), dulprovider.SOCKET_TIMEOUT)
+            finally:
+                provider.kill()
+        finally:
+            left.close()
+            right.close()
+
+    def test_provider_thread_is_daemon(self) -> None:
+        # The DUL thread is started in the constructor and can leak if the
+        # enclosing object fails to finish initializing; as a daemon it
+        # cannot block interpreter shutdown.
+        left, right = socket.socketpair()
+        try:
+            provider = dulprovider.DULServiceProvider(
+                set(), lambda ctx, ds: (None, 0), dul_socket=left
+            )
+            try:
+                self.assertTrue(provider.daemon)
             finally:
                 provider.kill()
         finally:

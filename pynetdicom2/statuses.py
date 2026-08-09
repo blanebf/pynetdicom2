@@ -338,6 +338,29 @@ _status_dict: dict[
     tuple[int, int], _Status
 ] = {}  # pylint: disable=invalid-name
 
+#: Status code ranges (start, end, status) that are not service specific.
+#: Ranges are stored as intervals instead of materializing one entry per
+#: code (a single range like 0xC000-0xCFFF would otherwise consume thousands
+#: of dictionary entries).
+_general_status_ranges: list[
+    tuple[int, int, _Status]
+] = []  # pylint: disable=invalid-name
+
+#: Service specific status code ranges, keyed by command field.
+_status_ranges: dict[
+    int, list[tuple[int, int, _Status]]
+] = {}  # pylint: disable=invalid-name
+
+
+def _find_in_ranges(
+        ranges: list[tuple[int, int, _Status]], value: int
+) -> Optional[_Status]:
+    """Looks up a status code in a list of status code intervals."""
+    for start, end, status in ranges:
+        if start <= value <= end:
+            return status
+    return None
+
 
 UNKNOWN = _Status('Failure', 'Unknown Status')
 
@@ -361,17 +384,19 @@ def add_status(
     :param command: DIMSE command, if this status is command/service specific
     """
     status = _Status(code_type, description)
-    if end is not None:
-        code_range = list(range(code, end + 1))
-    else:
-        code_range = [code]
 
     if command is None:
-        for _code in code_range:
-            _general_status_dict[_code] = status
+        if end is None:
+            _general_status_dict[code] = status
+        else:
+            _general_status_ranges.append((code, end, status))
     else:
-        for _code in code_range:
-            _status_dict[(command.command_field, _code)] = status
+        if end is None:
+            _status_dict[(command.command_field, code)] = status
+        else:
+            _status_ranges.setdefault(
+                command.command_field, []
+            ).append((code, end, status))
 
 
 class Status:
@@ -396,8 +421,16 @@ class Status:
         status: Optional[_Status] = None
         if command:
             status = _status_dict.get((command.command_field, value))
+            if status is None:
+                status = _find_in_ranges(
+                    _status_ranges.get(command.command_field, []), value
+                )
         if not status:
-            status = _general_status_dict.get(value, UNKNOWN)
+            status = _general_status_dict.get(value)
+        if not status:
+            status = _find_in_ranges(_general_status_ranges, value)
+        if not status:
+            status = UNKNOWN
         self.status_type = status.code_type
         self.description = status.description
 
@@ -406,6 +439,19 @@ class Status:
         self.is_failure = self.status_type == 'Failure'
         self.is_warning = self.status_type == 'Warning'
         self.is_cancel = self.status_type == 'Cancel'
+
+    def __eq__(self, other: object) -> bool:
+        """Statuses are equal when they carry the same code.
+
+        The optional command context only affects how the status metadata is
+        resolved: two statuses with the same code describe the same outcome.
+        """
+        if isinstance(other, Status):
+            return int(self) == int(other)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(int(self))
 
     def __int__(self) -> int:
         return int(self._value)
@@ -525,6 +571,8 @@ register_statuses()
 SUCCESS = Status(0x0000)
 #: (0x0110) Processing Failure
 PROCESSING_FAILURE = Status(0x0110)
+#: (0x0122) Refused: SOP Class Not Supported
+SOP_CLASS_NOT_SUPPORTED = Status(0x0122)
 
 #: (0xC000) Error: Cannot understand (C-STORE)
 C_STORE_CANNOT_UNDERSTAND = Status(0xC000, dimse.CStoreRSPMessage)
