@@ -8,9 +8,15 @@ no real socket or thread is involved.
 import unittest
 from unittest import mock
 
+from pydicom import uid
+
 from pynetdicom2 import asceprovider
 from pynetdicom2 import dimsemessages
+from pynetdicom2 import exceptions
 from pynetdicom2 import pdu
+from pynetdicom2 import statuses
+from pynetdicom2 import uids
+from pynetdicom2 import userdataitems
 
 
 def _make_bare_association() -> asceprovider.Association:
@@ -114,6 +120,121 @@ class CancelHandlingTestCase(unittest.TestCase):
         # StopLoop proves the loop survived the C-CANCEL and kept iterating.
         with self.assertRaises(StopLoop):
             assoc._loop()
+
+
+class AcceptValidationTestCase(unittest.TestCase):
+    """Malformed association requests from a peer must raise descriptive
+    association errors instead of raw IndexError/KeyError/AssertionError."""
+
+    APPLICATION_CONTEXT = '1.2.840.10008.3.1.1.1'
+    SOP_CLASS = uid.UID('1.2.3.4')
+    TS = uid.ImplicitVRLittleEndian
+
+    def _make_acceptor(self) -> asceprovider.AssociationAcceptor:
+        assoc = object.__new__(asceprovider.AssociationAcceptor)
+        assoc.dul = mock.MagicMock()
+        assoc.ae = mock.MagicMock()
+        assoc.ae.supported_scp = {self.SOP_CLASS: object()}
+        assoc.ae.supported_ts = frozenset([self.TS])
+        assoc.max_pdu_length = 65536
+        assoc.sop_classes_as_scp = {}
+        assoc.accepted_contexts = {}
+        return assoc
+
+    def _rq(self, variable_items: list) -> pdu.AAssociateRqPDU:
+        return pdu.AAssociateRqPDU(
+            called_ae_title='CALLED',
+            calling_ae_title='CALLING',
+            variable_items=variable_items
+        )
+
+    def _context_item(self, pc_id: int) -> pdu.PresentationContextItemRQ:
+        return pdu.PresentationContextItemRQ(
+            pc_id,
+            pdu.AbstractSyntaxSubItem(str(self.SOP_CLASS)),
+            [pdu.TransferSyntaxSubItem(str(self.TS))]
+        )
+
+    def _user_info(self) -> pdu.UserInformationItem:
+        return pdu.UserInformationItem(
+            [userdataitems.MaximumLengthSubItem(65536)]
+        )
+
+    def test_empty_variable_items_rejected(self) -> None:
+        assoc = self._make_acceptor()
+        with self.assertRaises(exceptions.AssociationError):
+            assoc.accept(self._rq([]))
+
+    def test_missing_application_context_rejected(self) -> None:
+        assoc = self._make_acceptor()
+        with self.assertRaises(exceptions.AssociationError):
+            assoc.accept(self._rq([self._user_info()]))
+
+    def test_user_info_without_sub_items_rejected(self) -> None:
+        assoc = self._make_acceptor()
+        ctx = pdu.ApplicationContextItem(self.APPLICATION_CONTEXT)
+        with self.assertRaises(exceptions.AssociationError):
+            assoc.accept(self._rq([ctx, pdu.UserInformationItem([])]))
+
+    def test_invalid_and_duplicate_context_ids_refused(self) -> None:
+        assoc = self._make_acceptor()
+        ctx = pdu.ApplicationContextItem(self.APPLICATION_CONTEXT)
+        assoc.accept(self._rq([
+            ctx,
+            self._context_item(1),   # valid
+            self._context_item(1),   # duplicate
+            self._context_item(2),   # even ID - invalid
+            self._user_info()
+        ]))
+
+        res = assoc.dul.send.call_args.args[0]
+        ac_items = [
+            item for item in res.variable_items
+            if isinstance(item, pdu.PresentationContextItemAC)
+        ]
+        self.assertEqual(
+            [item.result_reason for item in ac_items], [0, 2, 2]
+        )
+        self.assertEqual(list(assoc.accepted_contexts), [1])
+
+
+class UnsupportedRequestTestCase(unittest.TestCase):
+    """A request for an unsupported SOP Class must be refused with a
+    failure response, not tear down the whole association."""
+
+    def test_unsupported_request_refused_not_fatal(self) -> None:
+        class StopLoop(Exception):
+            pass
+
+        echo = dimsemessages.CEchoRQMessage()
+        echo.message_id = 12
+        echo.sop_class_uid = uids.VERIFICATION_SOP_CLASS
+
+        assoc = object.__new__(asceprovider.AssociationAcceptor)
+        assoc.is_killed = False
+        assoc.ae = mock.MagicMock()
+        assoc.ae.supported_scp = {}  # nothing supported
+        assoc.dul = mock.MagicMock()
+        assoc.dul.receive.side_effect = [(echo, 3), StopLoop()]
+        assoc.sop_classes_as_scp = {
+            3: (3, uid.UID('1.2.3'), uid.ImplicitVRLittleEndian)
+        }
+
+        with mock.patch.object(
+                asceprovider.Association, 'send') as send_mock:
+            # StopLoop proves the loop kept running after refusing the
+            # request instead of raising ClassNotSupportedError.
+            with self.assertRaises(StopLoop):
+                assoc._loop()
+
+        self.assertEqual(send_mock.call_count, 1)
+        rsp, ctx_id = send_mock.call_args.args
+        self.assertIsInstance(rsp, dimsemessages.CEchoRSPMessage)
+        self.assertEqual(ctx_id, 3)
+        self.assertEqual(rsp.message_id_being_responded_to, 12)
+        self.assertEqual(
+            rsp.status, int(statuses.SOP_CLASS_NOT_SUPPORTED)
+        )
 
 
 if __name__ == '__main__':

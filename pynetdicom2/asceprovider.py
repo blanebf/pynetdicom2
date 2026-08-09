@@ -265,6 +265,36 @@ IMPLEMENTATION_UID = uid.UID(
     '1.2.826.0.1.3680043.8.498.1.1.155105445218102811803000'
 )
 
+#: Response classes used to refuse a request that was received for an
+#: unsupported SOP Class, keyed by the request's command field. Refusing the
+#: individual request keeps the association usable for other requests.
+UNSUPPORTED_REQUEST_RESPONSES: dict[
+    int, type[dimsemessages.DIMSEResponseMessage]
+] = {
+    dimsemessages.CStoreRQMessage.command_field:
+        dimsemessages.CStoreRSPMessage,
+    dimsemessages.CFindRQMessage.command_field:
+        dimsemessages.CFindRSPMessage,
+    dimsemessages.CGetRQMessage.command_field:
+        dimsemessages.CGetRSPMessage,
+    dimsemessages.CMoveRQMessage.command_field:
+        dimsemessages.CMoveRSPMessage,
+    dimsemessages.CEchoRQMessage.command_field:
+        dimsemessages.CEchoRSPMessage,
+    dimsemessages.NEventReportRQMessage.command_field:
+        dimsemessages.NEventReportRSPMessage,
+    dimsemessages.NGetRQMessage.command_field:
+        dimsemessages.NGetRSPMessage,
+    dimsemessages.NSetRQMessage.command_field:
+        dimsemessages.NSetRSPMessage,
+    dimsemessages.NActionRQMessage.command_field:
+        dimsemessages.NActionRSPMessage,
+    dimsemessages.NCreateRQMessage.command_field:
+        dimsemessages.NCreateRSPMessage,
+    dimsemessages.NDeleteRQMessage.command_field:
+        dimsemessages.NDeleteRSPMessage
+}
+
 
 def build_pres_context_def_list(
         context_def_list: dict[int, PContextDefList]
@@ -454,9 +484,26 @@ class AssociationAcceptor(Association):
         """Waits for an association request from a remote AE. Upon reception
         of the request sends association response based on
         acceptable_pr_contexts"""
+        if not assoc_req.variable_items:
+            raise exceptions.AssociationError(
+                'A-ASSOCIATE-RQ does not contain any variable items'
+            )
+        if not isinstance(
+                assoc_req.variable_items[0], pdu.ApplicationContextItem
+        ):
+            raise exceptions.AssociationError(
+                'First variable item of A-ASSOCIATE-RQ is not an '
+                'Application Context item'
+            )
         user_items = assoc_req.variable_items[-1]
         if not isinstance(user_items, pdu.UserInformationItem):
-            raise AssertionError(f'Unexpected sub-item: {user_items}')
+            raise exceptions.AssociationError(
+                f'Unexpected sub-item: {user_items}'
+            )
+        if not user_items.user_data:
+            raise exceptions.AssociationError(
+                'User Information item does not contain any sub-items'
+            )
         max_pdu_sub_item = user_items.user_data[0]
         if not isinstance(
                 max_pdu_sub_item, userdataitems.MaximumLengthSubItem
@@ -470,14 +517,30 @@ class AssociationAcceptor(Association):
         max_pdu_sub_item.maximum_length_received = self.max_pdu_length
 
         # analyse proposed presentation contexts
-        rsp = [assoc_req.variable_items[0]]
+        rsp: list[pdu.VariableItems] = [assoc_req.variable_items[0]]
         requested = (
             (item.context_id, item.abs_sub_item.name, item.ts_sub_items)
             for item in assoc_req.variable_items[1:-1]
             if isinstance(item, pdu.PresentationContextItemRQ)
         )
+        seen_contexts: set[int] = set()
 
         for pc_id, proposed_sop, proposed_ts in requested:
+            # PS3.8 9.3.2.2: presentation context IDs shall be odd values
+            # between 1 and 255 and each ID may be proposed only once.
+            # Refuse malformed or duplicate proposals instead of silently
+            # overwriting already negotiated contexts.
+            invalid_id = pc_id % 2 != 1 or not 1 <= pc_id <= 255
+            if invalid_id or pc_id in seen_contexts:
+                rsp.append(
+                    pdu.PresentationContextItemAC(
+                        pc_id,
+                        2,
+                        pdu.TransferSyntaxSubItem('')
+                    )
+                )
+                continue
+            seen_contexts.add(pc_id)
             if proposed_sop not in self.ae.supported_scp:
                 # refuse sop class because of SOP class not supported
                 rsp.append(
@@ -573,20 +636,56 @@ class AssociationAcceptor(Association):
                 self._handle_cancel(dimse_msg)
                 continue
             _uid = dimse_msg.sop_class_uid
+            if not isinstance(
+                    dimse_msg, dimsemessages.DIMSERequestMessage
+            ):
+                raise exceptions.DIMSEProcessingError(
+                    f'Expected DIMSE Request message but got: {dimse_msg}'
+                )
             try:
-                if not isinstance(
-                        dimse_msg, dimsemessages.DIMSERequestMessage
-                ):
-                    raise exceptions.DIMSEProcessingError(
-                        f'Expected DIMSE Request message but got: {dimse_msg}'
-                    )
                 _, sop_class, ts = self.sop_classes_as_scp[pc_id]
                 service = self.ae.supported_scp[_uid]
-            except KeyError as exc:
-                raise exceptions.ClassNotSupportedError(
-                    f'SOP Class {_uid} not supported as SCP'
-                ) from exc
+            except KeyError:
+                # Refuse this one request with a failure response rather
+                # than raising ClassNotSupportedError, which would tear
+                # down the whole association (PS3.7 7.2).
+                logger.warning(
+                    'SOP Class %s not supported as SCP on presentation '
+                    'context %d; refusing request', _uid, pc_id
+                )
+                self._respond_unsupported(pc_id, dimse_msg)
+                continue
             service(self, fsm.PContextDef(pc_id, sop_class, ts), dimse_msg)
+
+    def _respond_unsupported(
+            self,
+            pc_id: int,
+            msg: dimsemessages.DIMSERequestMessage
+    ) -> None:
+        """Sends a failure response for a request whose SOP Class is not
+        supported by this SCP.
+
+        :param pc_id: presentation context ID the request arrived on
+        :param msg: received request message
+        """
+        rsp_type = UNSUPPORTED_REQUEST_RESPONSES.get(msg.command_field)
+        if rsp_type is None:
+            logger.warning(
+                'Cannot refuse unsupported request, no response defined '
+                'for command field 0x%04X', msg.command_field
+            )
+            return
+        rsp = rsp_type()
+        rsp.message_id_being_responded_to = msg.message_id
+        rsp.status = int(statuses.SOP_CLASS_NOT_SUPPORTED)
+        if msg.sop_class_uid is not None:
+            rsp.sop_class_uid = msg.sop_class_uid
+        instance_uid = getattr(msg, 'affected_sop_instance_uid', None)
+        if instance_uid is not None and hasattr(
+                rsp, 'affected_sop_instance_uid'
+        ):
+            rsp.affected_sop_instance_uid = instance_uid
+        self.send(rsp, pc_id)
 
     def _handle_cancel(
             self, msg: dimsemessages.CCancelRQMessage
@@ -765,10 +864,18 @@ class AssociationRequester(Association):
             raise exceptions.AssociationError('Invalid repsonse')
 
         # Get maximum pdu length from answer
+        if not response.variable_items:
+            raise exceptions.AssociationError(
+                'A-ASSOCIATE-AC does not contain any variable items'
+            )
         user_item = response.variable_items[-1]
         if not isinstance(user_item, pdu.UserInformationItem):
             raise exceptions.AssociationError(
                 f'Unexpected item in place of UserInformation item {user_item}'
+            )
+        if not user_item.user_data:
+            raise exceptions.AssociationError(
+                'User Information item does not contain any sub-items'
             )
         max_pdu_sub_item = user_item.user_data[0]
         if not isinstance(
@@ -792,7 +899,13 @@ class AssociationRequester(Association):
         )
         for ctx in accepted:
             pc_id = ctx.context_id
-            sop_class = self.context_def_list[ctx.context_id].sop_class
+            try:
+                sop_class = self.context_def_list[pc_id].sop_class
+            except KeyError as exc:
+                raise exceptions.AssociationError(
+                    'A-ASSOCIATE-AC references presentation context '
+                    f'{pc_id} that was not proposed'
+                ) from exc
             ts_uid = uid.UID(ctx.ts_sub_item.name)
             self.sop_classes_as_scu[sop_class] = (pc_id, ts_uid)
             self.accepted_contexts[pc_id] = fsm.PContextDef(

@@ -83,5 +83,60 @@ class CancelStatusTestCase(unittest.TestCase):
         self.assertIs(statuses.C_MOVE_CANCEL.is_cancel, True)
 
 
+class StatusEqualityTestCase(unittest.TestCase):
+    def test_statuses_with_same_code_are_equal(self) -> None:
+        self.assertEqual(statuses.Status(0x0000), statuses.SUCCESS)
+        self.assertEqual(
+            statuses.Status(0x0110), statuses.PROCESSING_FAILURE
+        )
+
+    def test_statuses_with_different_codes_differ(self) -> None:
+        self.assertNotEqual(statuses.SUCCESS, statuses.PROCESSING_FAILURE)
+
+    def test_equality_is_not_identity(self) -> None:
+        # Two separately constructed instances with the same code must be
+        # equal even though they are distinct objects.
+        self.assertEqual(statuses.Status(0x0000), statuses.Status(0x0000))
+
+    def test_status_is_hashable(self) -> None:
+        # Statuses can be used in sets and as dict keys.
+        collection = {statuses.SUCCESS, statuses.Status(0x0000)}
+        self.assertEqual(len(collection), 1)
+        mapping = {statuses.PROCESSING_FAILURE: 'failure'}
+        self.assertEqual(mapping[statuses.Status(0x0110)], 'failure')
+
+
+class StatusRangeTestCase(unittest.TestCase):
+    """Status code ranges must resolve without materializing one dictionary
+    entry per code."""
+
+    def test_range_lookup_resolves(self) -> None:
+        # 0xC000-0xCFFF is a registered range for several commands.
+        for value in (0xC000, 0xC123, 0xCFFF):
+            status = statuses.Status(value, dimse.CStoreRSPMessage)
+            self.assertTrue(status.is_failure)
+
+    def test_range_codes_not_materialized(self) -> None:
+        # Individual codes inside a registered range must not appear as
+        # separate entries in the command-specific dictionary.
+        key = (dimse.CStoreRSPMessage.command_field, 0xC123)
+        self.assertNotIn(key, statuses._status_dict)
+
+    def test_add_status_with_range(self) -> None:
+        statuses.add_status(
+            0xE000, 'Failure', 'Custom range', end=0xE0FF
+        )
+        try:
+            status = statuses.Status(0xE010)
+            self.assertTrue(status.is_failure)
+            self.assertEqual(status.description, 'Custom range')
+        finally:
+            statuses._general_status_dict.pop(0xE000, None)
+            statuses._general_status_ranges[:] = [
+                entry for entry in statuses._general_status_ranges
+                if entry[0] != 0xE000
+            ]
+
+
 if __name__ == '__main__':
     unittest.main()

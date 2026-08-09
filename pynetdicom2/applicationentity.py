@@ -528,7 +528,8 @@ class AE(AEBase):
         self.server = self._create_server(
             port, bind_and_activate, max_pdu_length
         )
-        self.activted = bind_and_activate
+        self.activated = bind_and_activate
+        self._serve_thread: Optional[threading.Thread] = None
 
     def add_scp(
             self,
@@ -559,6 +560,11 @@ class AE(AEBase):
     def quit(self) -> None:
         """Stops AE from accepting any more connections."""
         self.server.shutdown()
+        if self._serve_thread:
+            # Wait for the serve loop to actually terminate before closing
+            # the listening socket.
+            self._serve_thread.join()
+            self._serve_thread = None
         self.server.server_close()
 
     def _create_server(
@@ -578,14 +584,17 @@ class AE(AEBase):
         )
 
     def __enter__(self) -> 'AE':
-        if not self.activted:
+        if not self.activated:
             try:
                 self.server.server_bind()
                 self.server.server_activate()
             except:  # noqa E722
                 self.server.server_close()
                 raise
-        threading.Thread(target=self.server.serve_forever).start()
+        self._serve_thread = threading.Thread(
+            target=self.server.serve_forever
+        )
+        self._serve_thread.start()
         return self
 
     def __exit__(self, *args: Any) -> None:

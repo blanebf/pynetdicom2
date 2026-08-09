@@ -39,7 +39,9 @@ logger = logging.getLogger(__name__)
 
 #: Maximum time (in seconds) to wait for the remote peer to close its side of
 #: the connection during :meth:`DULServiceProvider._close`. Without a bound a
-#: half-open or misbehaving peer would block the DUL thread indefinitely.
+#: half-open or misbehaving peer would keep the association in STA_13
+#: indefinitely. The wait is performed in small non-blocking steps so the
+#: event loop keeps running while waiting.
 CLOSE_TIMEOUT = 10
 
 #: Upper bound (in bytes) for the body of received association PDUs.
@@ -168,8 +170,14 @@ class DULServiceProvider(threading.Thread):
 
         self.dul_socket = dul_socket
         self.raw_pdu: bytes = b''
+        self._close_deadline: Optional[float] = None
 
         self.is_killed: bool = False
+        # The thread is started from the constructor, so if the enclosing
+        # object fails to finish construction it can leak. Marking it as a
+        # daemon ensures such a leaked thread cannot block interpreter
+        # shutdown; the event loop is additionally paced so it does not spin.
+        self.daemon = True
         self.start()
 
     @property
@@ -462,25 +470,48 @@ class DULServiceProvider(threading.Thread):
         if self.dul_socket is None:
             return False
 
-        # Wait for the remote connection to close, but never block the DUL
-        # thread forever: a bounded timeout is applied so a half-open or
-        # misbehaving peer that never closes its side cannot hang the provider.
-        previous_timeout = self.dul_socket.gettimeout()
+        # Wait for the remote connection to close without blocking the DUL
+        # event loop: a single non-blocking step is performed per call, so
+        # outgoing PDUs and timers keep being serviced while the provider
+        # waits (bounded by CLOSE_TIMEOUT) for the peer to close its side.
+        if self._close_deadline is None:
+            self._close_deadline = time.monotonic() + CLOSE_TIMEOUT
+
         try:
-            self.dul_socket.settimeout(CLOSE_TIMEOUT)
-            while self.dul_socket.recv(1) != b'':
-                continue
-        except (socket.timeout, socket.error):
-            # Timed out or the socket errored out: treat as "peer did not
-            # cleanly close" and fall through to close it ourselves.
-            pass
-        finally:
+            readable = select.select(
+                [self.dul_socket], [], [], POLL_INTERVAL
+            )[0]
+        except ValueError:
+            # Invalid socket state: finish closing.
+            return self._finish_close()
+
+        if readable:
             try:
-                self.dul_socket.settimeout(previous_timeout)
+                data = self.dul_socket.recv(self.max_pdu_length)
+            except socket.error:
+                return self._finish_close()
+            if not data:
+                # Remote side has been closed
+                return self._finish_close()
+            self.raw_pdu += data
+            # The drained bytes may contain complete PDUs: process them so
+            # their events are not lost.
+            self._process_incoming()
+            return True
+
+        if time.monotonic() >= self._close_deadline:
+            # Timed out waiting for the peer to close: give up and close.
+            return self._finish_close()
+        return False
+
+    def _finish_close(self) -> bool:
+        """Closes the DUL socket and emits the transport close event."""
+        if self.dul_socket is not None:
+            try:
+                self.dul_socket.close()
             except socket.error:
                 pass
-
-        self.dul_socket.close()
         self.dul_socket = None
+        self._close_deadline = None
         self.event.append(fsm.Events.EVT_17)
         return True
