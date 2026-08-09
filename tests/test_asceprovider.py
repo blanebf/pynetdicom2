@@ -9,6 +9,8 @@ import unittest
 from unittest import mock
 
 from pynetdicom2 import asceprovider
+from pynetdicom2 import dimsemessages
+from pynetdicom2 import pdu
 
 
 def _make_bare_association() -> asceprovider.Association:
@@ -57,6 +59,61 @@ class KillTestCase(unittest.TestCase):
         self.assertEqual(sleep_mock.call_count, 1000)
         assoc.dul.kill.assert_called_once()
         self.assertFalse(assoc.association_established)
+
+
+class ReleaseTestCase(unittest.TestCase):
+    def test_release_normal_flow(self) -> None:
+        assoc = _make_bare_association()
+        assoc.ae = mock.MagicMock()
+        assoc.dul.receive.return_value = pdu.AReleaseRpPDU()
+
+        rsp = assoc.release()
+
+        self.assertIsInstance(rsp, pdu.AReleaseRpPDU)
+        rq = assoc.dul.send.call_args_list[0].args[0]
+        self.assertIsInstance(rq, pdu.AReleaseRqPDU)
+        assoc.dul.kill.assert_called_once()
+
+    def test_release_collision_approves_remote_request(self) -> None:
+        # PS3.7 7.2.4: if the remote AE requested release while our request
+        # was in flight, approve it (send A-RELEASE-RP) and then complete our
+        # own release once the remote confirmation arrives.
+        assoc = _make_bare_association()
+        assoc.ae = mock.MagicMock()
+        assoc.dul.receive.side_effect = [
+            pdu.AReleaseRqPDU(),  # remote release request
+            pdu.AReleaseRpPDU()   # confirmation of our request
+        ]
+
+        rsp = assoc.release()
+
+        self.assertIsInstance(rsp, pdu.AReleaseRpPDU)
+        sent = [call.args[0] for call in assoc.dul.send.call_args_list]
+        self.assertIsInstance(sent[0], pdu.AReleaseRqPDU)
+        self.assertIsInstance(sent[1], pdu.AReleaseRpPDU)
+        assoc.dul.kill.assert_called_once()
+
+
+class CancelHandlingTestCase(unittest.TestCase):
+    def test_cancel_is_accepted_without_tearing_down(self) -> None:
+        # A C-CANCEL must not raise (previously it triggered a
+        # DIMSEProcessingError that tore down the association): it is
+        # acknowledged and the message loop keeps running.
+        class StopLoop(Exception):
+            pass
+
+        cancel = dimsemessages.CCancelRQMessage()
+        cancel.message_id_being_responded_to = 5
+
+        assoc = object.__new__(asceprovider.AssociationAcceptor)
+        assoc.is_killed = False
+        assoc.ae = mock.MagicMock()
+        assoc.dul = mock.MagicMock()
+        assoc.dul.receive.side_effect = [(cancel, 1), StopLoop()]
+
+        # StopLoop proves the loop survived the C-CANCEL and kept iterating.
+        with self.assertRaises(StopLoop):
+            assoc._loop()
 
 
 if __name__ == '__main__':

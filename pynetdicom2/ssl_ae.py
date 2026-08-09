@@ -125,7 +125,12 @@ class _SSLCPServer(socketserver.TCPServer):
 
 
 class _SSLThreadingTCPServer(socketserver.ThreadingMixIn, _SSLCPServer):
-    pass
+    # ``allow_reuse_address`` must be set before the socket is bound. As the
+    # binding happens inside ``__init__`` (when ``bind_and_activate`` is
+    # true), the attributes are defined on the class rather than set on the
+    # instance.
+    allow_reuse_address = True
+    daemon_threads = True
 
 
 class SSLApplicationEntity(applicationentity.AE):
@@ -152,7 +157,7 @@ class SSLApplicationEntity(applicationentity.AE):
             bind_and_activate: bool,
             max_pdu_length: int
     ) -> socketserver.TCPServer:
-        server = _SSLThreadingTCPServer(
+        return _SSLThreadingTCPServer(
             self.context,
             ('', port),
             partial(
@@ -162,6 +167,3 @@ class SSLApplicationEntity(applicationentity.AE):
             ),
             bind_and_activate
         )
-        server.daemon_threads = True
-        server.allow_reuse_address = True
-        return server

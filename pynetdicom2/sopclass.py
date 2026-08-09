@@ -233,7 +233,9 @@ def storage_scu(
         asce: asceprovider.AssociationRequester,
         ctx: fsm.PContextDef,
         dataset: Union[str, pydicom.Dataset],
-        msg_id: int
+        msg_id: int,
+        move_originator_aet: Optional[str] = None,
+        move_originator_message_id: Optional[int] = None
 ) -> statuses.Status:
     """Simple storage SCU role implementation.
 
@@ -242,13 +244,24 @@ def storage_scu(
 
     :param dataset: dataset or filename that should be sent via Storage service
     :param msg_id: message identifier
+    :param move_originator_aet: AE title of the AE that invoked the C-MOVE
+        this store is a sub-operation of, if any
+    :param move_originator_message_id: message ID of that C-MOVE request
     :return: status code when dataset is stored.
     """
     c_store = dimsemessages.CStoreRQMessage()
     c_store.message_id = msg_id
     c_store.priority = dimsemessages.PRIORITY_MEDIUM
-    c_store.move_originator_aet = asce.ae.local_ae.aet
-    c_store.move_originator_message_id = msg_id
+    # The Move Originator fields are conditional (PS3.7 9.3.1.1): they shall
+    # only be present when this C-STORE is invoked as a C-MOVE sub-operation.
+    if move_originator_aet is not None and \
+            move_originator_message_id is not None:
+        c_store.move_originator_aet = move_originator_aet
+        c_store.move_originator_message_id = move_originator_message_id
+    else:
+        # Remove the fields entirely rather than sending them empty.
+        del c_store.command_set[0x0000, 0x1030]
+        del c_store.command_set[0x0000, 0x1031]
 
     if isinstance(dataset, str):
         # Got file name
@@ -417,7 +430,9 @@ def qr_find_scp(
     )
 
     gen = asce.ae.on_receive_find(ctx, ds)
+    last_status: Optional[statuses.Status] = None
     for data_set, status in gen:
+        last_status = status
         rsp.status = int(status)
         rsp.data_set = dsutils.encode(
             data_set,
@@ -426,11 +441,16 @@ def qr_find_scp(
         )
         asce.send(rsp, ctx.id)
 
-    rsp = dimsemessages.CFindRSPMessage()
-    rsp.message_id_being_responded_to = msg.message_id
-    rsp.sop_class_uid = msg.sop_class_uid
-    rsp.status = int(statuses.SUCCESS)
-    asce.send(rsp, ctx.id)
+    if last_status is None or last_status.is_pending:
+        # The handler finished without sending a final (non-pending) status,
+        # so the SCP must report Success ("no more matches"). If a final
+        # response - e.g. a failure - has already been sent, no further
+        # response shall follow it.
+        rsp = dimsemessages.CFindRSPMessage()
+        rsp.message_id_being_responded_to = msg.message_id
+        rsp.sop_class_uid = msg.sop_class_uid
+        rsp.status = int(statuses.SUCCESS)
+        asce.send(rsp, ctx.id)
 
 
 GET_SOP_CLASSES = [
@@ -464,11 +484,11 @@ def qr_get_scu(
     :param ds: dataset that contains request parameters.
     :param msg_id: message ID
     """
-    def decode_ds(_ds: bytes) -> pydicom.Dataset:
+    def decode_ds(_ds: bytes, _ctx: fsm.PContextDef) -> pydicom.Dataset:
         return dsutils.decode(
             _ds,
-            ctx.supported_ts.is_implicit_VR,
-            ctx.supported_ts.is_little_endian
+            _ctx.supported_ts.is_implicit_VR,
+            _ctx.supported_ts.is_little_endian
         )
 
     c_get = dimsemessages.CGetRQMessage()
@@ -491,7 +511,7 @@ def qr_get_scu(
             # pending. intermediate C-GET response
         elif msg.command_field == dimsemessages.CStoreRQMessage.command_field:
             msg = cast(dimsemessages.CStoreRQMessage, msg)
-            store_ctx = asce.ae.context_def_list[pc_id]
+            store_ctx = asce.accepted_contexts[pc_id]
             in_file = store_ctx.sop_class in asce.ae.store_in_file
 
             rsp = dimsemessages.CStoreRSPMessage()
@@ -503,11 +523,15 @@ def qr_get_scu(
                 if not msg.data_set:
                     status = statuses.C_GET_UNABLE_TO_PROCESS
                 else:
-                    status = asce.ae.on_receive_store(ctx, msg.data_set)
+                    status = asce.ae.on_receive_store(store_ctx, msg.data_set)
                     if in_file:
-                        yield ctx, cast(BinaryIO, msg.data_set)
+                        yield store_ctx, cast(BinaryIO, msg.data_set)
                     else:
-                        yield ctx, decode_ds(cast(bytes, msg.data_set))
+                        yield (
+                            store_ctx, decode_ds(
+                                cast(bytes, msg.data_set), store_ctx
+                            )
+                        )
             except exceptions.EventHandlingError:
                 status = statuses.C_GET_UNABLE_TO_PROCESS
             finally:
@@ -624,7 +648,17 @@ def qr_move_scp(
         for data_set in gen:
             # request an association with destination send C-STORE
             service = assoc.get_scu(data_set.SOPClassUID)
-            status = cast(statuses.Status, service(data_set, completed))
+            status = cast(
+                statuses.Status,
+                service(
+                    data_set,
+                    # PS3.7 9.1.1.1.3: message IDs must be non-zero, while
+                    # `completed` is a 0-based sub-operation counter.
+                    completed + 1,
+                    move_originator_aet=asce.remote_ae,
+                    move_originator_message_id=msg.message_id
+                )
+            )
             if status.is_failure:
                 failed += 1
             if status.is_warning:
@@ -657,7 +691,13 @@ def _send_response(
     rsp.num_of_completed_sub_ops = completed
     rsp.num_of_failed_sub_ops = failed
     rsp.num_of_warning_sub_ops = warning
-    rsp.status = int(statuses.SUCCESS)
+    if failed or warning:
+        # PS3.4 C.4.2.1.4: when the sub-operations have completed but one or
+        # more of them failed or produced a warning, the final response must
+        # carry Warning status B000, not Success.
+        rsp.status = int(statuses.C_MOVE_WARNING)
+    else:
+        rsp.status = int(statuses.SUCCESS)
     asce.send(rsp, ctx.id)
 
 

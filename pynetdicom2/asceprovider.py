@@ -346,10 +346,17 @@ class Association:
         """Releases association.
 
         Requests the release of the association and waits for
-        confirmation
+        confirmation. If the remote AE requested release at the same time
+        (release collision, PS3.7 7.2.4) its request is approved as well.
         """
         self.dul.send(pdu.AReleaseRqPDU())
         rsp = self.dul.receive(self.ae.dcm_timeout)
+        if isinstance(rsp, pdu.AReleaseRqPDU):
+            # Release collision: the remote AE requested release while our
+            # own request was in flight. Approve the remote request and
+            # wait for the confirmation of our own one.
+            self.dul.send(pdu.AReleaseRpPDU())
+            rsp = self.dul.receive(self.ae.dcm_timeout)
         if isinstance(rsp, tuple):
             raise exceptions.NetDICOMError(
                 f'Unexpected DIMSE message on release: {rsp}'
@@ -562,6 +569,9 @@ class AssociationAcceptor(Association):
     def _loop(self) -> None:
         while not self.is_killed:
             dimse_msg, pc_id = self.receive()
+            if isinstance(dimse_msg, dimsemessages.CCancelRQMessage):
+                self._handle_cancel(dimse_msg)
+                continue
             _uid = dimse_msg.sop_class_uid
             try:
                 if not isinstance(
@@ -577,6 +587,26 @@ class AssociationAcceptor(Association):
                     f'SOP Class {_uid} not supported as SCP'
                 ) from exc
             service(self, fsm.PContextDef(pc_id, sop_class, ts), dimse_msg)
+
+    def _handle_cancel(
+            self, msg: dimsemessages.CCancelRQMessage
+    ) -> None:
+        """Handles an incoming C-CANCEL request (PS3.7 9.3.2.3).
+
+        C-CANCEL asks to cancel a previously invoked C-FIND, C-GET or C-MOVE
+        operation. DIMSE messages are handled sequentially and
+        synchronously, so by the time a C-CANCEL arrives the target
+        operation is already being processed and cannot be interrupted.
+        The request is therefore acknowledged and logged rather than being
+        treated as an error that tears down the association.
+
+        :param msg: received C-CANCEL message
+        """
+        logger.warning(
+            'Received C-CANCEL for message %d; in-progress operations '
+            'cannot be interrupted, ignoring',
+            msg.message_id_being_responded_to or 0
+        )
 
 
 class AssociationRequester(Association):
