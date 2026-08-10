@@ -100,7 +100,7 @@ class MaximumLengthSubItem:
         """
         (
             _, reserved, item_length, maximum_length_received
-        ) = cls.item_format.unpack(stream.read(8))
+        ) = cls.item_format.unpack(stream.read(cls.item_format.size))
         return cls(
             reserved=reserved,
             item_length=item_length,
@@ -176,7 +176,9 @@ class ImplementationClassUIDSubItem:
         :param stream: raw data stream
         :return: decoded maximum length sub-item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         implementation_class_uid = uid.UID(
             _read_exact(stream, item_length).decode()
         )
@@ -251,7 +253,9 @@ class ImplementationVersionNameSubItem:
         :param stream: raw data stream
         :return decoded Implementation Version Name sub-item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         implementation_version_name = _read_exact(
             stream, item_length
         ).decode()
@@ -329,7 +333,9 @@ class AsynchronousOperationsWindowSubItem:
         :return decoded Asynchronous Operations Window sub-item
         """
         _, reserved, item_length, max_num_ops_invoked, \
-            max_num_ops_performed = cls.item_format.unpack(stream.read(8))
+            max_num_ops_performed = cls.item_format.unpack(
+                stream.read(cls.item_format.size)
+            )
         return cls(
             reserved=reserved,
             item_length=item_length,
@@ -415,7 +421,7 @@ class ScpScuRoleSelectionSubItem:
         :return decoded SCP/SCU Role Selection sub-item
         """
         _, reserved, item_length, uid_length = cls.header.unpack(
-            stream.read(6)
+            stream.read(cls.header.size)
         )
         # Per PS3.8 D.3.3.4 the item length covers the 2-byte UID length
         # field, the UID itself and the two role bytes.
@@ -494,7 +500,7 @@ class SOPClassExtendedNegotiationSubItem:
         :return: new sub-item
         """
         _, reserved, item_length, uid_length = cls.header.unpack(
-            stream.read(6)
+            stream.read(cls.header.size)
         )
         # Per PS3.8 D.3.3.5 the item length covers the 2-byte UID length
         # field, the UID itself and the application information. A UID
@@ -842,7 +848,9 @@ class GenericUserDataSubItem:
         :param stream: raw data stream
         :return: decoded generic data sub-item
         """
-        item_type, reserved, item_length = cls.header.unpack(stream.read(4))
+        item_type, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         user_data = _read_exact(stream, item_length)
         return cls(
             item_type=item_type,

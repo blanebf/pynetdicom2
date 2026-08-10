@@ -117,6 +117,18 @@ class ReleaseCollisionTestCase(unittest.TestCase):
                 self.assertTrue(sm.provider.dul_socket.sent)
 
 
+class RejectActionTestCase(unittest.TestCase):
+    def test_ae_8_sends_reject_and_starts_timer(self) -> None:
+        # AE-8 sends the A-ASSOCIATE-RJ, moves to Sta13 and starts the
+        # ARTIM timer so the wait for the connection close is bounded.
+        sm = _make_sm()
+        sm.primitive = pdu.AAssociateRjPDU(1, 1, 1)
+        result = sm.ae_8()
+        self.assertEqual(result, fsm.States.STA_13)
+        self.assertTrue(sm.provider.dul_socket.sent)
+        self.assertIsNotNone(sm.timer._start_time)
+
+
 class AbortAndCloseTestCase(unittest.TestCase):
     def test_aa_2_stops_and_closes(self) -> None:
         sm = _make_sm()

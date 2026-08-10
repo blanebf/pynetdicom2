@@ -46,8 +46,8 @@ arguments are provided by association and the rest are expected from service
 user.
 """
 from typing import (
-    Any, BinaryIO, Callable, Iterable, Optional, Protocol, Union, cast,
-    overload
+    Any, BinaryIO, Callable, Iterable, Optional, Protocol, Sequence, Union,
+    cast, overload
 )
 import pydicom
 from pydicom import filereader, uid
@@ -75,7 +75,7 @@ class AugmentedProto(Protocol):
         ...
 
 
-def sop_classes(uids: list[uid.UID]) -> AugmentedProto:
+def sop_classes(uids: Sequence[uid.UID]) -> AugmentedProto:
     """Simple decorator that adds or extends ``sop_classes`` attribute
     with provided list of UIDs.
     """

@@ -204,5 +204,20 @@ class AeTitleDecodingTestCase(unittest.TestCase):
             pdu.AAssociateRqPDU.decode(bytes(raw))
 
 
+class ReprTestCase(unittest.TestCase):
+    def test_application_context_repr_shows_name(self) -> None:
+        # The repr must interpolate the context name, not print the literal
+        # "{self.context_name}" placeholder.
+        item = pdu.ApplicationContextItem('1.2.840.10008.3.1.1.1')
+        self.assertIn('1.2.840.10008.3.1.1.1', repr(item))
+        self.assertNotIn('{self.context_name}', repr(item))
+
+    def test_release_pdu_repr_uses_class_name(self) -> None:
+        rq = pdu.AReleaseRqPDU()
+        rp = pdu.AReleaseRpPDU()
+        self.assertTrue(repr(rq).startswith('AReleaseRqPDU('))
+        self.assertTrue(repr(rp).startswith('AReleaseRpPDU('))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,7 @@
 import argparse
 import dataclasses
 import pathlib
+import re
 import sys
 from typing import Callable, Iterable, Optional, Literal, Union
 
@@ -18,7 +19,8 @@ def main() -> None:
     parser = get_parser()
     args = parse_args(parser, sys.argv[1:])
     if not args.func:
-        return
+        parser.print_help()
+        sys.exit(1)
 
     for output in args.func(args):
         print(output)
@@ -130,9 +132,10 @@ def move(args: Args) -> Iterable[str]:
         root = uids.PATIENT_ROOT_MOVE_SOP_CLASS
     else:
         root = uids.STUDY_ROOT_MOVE_SOP_CLASS
-    if args.local_port and args.storage_dir:
+    if args.local_port:
+        storage_dir = pathlib.Path(args.storage_dir or pathlib.Path.cwd())
         with commands.storage(
-            pathlib.Path(args.storage_dir), args.local_aet, args.local_port
+            storage_dir, args.local_aet, args.local_port
         ):
             yield _move(args, remote_ae, request, root)
     else:
@@ -225,9 +228,9 @@ def _create_move_parser(
         ' datasets. Provide to actually receive incoming datasets.'
     )
     parser.add_argument(
-        '--storage_dir', default=pathlib.Path.cwd(),
-        help='Path where to store incoming datasets. Defaults to the '
-        'current dir'
+        '--storage_dir', default=None,
+        help='Path where to store incoming datasets. Only used together '
+        'with --local_port. Defaults to the current dir'
     )
     _add_conn_params(parser)
     _add_root_and_level(parser)
@@ -311,20 +314,37 @@ def _args_to_remote_ae(args: Args) -> asceprovider.RemoteAEConfig:
 def _parse_attrs(attrs: list[str]) -> pydicom.Dataset:
     ds = pydicom.Dataset()
     for attr_and_value in attrs:
-        attr, value = attr_and_value.split('=')
-        vr, _, _, _, keyword = pydicom.datadict.get_entry(
-            _convert_tag(attr.strip())
-        )
+        if '=' not in attr_and_value:
+            raise ValueError(
+                f'Invalid attribute {attr_and_value!r}: expected format '
+                '<attribute name or tag>=<value>'
+            )
+        attr, value = attr_and_value.split('=', 1)
+        try:
+            vr, _, _, _, keyword = pydicom.datadict.get_entry(
+                _convert_tag(attr.strip())
+            )
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f'Unknown attribute {attr.strip()!r}') from exc
         parsed_value = _convert_value(vr, value.strip())
         setattr(ds, keyword, parsed_value)
     return ds
 
 
+_TAG_REGEX = re.compile(r'^[0-9A-Fa-f]{8}$')
+
+
 def _convert_tag(attr: str) -> Union[str, int]:
-    try:
-        return int(attr, base=16)
-    except ValueError:
-        return attr
+    """Converts an attribute specification into a tag if in numeric form.
+
+    Tags are accepted as 8 hex digits (``00100010``) or two comma-separated
+    4-digit groups (``0010,0010``); anything else is treated as an attribute
+    keyword.
+    """
+    normalized = attr.replace(',', '')
+    if _TAG_REGEX.match(normalized):
+        return int(normalized, base=16)
+    return attr
 
 
 def _convert_value(vr: str, value: str) -> Union[str, float, int, None]:

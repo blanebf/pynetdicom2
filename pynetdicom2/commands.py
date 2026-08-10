@@ -2,7 +2,9 @@
 import contextlib
 import dataclasses
 import pathlib
-from typing import Callable, Iterable, Iterator, Optional, Union, cast
+from typing import (
+    Callable, Iterable, Iterator, Optional, Sequence, Union, cast
+)
 
 from pydicom import dataset, filereader, uid
 
@@ -29,6 +31,31 @@ BoundMove = Callable[
 ]
 
 
+@contextlib.contextmanager
+def _association(
+        local_aet: str,
+        remote_ae: asceprovider.RemoteAEConfig,
+        service: asceprovider.SCUServiceWithSOPClass,
+        supported_ts: Optional[Sequence[uid.UID]] = None,
+        sop_classes: Optional[list[uid.UID]] = None
+) -> Iterator[asceprovider.AssociationRequester]:
+    """Opens an association with a remote AE exposing ``service`` as SCU.
+
+    :param local_aet: local AE title
+    :param remote_ae: remote AE connection parameters
+    :param service: SCU service that should be available on the association
+    :param supported_ts: transfer syntaxes the association should propose,
+                         if not the AE defaults
+    :param sop_classes: subset of SOP Class UIDs to register for the
+                        service, if not all supported by the service
+    :yield: established association
+    """
+    ae = applicationentity.ClientAE(local_aet, supported_ts=supported_ts)
+    ae.add_scu(service, sop_classes)
+    with ae.request_association(remote_ae) as assoc:
+        yield assoc
+
+
 def verify(
         local_aet: str,
         remote_ae: asceprovider.RemoteAEConfig
@@ -40,9 +67,9 @@ def verify(
     :param remote_ae: remote AE connection parameters
     :return: resulting verification status
     """
-    ae = applicationentity.ClientAE(local_aet)
-    ae.add_scu(sopclass.verification_scu)
-    with ae.request_association(remote_ae) as assoc:
+    with _association(
+            local_aet, remote_ae, sopclass.verification_scu
+    ) as assoc:
         service = assoc.get_scu(uids.VERIFICATION_SOP_CLASS)
         result = cast(statuses.Status, service(1))
         return result
@@ -62,9 +89,7 @@ def find(
     :param root: Q/R search root, defaults to uids.STUDY_ROOT_FIND_SOP_CLASS
     :yield: responses from Q/R SCP
     """
-    ae = applicationentity.ClientAE(local_aet)
-    ae.add_scu(sopclass.qr_find_scu)
-    with ae.request_association(remote_ae) as assoc:
+    with _association(local_aet, remote_ae, sopclass.qr_find_scu) as assoc:
         service = cast(BoundFind, assoc.get_scu(root))
         for response, status in service(request, 1):
             if status.is_failure:
@@ -88,9 +113,13 @@ def store(
     file_meta = filereader.read_file_meta_info(ds)
     sop_class = file_meta.MediaStorageSOPClassUID
     transfer_syntax = file_meta.TransferSyntaxUID
-    ae = applicationentity.ClientAE(local_aet, supported_ts=[transfer_syntax])
-    ae.add_scu(sopclass.storage_scu, [sop_class])
-    with ae.request_association(remote_ae) as assoc:
+    with _association(
+            local_aet,
+            remote_ae,
+            sopclass.storage_scu,
+            supported_ts=[transfer_syntax],
+            sop_classes=[sop_class]
+    ) as assoc:
         service = assoc.get_scu(sop_class)
         result = cast(statuses.Status, service(ds, 1))
         return result
@@ -101,7 +130,7 @@ def storage(
         storage_dir: pathlib.Path,
         local_aet: str,
         port: int,
-        supported_ts: Optional[list[uid.UID]] = None
+        supported_ts: Optional[Sequence[uid.UID]] = None
 ) -> Iterator[None]:
     """Simple context manager to start a Storage SCP and receive datasets to
     a folder.
@@ -140,10 +169,8 @@ def move(
     :raises exceptions.NetDICOMError: _description_
     :return: resulting move response with success/failure/warnings total
     """
-    ae = applicationentity.ClientAE(local_aet)
-    ae.add_scu(sopclass.qr_move_scu)
-    with ae.request_association(remote_ae) as asce:
-        service = cast(BoundMove, asce.get_scu(root))
+    with _association(local_aet, remote_ae, sopclass.qr_move_scu) as assoc:
+        service = cast(BoundMove, assoc.get_scu(root))
         last_response = CMoveResponse(None, None, None, None)
         for status, msg in service(request, dest_ae, 1):
             if status.is_failure:
