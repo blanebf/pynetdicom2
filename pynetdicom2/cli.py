@@ -3,7 +3,8 @@ import dataclasses
 import pathlib
 import re
 import sys
-from typing import Callable, Iterable, Optional, Literal, Union
+from collections.abc import Callable, Iterable
+from typing import Literal, Optional, Union
 
 import pydicom
 import pydicom.datadict
@@ -89,7 +90,7 @@ def find(args: Args) -> Iterable[str]:
     else:
         root = uids.STUDY_ROOT_FIND_SOP_CLASS
     for ds in commands.find(args.local_aet, remote_ae, request, root):
-        yield f'C-FIND resposne:\n{ds}'
+        yield f'C-FIND response:\n{ds}'
 
 
 def store(args: Args) -> Iterable[str]:
@@ -191,7 +192,7 @@ def _create_find_parser(
         subparsers: 'argparse._SubParsersAction[argparse.ArgumentParser]'
 ) -> None:
     parser = subparsers.add_parser(
-        'find', help='Performer a find request and print results'
+        'find', help='Perform a find request and print results'
     )
     parser.set_defaults(func=find)
     _add_conn_params(parser)
@@ -254,7 +255,7 @@ def _add_conn_params(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         '--kerberos', required=False,
-        help='Kerboros key for DICOM authorization'
+        help='Kerberos key for DICOM authorization'
     )
     parser.add_argument(
         '--saml', required=False,

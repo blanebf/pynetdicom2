@@ -8,14 +8,14 @@
 Implementation of the OSI Upper Layer Services
 DICOM, Part 8, Section 7
 """
-from collections.abc import Iterator
 import dataclasses
 import enum
 import socket
 import time
 import queue
 
-from typing import BinaryIO, Optional, Protocol, Callable, Union
+from collections.abc import Callable, Iterator
+from typing import Any, BinaryIO, ClassVar, Optional, Protocol, Union
 
 import pydicom
 import pydicom.uid
@@ -112,7 +112,7 @@ class Events(enum.Enum):
     """Transport connection indication (local transport service)"""
 
     EVT_6 = 5
-    """A-ASSOCIATE-RQ PDU (on tranport connection)"""
+    """A-ASSOCIATE-RQ PDU (on transport connection)"""
 
     EVT_7 = 6
     """A-ASSOCIATE response primitive (accept)"""
@@ -189,6 +189,23 @@ ASCEType = Union[
     pdu.AReleaseRpPDU,
     pdu.AAbortPDU
 ]
+
+
+class DecodablePDU(Protocol):
+    """Structural type for PDU classes that can decode themselves.
+
+    Every concrete PDU class in :mod:`~pynetdicom2.pdu` satisfies this
+    protocol. It lets lookup tables such as the DUL provider's ``PDU_TYPES``
+    be typed as ``Type[DecodablePDU]`` instead of an invalid
+    ``Type[Union[...]]``.
+    """
+
+    pdu_type: ClassVar[int]
+
+    @classmethod
+    def decode(cls, raw_bytes: bytes) -> Any:
+        """Decodes a PDU instance from its binary representation."""
+        ...
 
 
 IncomingQueue = queue.Queue[
@@ -732,7 +749,7 @@ class DIMSEDecoder:  # pylint: disable=too-few-public-methods
     :ivar store_in_file: set of SOP Class UIDs, for which incoming datasets
                          should be stored in a file, rather than in-memory
     :ivar get_file_cb: callback for getting a file object for storage
-    :ivar receiving: `True` if :class:`~pynetdicom2.fsm.DIMSEDecoder` instnace
+    :ivar receiving: `True` if :class:`~pynetdicom2.fsm.DIMSEDecoder` instance
                      has not received all P-DATA-TF PDUs for the current DIMSE
                      message
     :ivar command_set_received: `True` if Command Set for DIMSE message is

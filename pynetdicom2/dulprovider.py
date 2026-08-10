@@ -75,7 +75,7 @@ SOCKET_TIMEOUT = 30
 KILL_TIMEOUT = 5
 
 
-PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
+PDU_TYPES: dict[int, tuple[Type[fsm.DecodablePDU], fsm.Events]] = {
     0x01: (pdu.AAssociateRqPDU, fsm.Events.EVT_6),
     0x02: (pdu.AAssociateAcPDU, fsm.Events.EVT_3),
     0x03: (pdu.AAssociateRjPDU, fsm.Events.EVT_4),
@@ -85,7 +85,7 @@ PDU_TYPES: dict[int, tuple[Type[fsm.PDUType], fsm.Events]] = {
     0x07: (pdu.AAbortPDU, fsm.Events.EVT_16)
 }
 
-PDU_TO_EVENT = {
+PDU_TO_EVENT: dict[int, fsm.Events] = {
     # A-ASSOCIATE Request
     pdu.AAssociateRqPDU.pdu_type: fsm.Events.EVT_1,
     # A-ASSOCIATE Response (accept)
@@ -108,7 +108,7 @@ class DULServiceProvider(threading.Thread):
     outgoing PDUs.
 
     Service can be initialized by providing open socket that service would
-    use for sending and receiving PDUs. In case if socket is not provider
+    use for sending and receiving PDUs. In case the socket is not provided
     service opens a client socket by itself when sending
     :class:`~pynetdicom2.pdu.AAssociateRqPDU` instance.
 
@@ -239,7 +239,7 @@ class DULServiceProvider(threading.Thread):
         """Tries to get PDU from incoming queue.
 
         If timeout is exceeded method
-        rises :class:`~pynetdicom2.exceptions.DCMTimeoutError` exception.
+        raises :class:`~pynetdicom2.exceptions.DCMTimeoutError` exception.
 
         :param timeout: the amount of seconds method waits for PDU to appear
                         in incoming queue

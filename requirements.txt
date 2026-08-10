@@ -1,2 +1,1 @@
-six
-pydicom >= 0.9.7
+pydicom >=2.4,<3.0

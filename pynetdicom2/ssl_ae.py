@@ -8,7 +8,8 @@ from functools import partial
 import ssl
 import socket
 import socketserver
-from typing import Any, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import Any, Optional, Union
 
 from pydicom import uid
 

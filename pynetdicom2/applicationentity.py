@@ -33,9 +33,8 @@ import platform
 import tempfile
 import socket
 import socketserver
-from typing import (
-    Any, BinaryIO, Iterator, Iterable, Optional, Sequence, Union, cast
-)
+from collections.abc import Iterable, Iterator, Sequence
+from typing import Any, BinaryIO, Optional, Union, cast
 
 from pydicom import Dataset, filebase, uid
 from pydicom.dataset import FileMetaDataset
@@ -199,7 +198,7 @@ class AEBase:
 
         .. note::
 
-            This method is tread-safe.
+            This method is thread-safe.
 
         :return: copy of the presentation context definition list.
         """
@@ -365,7 +364,11 @@ class AEBase:
             ds: Dataset,
             destination: str
     ) -> tuple[asceprovider.RemoteAEConfig, int, Iterator[Dataset]]:
-        """Default handling of C-MOVE command. Returns empty empty values
+        """Default handling of C-MOVE command.
+
+        Not implemented by default: raises
+        :class:`~pynetdicom2.exceptions.EventHandlingError`. Override this
+        method to support C-MOVE.
 
         :param context: presentation context (contains ID, SOP Class UID and
                         Transfer Syntax)
@@ -373,6 +376,7 @@ class AEBase:
         :param destination: C-MOVE command destination
         :return: tuple: remote AE parameters, number of operations and iterator
                  that will return datasets for moving
+        :raises exceptions.EventHandlingError: always, unless overridden
         """
         raise exceptions.EventHandlingError('Not implemented')
 
@@ -466,7 +470,7 @@ class ClientAE(AEBase):
 
 class RequestHandler(socketserver.StreamRequestHandler):
     """Request handler for incoming TCP connections. Used to establish
-    association and is not inteded to be used directly.
+    association and is not intended to be used directly.
     """
     def __init__(
             self,
