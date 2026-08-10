@@ -5,7 +5,7 @@
 #    available at https://github.com/blanebf/pynetdicom2
 
 """
-Module contains all exception class that are used in this package.
+Module contains all exception classes that are used in this package.
 
 NetDICOMError serves as base exception class.
 
@@ -27,7 +27,7 @@ from typing import Any
 
 
 class NetDICOMError(Exception):
-    """Base class for all library specific exceptions exception."""
+    """Base class for all library specific exceptions."""
 
 
 class ClassNotSupportedError(NetDICOMError):

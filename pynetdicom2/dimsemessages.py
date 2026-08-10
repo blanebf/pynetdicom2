@@ -21,7 +21,8 @@ messages as they are described in PS3.7 Sections 9 (DIMSE-C) and 10 (DIMSE-N).
     should not worry about any kind of message validation.
 """
 import struct
-from typing import Any, BinaryIO, ClassVar, Iterator, Optional, Type, Union
+from collections.abc import Iterator
+from typing import Any, BinaryIO, ClassVar, Optional, Type, Union
 
 from pydicom.dataset import Dataset
 from pydicom.dataelem import DataElement, RawDataElement

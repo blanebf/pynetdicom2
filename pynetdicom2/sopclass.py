@@ -45,9 +45,9 @@ Arguments have similar meaning to SCP role implementation. First two mandatory
 arguments are provided by association and the rest are expected from service
 user.
 """
+from collections.abc import Callable, Iterable, Sequence
 from typing import (
-    Any, BinaryIO, Callable, Iterable, Optional, Protocol, Sequence, Union,
-    cast, overload
+    Any, BinaryIO, Optional, Protocol, Union, cast, overload
 )
 import pydicom
 from pydicom import filereader, uid
@@ -707,7 +707,7 @@ def modality_work_list_scu(
         ctx: fsm.PContextDef,
         ds: pydicom.Dataset,
         msg_id: int
-) -> Iterable[tuple[statuses.Status, pydicom.Dataset]]:
+) -> Iterable[tuple[Optional[pydicom.Dataset], statuses.Status]]:
     """Modality WorkList service implementation (SCU).
 
     Pretty much the same as Query/Retrieve C-FIND

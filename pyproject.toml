@@ -34,27 +34,20 @@ classifiers = [
 python = "^3.10"
 pydicom = "^2.4"
 
-[tool.poetry.dev-dependencies]
-pylint = "^3.3.0"
-
 [tool.poetry.group.dev.dependencies]
+pylint = "^3.3.0"
 mypy = "^1.10.1"
 flake8 = "^7.3.0"
 coverage = "7.10.7"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 files = ["pynetdicom2"]
 warn_unused_configs = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["*TestCase"]
 
 [tool.coverage.run]
 source = ["pynetdicom2"]

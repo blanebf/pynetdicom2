@@ -5,7 +5,7 @@
 #    available at https://github.com/blanebf/pynetdicom2
 #
 """
-Helper module that provides function for converting datasets or dataset
+Helper module that provides functions for converting datasets or dataset
 elements into bytes and back.
 """
 from io import BytesIO
@@ -36,7 +36,7 @@ def encode(
         is_implicit_vr: bool,
         is_little_endian: bool
 ) -> bytes:
-    """Encoded dataset into raw bytes
+    """Encodes a dataset into raw bytes
 
     :param ds: dataset to encode
     :param is_implicit_vr: encode using implicit VR

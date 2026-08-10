@@ -30,7 +30,8 @@ The rest sub-items for User Data Information Item can be found at
 """
 import struct
 from io import BytesIO
-from typing import ClassVar, Iterable, Optional, Type, Union, cast
+from collections.abc import Iterable
+from typing import ClassVar, Optional, Type, Union, cast
 
 from pydicom import uid
 
@@ -286,7 +287,7 @@ class AAssociateRjPDU:
     :ivar reserved2: Reserved field, defaults to 0 (unsigned byte)
     """
 
-    pdu_type = 0x03
+    pdu_type: ClassVar[int] = 0x03
     """PDU Type"""
 
     pdu_length = 4
@@ -375,7 +376,7 @@ class PDataTfPDU:
     :ivar data_value_items: list of one of more PresentationDataValueItem
     """
 
-    pdu_type = 0x04
+    pdu_type: ClassVar[int] = 0x04
     """PDU Type"""
 
     header = struct.Struct('>B B I')
@@ -549,7 +550,7 @@ class AAbortPDU:
                         * 5 - unexpected-PDU parameter
                         * 6 - invalid-PDU-parameter value
     """
-    pdu_type = 0x07
+    pdu_type: ClassVar[int] = 0x07
     """PDU Type"""
 
     pdu_length = 4

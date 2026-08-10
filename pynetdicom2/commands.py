@@ -2,9 +2,8 @@
 import contextlib
 import dataclasses
 import pathlib
-from typing import (
-    Callable, Iterable, Iterator, Optional, Sequence, Union, cast
-)
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import Optional, Union, cast
 
 from pydicom import dataset, filereader, uid
 
@@ -61,7 +60,7 @@ def verify(
         remote_ae: asceprovider.RemoteAEConfig
 ) -> statuses.Status:
     """Makes a verification request (C-ECHO) to a remote Verification SCP.
-    In case or rejection the function will throw an exception.
+    In case of rejection the function will throw an exception.
 
     :param local_aet: local AE title
     :param remote_ae: remote AE connection parameters
@@ -163,10 +162,10 @@ def move(
 
     :param local_aet: local AE title
     :param remote_ae: remote AE connection parameters
-    :param request: C-FIND request
+    :param request: C-MOVE request
     :param dest_ae: move destination AE title
     :param root: Q/R move root, defaults to uids.STUDY_ROOT_MOVE_SOP_CLASS
-    :raises exceptions.NetDICOMError: _description_
+    :raises exceptions.NetDICOMError: if the C-MOVE operation fails
     :return: resulting move response with success/failure/warnings total
     """
     with _association(local_aet, remote_ae, sopclass.qr_move_scu) as assoc:

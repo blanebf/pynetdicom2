@@ -30,10 +30,8 @@ from itertools import chain
 import logging
 import time
 import socket
-from typing import (
-    Any, BinaryIO, Callable, Iterable, Iterator, Optional, Protocol,
-    TypeVar, Union
-)
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any, BinaryIO, Optional, Protocol, TypeVar, Union
 
 import pydicom
 from pydicom import uid
@@ -42,7 +40,7 @@ from pynetdicom2 import dimsemessages
 
 from . import exceptions, dulprovider, fsm, pdu, statuses, userdataitems
 
-# backwards compatability
+# backwards compatibility
 from .fsm import PContextDef  # pylint: disable=unused-import. # noqa F401
 
 
@@ -87,7 +85,7 @@ T_contra = TypeVar(
 
 
 class SCPServiceWithSOPClass(Protocol[T_contra]):
-    """Service Content Provider Protocol augemnted with supported SOP
+    """Service Content Provider Protocol augmented with supported SOP
     Class UIDs.
     """
 
@@ -129,7 +127,7 @@ class SCUService(Protocol):
 
 
 class SCUServiceWithSOPClass(Protocol):
-    """Service Content User protocol augemented with supported
+    """Service Content User protocol augmented with supported
     SOP Class UIDs.
     """
     sop_classes: list[uid.UID]
@@ -299,7 +297,7 @@ UNSUPPORTED_REQUEST_RESPONSES: dict[
 def build_pres_context_def_list(
         context_def_list: dict[int, PContextDefList]
 ) -> Iterable[pdu.PresentationContextItemRQ]:
-    """Builds a list of Presntation Context Items
+    """Builds a list of Presentation Context Items
 
     :param context_def_list: list of tuples (presentation context ID and
                              PContextDef)
@@ -602,7 +600,7 @@ class AssociationAcceptor(Association):
             self.ae.on_dcm_timeout(self, exc)
         except Exception as exc:
             logger.exception(
-                'Assocation[%d] unexpected handling error: %s', id(self), exc
+                'Association[%d] unexpected handling error: %s', id(self), exc
             )
         finally:
             self.kill()
@@ -612,7 +610,7 @@ class AssociationAcceptor(Association):
             assoc_req = self.dul.receive(self.ae.dcm_timeout)
             if not isinstance(assoc_req, pdu.AAssociateRqPDU):
                 raise exceptions.AssociationError(
-                    f'Invalid request on associaction: {assoc_req}'
+                    f'Invalid request on association: {assoc_req}'
                 )
 
             logger.info(
@@ -761,7 +759,7 @@ class AssociationRequester(Association):
 
         SCU are generally provided by `sopclass` module. First argument of the
         service would be bound to current association and second would be bound
-        to current presentation contexnt.
+        to current presentation context.
 
         :param sop_class: SOP Class UID
         :raises exceptions.ClassNotSupportedError: raised if provided SOP
@@ -861,7 +859,7 @@ class AssociationRequester(Association):
             )
         self._handle_errors(response)
         if not isinstance(response, pdu.AAssociateAcPDU):
-            raise exceptions.AssociationError('Invalid repsonse')
+            raise exceptions.AssociationError('Invalid response')
 
         # Get maximum pdu length from answer
         if not response.variable_items:

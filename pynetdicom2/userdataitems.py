@@ -96,7 +96,7 @@ class MaximumLengthSubItem:
         """Decodes maximum length sub-item from data stream
 
         :param stream: raw data stream
-        :return decoded maximum length sub-item
+        :return: decoded maximum length sub-item
         """
         (
             _, reserved, item_length, maximum_length_received
@@ -174,7 +174,7 @@ class ImplementationClassUIDSubItem:
         """Decodes Implementation Class UID sub-item from data stream
 
         :param stream: raw data stream
-        :return: decoded maximum length sub-item
+        :return: decoded implementation class UID sub-item
         """
         _, reserved, item_length = cls.header.unpack(
             stream.read(cls.header.size)
@@ -251,7 +251,7 @@ class ImplementationVersionNameSubItem:
         """Decodes Implementation Version Name sub-item from data stream
 
         :param stream: raw data stream
-        :return decoded Implementation Version Name sub-item
+        :return: decoded Implementation Version Name sub-item
         """
         _, reserved, item_length = cls.header.unpack(
             stream.read(cls.header.size)
@@ -330,7 +330,7 @@ class AsynchronousOperationsWindowSubItem:
         """Decodes Asynchronous Operations Window sub-item from data stream
 
         :param stream: raw data stream
-        :return decoded Asynchronous Operations Window sub-item
+        :return: decoded Asynchronous Operations Window sub-item
         """
         _, reserved, item_length, max_num_ops_invoked, \
             max_num_ops_performed = cls.item_format.unpack(
@@ -418,7 +418,7 @@ class ScpScuRoleSelectionSubItem:
         """Decodes SCP/SCU Role Selection sub-item from data stream
 
         :param stream: raw data stream
-        :return decoded SCP/SCU Role Selection sub-item
+        :return: decoded SCP/SCU Role Selection sub-item
         """
         _, reserved, item_length, uid_length = cls.header.unpack(
             stream.read(cls.header.size)
@@ -460,7 +460,7 @@ class SOPClassExtendedNegotiationSubItem:
             app_info: bytes,
             reserved: int = 0x00
     ) -> None:
-        """Initializes new sub item instance"""
+        """Initializes new sub-item instance"""
         self.reserved = reserved
         self.sop_class_uid = sop_class_uid
         self.app_info = app_info
@@ -551,7 +551,7 @@ class UserIdentityNegotiationSubItem:
             positive_response_req: int = 0,
             reserved: int = 0x00
     ) -> None:
-        """Initializes new sub item instance
+        """Initializes new sub-item instance
 
         Both fields accept ``str`` (encoded as UTF-8) or raw ``bytes``.
         Username/password identity types carry text; Kerberos, SAML and JWT
