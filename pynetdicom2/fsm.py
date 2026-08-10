@@ -461,6 +461,44 @@ class StateMachine:  # pylint: disable=too-many-public-methods
             ) from exc
         self.current_state = action()
 
+    def _send_primitive(self) -> None:
+        """Sends the current primitive PDU over the transport connection.
+
+        :raises exceptions.NetDICOMError: if no primitive is set
+        """
+        if not self.primitive:
+            raise exceptions.NetDICOMError('Trying to use unset primitive')
+        self.dul_socket.sendall(self.primitive.encode())
+
+    def _pdata_indication(self) -> None:
+        """Issues a P-DATA indication for a received P-DATA-TF PDU.
+
+        Decodes the received PDU and once all fragments of a DIMSE message
+        have been received puts the message into the service user queue.
+
+        :raises exceptions.NetDICOMError: if the received PDU is not a
+            P-DATA-TF PDU or the decoder ends up in an invalid state
+        """
+        if self.dimse_decoder is None:
+            self.dimse_decoder = DIMSEDecoder(
+                self.accepted_contexts,
+                self.store_in_file,
+                self.get_file_cb
+            )
+        if not isinstance(self.primitive, pdu.PDataTfPDU):
+            raise exceptions.NetDICOMError(
+                f'Unexpected PDU type: {self.primitive}'
+            )
+        self.dimse_decoder.process(self.primitive)
+        if not self.dimse_decoder.receiving:
+            msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
+            if not msg or not pc_id:
+                raise exceptions.NetDICOMError(
+                    'Invalid DIMSE decoder state'
+                )
+            self.to_service_user.put((msg, pc_id))
+            self.dimse_decoder = None
+
     def ae_1(self) -> States:
         """Issue TransportConnect request primitive to local transport service.
         """
@@ -469,9 +507,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ae_2(self) -> States:
         """Send A_ASSOCIATE-RQ PDU."""
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_5
 
     def ae_3(self) -> States:
@@ -504,70 +540,51 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ae_6(self) -> States:
         """Check A-ASSOCIATE-RQ.
 
-        Stop ARTIM timer and if A-ASSOCIATE-RQ acceptable by service
-        provider - issue A-ASSOCIATE indication primitive.
+        Stop ARTIM timer and issue A-ASSOCIATE indication primitive; per
+        PS3.8 Table 9-6 (AE-6) the next state is always Sta3. Refusing a
+        request is initiated by the local user through
+        :meth:`~asceprovider.AssociationAcceptor.reject`, not by this
+        action, so there is no path from here to Sta13.
         """
         self.timer.stop()
-        # Accept
         if not isinstance(self.primitive, pdu.AAssociateRqPDU):
             raise exceptions.NetDICOMError(
                 f'Unexpected PDU type {self.primitive}'
             )
         self.to_service_user.put(self.primitive)
-        # TODO Look into why according to standard transition to `Sta13`
-        # may occur
         return States.STA_3
 
     def ae_7(self) -> States:
         """Send A-ASSOCIATE-AC PDU."""
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_6
 
     def ae_8(self) -> States:
-        """Send A-ASSOCIATE-RJ PDU."""
-        # not sure about this ...
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        """Send A-ASSOCIATE-RJ PDU.
+
+        Per PS3.8 Table 9-6 (AE-8): send the A-ASSOCIATE-RJ PDU and move
+        to Sta13. The ARTIM timer is started so the wait for the transport
+        connection to close is bounded even if the peer never closes it.
+        """
+        self._send_primitive()
+        self.timer.start()
         return States.STA_13
 
     def dt_1(self) -> States:
         """Send P-DATA-TF PDU."""
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         self.primitive = None
         return States.STA_6
 
     def dt_2(self) -> States:
         """Send P-DATA indication primitive."""
-        if self.dimse_decoder is None:
-            self.dimse_decoder = DIMSEDecoder(
-                self.accepted_contexts,
-                self.store_in_file,
-                self.get_file_cb
-            )
-        if not isinstance(self.primitive, pdu.PDataTfPDU):
-            raise exceptions.NetDICOMError(
-                f'Unexpected PDU type: {self.primitive}'
-            )
-        self.dimse_decoder.process(self.primitive)
-        if not self.dimse_decoder.receiving:
-            msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
-            if not msg or not pc_id:
-                raise exceptions.NetDICOMError(
-                    'Invalid DIMSE decoder state'
-                )
-            self.to_service_user.put((msg, pc_id))
-            self.dimse_decoder = None
+        self._pdata_indication()
         return States.STA_6
 
     def ar_1(self) -> States:
         """Send A-RELEASE-RQ PDU."""
         self.primitive = pdu.AReleaseRqPDU()
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_7
 
     def ar_2(self) -> States:
@@ -590,7 +607,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ar_4(self) -> States:
         """Issue A-RELEASE-RP PDU and start ARTIM timer."""
         self.primitive = pdu.AReleaseRpPDU()
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         self.timer.start()
         return States.STA_13
 
@@ -601,32 +618,12 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def ar_6(self) -> States:
         """Issue P-DATA indication."""
-        if self.dimse_decoder is None:
-            self.dimse_decoder = DIMSEDecoder(
-                self.accepted_contexts,
-                self.store_in_file,
-                self.get_file_cb
-            )
-        if not isinstance(self.primitive, pdu.PDataTfPDU):
-            raise exceptions.NetDICOMError(
-                f'Unexpected PDU type: {self.primitive}'
-            )
-        self.dimse_decoder.process(self.primitive)
-        if not self.dimse_decoder.receiving:
-            msg, pc_id = self.dimse_decoder.msg, self.dimse_decoder.pc_id
-            if not msg or not pc_id:
-                raise exceptions.NetDICOMError(
-                    'Invalid DIMSE decoder state'
-                )
-            self.to_service_user.put((msg, pc_id))
-            self.dimse_decoder = None
+        self._pdata_indication()
         return States.STA_7
 
     def ar_7(self) -> States:
         """Issue P-DATA-TF PDU."""
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_8
 
     def ar_8(self) -> States:
@@ -641,7 +638,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
     def ar_9(self) -> States:
         """Send A-RELEASE-RP PDU."""
         self.primitive = pdu.AReleaseRpPDU()
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_11
 
     def ar_10(self) -> States:
@@ -655,9 +652,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
         """Send A-ABORT PDU (service-user source) and start (or restart)
         ARTIM timer.
         """
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         self.timer.restart()
         return States.STA_13
 
@@ -710,9 +705,7 @@ class StateMachine:  # pylint: disable=too-many-public-methods
 
     def aa_7(self) -> States:
         """Send A-ABORT PDU."""
-        if not self.primitive:
-            raise exceptions.NetDICOMError('Trying to use unset primitive')
-        self.dul_socket.sendall(self.primitive.encode())
+        self._send_primitive()
         return States.STA_13
 
     def aa_8(self) -> States:

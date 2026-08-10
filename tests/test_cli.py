@@ -3,7 +3,11 @@
 None of these tests perform any network I/O: they exercise the pure argument
 parsing and conversion logic only.
 """
+import contextlib
+import io
+import sys
 import unittest
+from unittest import mock
 
 from pynetdicom2 import cli
 from pynetdicom2 import uids
@@ -104,6 +108,40 @@ class AttributeParsingTestCase(unittest.TestCase):
         )
         self.assertEqual(ds.PatientName, 'Doe^John')
         self.assertEqual(ds.PatientID, 'ID-1')
+
+    def test_convert_tag_comma_format(self) -> None:
+        self.assertEqual(cli._convert_tag('0010,0010'), 0x00100010)
+
+    def test_parse_attrs_rejects_missing_equals(self) -> None:
+        with self.assertRaises(ValueError):
+            cli._parse_attrs(['NoEqualsSign'])
+
+    def test_parse_attrs_rejects_unknown_attribute(self) -> None:
+        with self.assertRaises(ValueError):
+            cli._parse_attrs(['NotARealDICOMAttribute=value'])
+
+    def test_parse_attrs_value_may_contain_equals(self) -> None:
+        ds = cli._parse_attrs(['PatientName=Doe=John'])
+        self.assertEqual(ds.PatientName, 'Doe=John')
+
+
+class StorageDirDefaultTestCase(unittest.TestCase):
+    def test_storage_dir_defaults_to_none(self) -> None:
+        # The default must not be evaluated at parser construction time.
+        args = _parse(
+            ['move', '--aet', 'A', '--address', 'h', '--port', '1']
+        )
+        self.assertIsNone(args.storage_dir)
+
+
+class MainNoCommandTestCase(unittest.TestCase):
+    def test_main_without_command_exits_nonzero(self) -> None:
+        with mock.patch.object(sys, 'argv', ['pynetdicom2']):
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                with self.assertRaises(SystemExit) as ctx:
+                    cli.main()
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn('usage', output.getvalue())
 
 
 class FindRootSelectionTestCase(unittest.TestCase):

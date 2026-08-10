@@ -8,7 +8,7 @@ from functools import partial
 import ssl
 import socket
 import socketserver
-from typing import Any, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 from pydicom import uid
 
@@ -23,7 +23,7 @@ class SSLDULProvider(dulprovider.DULServiceProvider):
             store_in_file: set[uid.UID],
             get_file_cb: fsm.GetFileCB,
             dul_socket: Optional[socket.socket] = None,
-            max_pdu_length: int = 65536
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH
     ) -> None:
         super().__init__(
             store_in_file, get_file_cb, dul_socket, max_pdu_length
@@ -87,8 +87,8 @@ class SSLClientAE(applicationentity.ClientAE):
             self,
             context: ssl.SSLContext,
             ae_title: str,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH
     ) -> None:
         """Initializes new ClientAE instance"""
         super().__init__(ae_title, supported_ts, max_pdu_length)
@@ -142,8 +142,8 @@ class SSLApplicationEntity(applicationentity.AE):
             context: ssl.SSLContext,
             ae_title: str,
             port: int,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536,
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH,
             bind_and_activate: bool = True
     ) -> None:
         self.context = context

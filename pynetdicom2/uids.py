@@ -71,8 +71,13 @@ RFC_2557_MIME_ENCAPSULATION = uid.UID('1.2.840.10008.1.2.6.1')
 XML_ENCODING = uid.UID('1.2.840.10008.1.2.6.2')
 
 
-#: Every available transfer syntax
-ALL_TS = [
+#: Every available transfer syntax that can encode a DICOM Data Set.
+#:
+#: Excludes pseudo transfer syntaxes such as RFC 2557 MIME encapsulation and
+#: XML encoding, which do not encode Data Sets and so are not valid for
+#: negotiation on storage presentation contexts. Tuples are used so the
+#: collections cannot be modified by accident.
+ALL_TS = (
     uid.ExplicitVRLittleEndian,
     uid.ImplicitVRLittleEndian,
     uid.ExplicitVRBigEndian,
@@ -99,9 +104,7 @@ ALL_TS = [
     HEVC_H_265_MAIN_PROFILE_LEVEL_5_1,
     HEVC_H_265_MAIN_10_PROFILE_LEVEL_5_1,
     RLE_LOSSLESS,
-    RFC_2557_MIME_ENCAPSULATION,
-    XML_ENCODING
-]
+)
 
 
 # VERIFICATION SOP CLASSES
@@ -406,7 +409,7 @@ MODALITY_WORK_LIST_INFORMATION_FIND_SOP_CLASS = uid.UID('1.2.840.10008.5.1.4.31'
 
 STORAGE_COMMITMENT_SOP_CLASS = uid.UID('1.2.840.10008.1.20.1')
 
-STORAGE_SOP_CLASSES = [
+STORAGE_SOP_CLASSES = (
     CR_IMAGE_STORAGE,
     DX_IMAGE_STORAGE_FOR_PRESENTATION,
     DX_IMAGE_STORAGE_FOR_PROCESSING,
@@ -546,4 +549,4 @@ STORAGE_SOP_CLASSES = [
     DICOS_QR_STORAGE,
     EDDY_CURRENT_IMAGE_STORAGE,
     EDDY_CURRENT_MULTI_FRAME_IMAGE_STORAGE
-]
+)

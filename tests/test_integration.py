@@ -1,5 +1,6 @@
 __author__ = 'Blane'
 import pathlib
+import socket
 import ssl
 import threading
 import unittest
@@ -11,21 +12,32 @@ from pydicom import dataset
 
 import pynetdicom2.applicationentity as ae
 import pynetdicom2.sopclass as sc
-from pynetdicom2 import asceprovider, fsm, statuses, ssl_ae, commands, uids
+from pynetdicom2 import (
+    asceprovider, dulprovider, exceptions, fsm, pdu, statuses, ssl_ae,
+    commands, uids
+)
 
 
 BASE_PATH = pathlib.Path(__file__).absolute().parent
 
 
+def _free_port() -> int:
+    """Gets an ephemeral free port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
 class CEchoTestCase(unittest.TestCase):
     def test_c_echo_positive(self) -> None:
+        port = _free_port()
         ae1 = ae.ClientAE('AET1').add_scu(sc.verification_scu)
-        ae2 = ae.AE('AET2', 11112, bind_and_activate=False)
+        ae2 = ae.AE('AET2', port, bind_and_activate=False)
         ae2.add_scp(sc.verification_scp)
         with ae2:
             remote_ae = asceprovider.RemoteAEConfig(
                 address='127.0.0.1',
-                port=11112,
+                port=port,
                 aet='AET2',
                 username='admin',
                 password='123'
@@ -38,6 +50,7 @@ class CEchoTestCase(unittest.TestCase):
                 self.assertTrue(result.is_success)
 
     def test_ssl_c_echo_positive(self) -> None:
+        port = _free_port()
         client_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         client_context.load_verify_locations(BASE_PATH / 'cert.pem')
         client_context.check_hostname = False
@@ -51,14 +64,14 @@ class CEchoTestCase(unittest.TestCase):
         server_ae = ssl_ae.SSLApplicationEntity(
             server_context,
             'AET2',
-            2762,
+            port,
             bind_and_activate=False
         )
         server_ae.add_scp(sc.verification_scp)
         with server_ae:
             remote_ae = asceprovider.RemoteAEConfig(
                 address='127.0.0.1',
-                port=2762,
+                port=port,
                 aet='AET2',
                 username='admin',
                 password='123'
@@ -96,13 +109,14 @@ class CFindServerAE(ae.AE):
 class CFindTestCase(unittest.TestCase):
     def test_c_find_positive(self) -> None:
         test_name = 'Patient^Name^Test'
+        port = _free_port()
         ae1 = ae.ClientAE('AET1').add_scu(sc.qr_find_scu)
-        ae2 = CFindServerAE(test_name, self, 'AET2', 11112)
+        ae2 = CFindServerAE(test_name, self, 'AET2', port)
         ae2.add_scp(sc.qr_find_scp)
         with ae2:
             remote_ae = asceprovider.RemoteAEConfig(
                 address='127.0.0.1',
-                port=11112,
+                port=port,
                 aet='AET2',
                 username='admin',
                 password='123'
@@ -120,9 +134,10 @@ class CFindTestCase(unittest.TestCase):
 class CFindWrapperTestCase(unittest.TestCase):
     def test_c_find_positive(self) -> None:
         test_name = 'Patient^Name^Test'
+        port = _free_port()
         remote_ae = asceprovider.RemoteAEConfig(
             address='127.0.0.1',
-            port=11112,
+            port=port,
             aet='AET2',
             username='admin',
             password='123'
@@ -131,7 +146,7 @@ class CFindWrapperTestCase(unittest.TestCase):
         ds = dataset.Dataset()
         ds.PatientName = test_name
 
-        ae2 = CFindServerAE(test_name, self, 'AET2', 11112)
+        ae2 = CFindServerAE(test_name, self, 'AET2', port)
         ae2.add_scp(sc.qr_find_scp)
         with ae2:
             for result in commands.find('AET1', remote_ae, ds):
@@ -177,13 +192,14 @@ class CStoreTestCase(unittest.TestCase):
         rq.SOPInstanceUID = '1.2.3.4.5.1.1'
         rq.SOPClassUID = uids.BASIC_TEXT_SR_STORAGE
 
+        port = _free_port()
         ae1 = ae.ClientAE('AET1')
         ae1.add_scu(sc.storage_scu, [uids.BASIC_TEXT_SR_STORAGE])
-        ae2 = CStoreAE(self, rq, 'AET2', 11112)
+        ae2 = CStoreAE(self, rq, 'AET2', port)
         ae2.add_scp(sc.storage_scp)
         with ae2:
             remote_ae = asceprovider.RemoteAEConfig(
-                address='127.0.0.1', port=11112, aet='AET2'
+                address='127.0.0.1', port=port, aet='AET2'
             )
             with ae1.request_association(remote_ae) as assoc:
                 service = assoc.get_scu(uids.BASIC_TEXT_SR_STORAGE)
@@ -194,14 +210,15 @@ class CStoreTestCase(unittest.TestCase):
         file_name = BASE_PATH / 'test_sr.dcm'
         rq = pydicom.dcmread(file_name)
 
+        port = _free_port()
         ae1 = ae.ClientAE(
             'AET1', [uid.ExplicitVRLittleEndian],  max_pdu_length=1024
         )
         ae1.add_scu(sc.storage_scu, [uids.COMPREHENSIVE_SR_STORAGE])
-        ae2 = CStoreAE(self, rq, 'AET2', 11112).add_scp(sc.storage_scp)
+        ae2 = CStoreAE(self, rq, 'AET2', port).add_scp(sc.storage_scp)
         with ae2:
             remote_ae = asceprovider.RemoteAEConfig(
-                address='127.0.0.1', port=11112, aet='AET2'
+                address='127.0.0.1', port=port, aet='AET2'
             )
             with ae1.request_association(remote_ae) as assoc:
                 service = assoc.get_scu(uids.COMPREHENSIVE_SR_STORAGE)
@@ -271,11 +288,13 @@ class CommitmentAE(ae.AE):
 class StorageCommitmentTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.event = threading.Event()
+        self.port1 = _free_port()
+        self.port2 = _free_port()
         self.remote_ae1 = asceprovider.RemoteAEConfig(
-            address='127.0.0.1', port=11113, aet='AET1'
+            address='127.0.0.1', port=self.port1, aet='AET1'
         )
         self.remote_ae2 = asceprovider.RemoteAEConfig(
-            address='127.0.0.1', port=11112, aet='AET2'
+            address='127.0.0.1', port=self.port2, aet='AET2'
         )
         self.transaction = uid.generate_uid()
 
@@ -293,7 +312,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
             event=self.event,
             remote_ae=self.remote_ae1,
             ae_title='AET2',
-            port=11113
+            port=self.port1
         )
         ae1.add_scp(sc.StorageCommitment())
         ae1.add_scu(sc.storage_commitment_scu)
@@ -306,7 +325,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
             event=self.event,
             remote_ae=self.remote_ae2,
             ae_title='AET2',
-            port=11112
+            port=self.port2
         )
         ae2.add_scp(sc.StorageCommitment())
 
@@ -316,7 +335,10 @@ class StorageCommitmentTestCase(unittest.TestCase):
 
                 status = service(self.transaction, _uids, 1)
                 self.assertTrue(status.is_success)
-                self.event.wait(20)
+                self.assertTrue(
+                    self.event.wait(20),
+                    'commitment response was not received'
+                )
 
     def test_commitment_failure(self) -> None:
         _uids = [
@@ -332,7 +354,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
             event=self.event,
             remote_ae=self.remote_ae1,
             ae_title='AET2',
-            port=11113
+            port=self.port1
         )
         ae1.add_scp(sc.StorageCommitment())
         ae1.add_scu(sc.storage_commitment_scu)
@@ -345,7 +367,7 @@ class StorageCommitmentTestCase(unittest.TestCase):
             event=self.event,
             remote_ae=self.remote_ae2,
             ae_title='AET2',
-            port=11112
+            port=self.port2
         )
         ae2.add_scp(sc.StorageCommitment())
 
@@ -355,4 +377,60 @@ class StorageCommitmentTestCase(unittest.TestCase):
 
                 status = service(self.transaction, _uids, 1)
                 self.assertTrue(status.is_success)
-                self.event.wait(20)
+                self.assertTrue(
+                    self.event.wait(20),
+                    'commitment response was not received'
+                )
+
+
+class RejectingAE(ae.AE):
+    """AE that refuses every incoming association request."""
+
+    def on_association_request(
+            self,
+            asce: asceprovider.AssociationAcceptor,
+            assoc: pdu.AAssociateRqPDU
+    ) -> None:
+        raise exceptions.AssociationRejectedError(1, 1, 7)
+
+
+class AssociationRejectTestCase(unittest.TestCase):
+    def test_reject_propagates_to_requester(self) -> None:
+        port = _free_port()
+        ae1 = ae.ClientAE('AET1').add_scu(sc.verification_scu)
+        ae2 = RejectingAE('AET2', port, bind_and_activate=False)
+        with ae2:
+            remote_ae = asceprovider.RemoteAEConfig(
+                address='127.0.0.1', port=port, aet='AET2'
+            )
+            with self.assertRaises(
+                    exceptions.AssociationRejectedError) as ctx:
+                with ae1.request_association(remote_ae):
+                    self.fail('association should have been rejected')
+            self.assertEqual(ctx.exception.result, 1)
+            self.assertEqual(ctx.exception.source, 1)
+            self.assertEqual(ctx.exception.diagnostic, 7)
+
+
+class AbortReceptionTestCase(unittest.TestCase):
+    def test_abort_is_delivered_to_service_user(self) -> None:
+        # An A-ABORT received while negotiating must surface to the service
+        # user as an abort indication with its source/reason intact.
+        left, right = socket.socketpair()
+        self.addCleanup(right.close)
+        provider = dulprovider.DULServiceProvider(
+            set(), lambda ctx, ds: (None, 0), dul_socket=left
+        )
+        try:
+            rq = pdu.AAssociateRqPDU('CALLED', 'CALLING', [])
+            right.sendall(rq.encode())
+            received = provider.receive(5)
+            self.assertIsInstance(received, pdu.AAssociateRqPDU)
+
+            right.sendall(pdu.AAbortPDU(source=0, reason_diag=2).encode())
+            abort = provider.receive(5)
+            self.assertIsInstance(abort, pdu.AAbortPDU)
+            self.assertEqual(abort.source, 0)
+            self.assertEqual(abort.reason_diag, 2)
+        finally:
+            provider.kill()

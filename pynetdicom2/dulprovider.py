@@ -61,6 +61,10 @@ ASSOCIATION_PDU_TYPES = frozenset((0x01, 0x02, 0x03))
 #: exists so an idle provider does not spin at 100% CPU.
 POLL_INTERVAL = 0.05
 
+#: Default maximum PDU length (in bytes) used when no value is negotiated or
+#: provided by the caller.
+DEFAULT_MAX_PDU_LENGTH = 65536
+
 #: Timeout (in seconds) applied to all operations on the DUL socket. Without
 #: a bound a stalled peer (e.g. one that has stopped reading) would block
 #: sends indefinitely, hanging the DUL thread and deadlocking ``kill()``.
@@ -127,7 +131,7 @@ class DULServiceProvider(threading.Thread):
             store_in_file: set[uid.UID],
             get_file_cb: fsm.GetFileCB,
             dul_socket: Optional[socket.socket] = None,
-            max_pdu_length: int = 65536,
+            max_pdu_length: int = DEFAULT_MAX_PDU_LENGTH,
             artim_timeout: int = 10,
     ) -> None:
         """Initializes DUL service.

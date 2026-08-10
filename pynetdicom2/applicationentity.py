@@ -33,13 +33,17 @@ import platform
 import tempfile
 import socket
 import socketserver
-from typing import Any, BinaryIO, Iterator, Iterable, Optional, Union, cast
+from typing import (
+    Any, BinaryIO, Iterator, Iterable, Optional, Sequence, Union, cast
+)
 
 from pydicom import Dataset, filebase, uid
 from pydicom.dataset import FileMetaDataset
 from pydicom.filewriter import write_file_meta_info
 
-from . import asceprovider, dimsemessages, exceptions, fsm, statuses, pdu
+from . import (
+    asceprovider, dimsemessages, dulprovider, exceptions, fsm, statuses, pdu
+)
 
 
 logger = logging.getLogger(__name__)
@@ -116,7 +120,7 @@ class AEBase:
 
     def __init__(
             self,
-            supported_ts: Optional[list[uid.UID]],
+            supported_ts: Optional[Sequence[uid.UID]],
             max_pdu_length: int,
             ae_title: str,
             port: Optional[int] = None
@@ -453,8 +457,8 @@ class ClientAE(AEBase):
     def __init__(
             self,
             ae_title: str,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH
     ) -> None:
         """Initializes new ClientAE instance"""
         super().__init__(supported_ts, max_pdu_length, ae_title)
@@ -519,8 +523,8 @@ class AE(AEBase):
             self,
             ae_title: str,
             port: int,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536,
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH,
             bind_and_activate: bool = True
     ) -> None:
         """Initializes new AE instance."""
@@ -677,8 +681,8 @@ class ClientStorageAE(ClientAE, FolderStorageMixin):
             self,
             storage_dir: pathlib.Path,
             ae_title: str,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH
     ) -> None:
         super().__init__(ae_title, supported_ts, max_pdu_length)
         self.storage_dir = storage_dir
@@ -700,8 +704,8 @@ class StorageAE(AE, FolderStorageMixin):
             storage_dir: pathlib.Path,
             ae_title: str,
             port: int,
-            supported_ts: Optional[list[uid.UID]] = None,
-            max_pdu_length: int = 65536,
+            supported_ts: Optional[Sequence[uid.UID]] = None,
+            max_pdu_length: int = dulprovider.DEFAULT_MAX_PDU_LENGTH,
             bind_and_activate: bool = True
     ) -> None:
         super().__init__(

@@ -37,6 +37,12 @@ from pydicom import uid
 from . import exceptions, userdataitems
 
 
+#: Length of the fixed header that begins every PDU: 1 byte PDU type,
+#: 1 reserved byte and a 4-byte PDU length field (PS3.7 9.3). PDU length
+#: fields count only the bytes that follow this header.
+PDU_HEADER_LENGTH = 6
+
+
 UserItem = Union[
     userdataitems.ImplementationClassUIDSubItem,
     userdataitems.MaximumLengthSubItem,
@@ -154,7 +160,10 @@ class AAssociatePDUBase:
 
         :return: PDU length
         """
-        return 68 + sum((i.total_length() for i in self.variable_items))
+        return (
+            self.header.size - PDU_HEADER_LENGTH
+            + sum((i.total_length() for i in self.variable_items))
+        )
 
     def encode(self) -> bytes:
         """Encodes PDU into bytes
@@ -200,7 +209,7 @@ class AAssociatePDUBase:
                 item_type = _next_type(stream)
 
         stream = BytesIO(raw_bytes)
-        values = cls.header.unpack(stream.read(74))
+        values = cls.header.unpack(stream.read(cls.header.size))
         _, reserved1, _, protocol_version, reserved2, \
             called_ae_title, calling_ae_title = values[:7]
         reserved3 = values[7:]
@@ -222,7 +231,7 @@ class AAssociatePDUBase:
 
         :return: total PDU length
         """
-        return 6 + self.pdu_length
+        return PDU_HEADER_LENGTH + self.pdu_length
 
 
 class AAssociateRqPDU(AAssociatePDUBase):
@@ -338,7 +347,7 @@ class AAssociateRjPDU:
         """
         stream = BytesIO(rawstring)
         _, reserved1, _, reserved2, result, source, \
-            reason_diag = cls.format.unpack(stream.read(10))
+            reason_diag = cls.format.unpack(stream.read(cls.format.size))
         return cls(
             result=result,
             source=source,
@@ -347,16 +356,16 @@ class AAssociateRjPDU:
             reserved2=reserved2
         )
 
-    @staticmethod
-    def total_length() -> int:
+    @classmethod
+    def total_length(cls) -> int:
         """Returns PDU total length.
 
-        This PDU has a fixed length of 10, so method always returns 10
-        regardless of specific instance
+        These PDUs have a fixed length, so the method always returns the
+        same value regardless of specific instance
 
         :return: PDU total length
         """
-        return 10
+        return PDU_HEADER_LENGTH + cls.pdu_length
 
 
 class PDataTfPDU:
@@ -424,7 +433,9 @@ class PDataTfPDU:
                 yield item
 
         stream = BytesIO(rawstring)
-        _, reserved, pdu_length = cls.header.unpack(stream.read(6))
+        _, reserved, pdu_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         data_value_items = list(iter_items())
         return cls(data_value_items, reserved)
 
@@ -433,7 +444,7 @@ class PDataTfPDU:
 
         :return: total PDU length
         """
-        return 6 + self.pdu_length
+        return PDU_HEADER_LENGTH + self.pdu_length
 
 
 class AReleasePDUBase:
@@ -455,7 +466,7 @@ class AReleasePDUBase:
 
     def __repr__(self) -> str:
         return (
-            'AReleaseRqPDU('
+            f'{type(self).__name__}('
             f'reserved1={self.reserved1}, '
             f'reserved2={self.reserved2})'
         )
@@ -481,19 +492,21 @@ class AReleasePDUBase:
         :return: decoded PDU
         """
         stream = BytesIO(rawstring)
-        _, reserved1, _, reserved2 = cls.format.unpack(stream.read(10))
+        _, reserved1, _, reserved2 = cls.format.unpack(
+            stream.read(cls.format.size)
+        )
         return cls(reserved1=reserved1, reserved2=reserved2)
 
-    @staticmethod
-    def total_length() -> int:
+    @classmethod
+    def total_length(cls) -> int:
         """Returns PDU total length.
 
-        This PDU has a fixed length of 10, so method always returns 10
-        regardless of specific instance
+        These PDUs have a fixed length, so the method always returns the
+        same value regardless of specific instance
 
         :return: PDU total length
         """
-        return 10
+        return PDU_HEADER_LENGTH + cls.pdu_length
 
 
 class AReleaseRqPDU(AReleasePDUBase):
@@ -504,13 +517,6 @@ class AReleaseRqPDU(AReleasePDUBase):
     pdu_type = 0x05
     """PDU Type"""
 
-    def __repr__(self) -> str:
-        return (
-            'AReleaseRqPDU('
-            f'reserved1={self.reserved1}, '
-            f'reserved2={self.reserved2})'
-        )
-
 
 class AReleaseRpPDU(AReleasePDUBase):
     """This class represents the A-RELEASE-RP PDU as described in
@@ -519,13 +525,6 @@ class AReleaseRpPDU(AReleasePDUBase):
 
     pdu_type = 0x06
     """PDU Type"""
-
-    def __repr__(self) -> str:
-        return (
-            'AReleaseRpPDU('
-            f'reserved1={self.reserved1}, '
-            f'reserved2={self.reserved2})'
-        )
 
 
 class AAbortPDU:
@@ -606,7 +605,7 @@ class AAbortPDU:
         """
         stream = BytesIO(rawstring)
         _, reserved1, _, reserved2, reserved3, abort_source, \
-            reason_diag = cls.format.unpack(stream.read(10))
+            reason_diag = cls.format.unpack(stream.read(cls.format.size))
         return cls(
             reserved1=reserved1,
             reserved2=reserved2,
@@ -615,16 +614,16 @@ class AAbortPDU:
             reason_diag=reason_diag
         )
 
-    @staticmethod
-    def total_length() -> int:
+    @classmethod
+    def total_length(cls) -> int:
         """Returns PDU total length.
 
-        This PDU has a fixed length of 10, so method always returns 10
-        regardless of specific instance
+        These PDUs have a fixed length, so the method always returns the
+        same value regardless of specific instance
 
         :return: PDU total length
         """
-        return 10
+        return PDU_HEADER_LENGTH + cls.pdu_length
 
 
 # Items and sub-items classes
@@ -648,7 +647,7 @@ class ApplicationContextItem:
 
     def __repr__(self) -> str:
         return (
-            'ApplicationContextItem(context_name="{self.context_name}", '
+            f'ApplicationContextItem(context_name="{self.context_name}", '
             f'reserved={self.reserved})'
         )
 
@@ -678,7 +677,9 @@ class ApplicationContextItem:
         :param stream: raw data stream
         :return: decoded item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         context_name = _read_exact(stream, item_length).decode()
         return cls(reserved=reserved, context_name=context_name)
 
@@ -776,7 +777,9 @@ class PresentationContextItemRQ:
                 yield TransferSyntaxSubItem.decode(stream)
 
         _, reserved1, _, context_id, \
-            reserved2, reserved3, reserved4 = cls.header.unpack(stream.read(8))
+            reserved2, reserved3, reserved4 = cls.header.unpack(
+                stream.read(cls.header.size)
+            )
         abs_sub_item = AbstractSyntaxSubItem.decode(stream)
         ts_sub_items = list(iter_items())
         return cls(
@@ -884,7 +887,7 @@ class PresentationContextItemAC:
         :return: decoded context item
         """
         _, reserved1, _, context_id, reserved2, result_reason, \
-            reserved3 = cls.header.unpack(stream.read(8))
+            reserved3 = cls.header.unpack(stream.read(cls.header.size))
         ts_sub_item = TransferSyntaxSubItem.decode(stream)
         return cls(
             context_id=context_id,
@@ -948,7 +951,9 @@ class AbstractSyntaxSubItem:
         :param stream: raw data stream
         :return: decoded abstract syntax sub-item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         name = uid.UID(_read_exact(stream, item_length).decode())
         return cls(name=name, reserved=reserved)
 
@@ -1007,7 +1012,9 @@ class TransferSyntaxSubItem:
         :param stream: raw data stream
         :return: decoded transfer syntax sub-item
         """
-        _, reserved, item_length = cls.header.unpack(stream.read(4))
+        _, reserved, item_length = cls.header.unpack(
+            stream.read(cls.header.size)
+        )
         name = _read_exact(stream, item_length)
         return cls(name=name.decode(), reserved=reserved)
 
@@ -1099,7 +1106,7 @@ class UserInformationItem:
         :param stream: raw data stream
         :return: decoded user information item
         """
-        _, reserved, _ = cls.header.unpack(stream.read(4))
+        _, reserved, _ = cls.header.unpack(stream.read(cls.header.size))
         # read the rest of user info
         user_data = list(cls.sub_items(stream))
         return cls(user_data=user_data, reserved=reserved)
