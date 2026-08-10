@@ -35,7 +35,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pydicom = "^2.4"
+pydicom = ">=2.4,<4"
 
 # These tool versions all support Python 3.9 today, so a single constraint
 # works for every interpreter. Poetry also resolves them per-interpreter, so
