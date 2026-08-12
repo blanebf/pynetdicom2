@@ -2,7 +2,7 @@
 import queue
 import time
 import unittest
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from pynetdicom2 import exceptions, fsm
 from pynetdicom2 import pdu
@@ -26,7 +26,8 @@ class FakeProvider:
     def __init__(self, is_acceptor: bool = False) -> None:
         self.primitive: Optional[Any] = None
         self.dul_socket: Any = FakeSocket()
-        self.to_service_user: queue.Queue = queue.Queue()
+        self.to_service_user: queue.Queue[Any] = queue.Queue()
+        self.from_service_user: queue.Queue[Any] = queue.Queue()
         self.is_acceptor = is_acceptor
 
     def create_socket(self) -> None:
@@ -36,7 +37,10 @@ class FakeProvider:
 def _make_sm(is_acceptor: bool = False) -> fsm.StateMachine:
     provider = FakeProvider(is_acceptor)
     timer = fsm.Timer(10)
-    return fsm.StateMachine(provider, timer, set(), lambda ctx, ds: (None, 0))
+    return fsm.StateMachine(
+        provider, timer, set(),
+        cast(fsm.GetFileCB, lambda ctx, ds: (None, 0))
+    )
 
 
 class TimerTestCase(unittest.TestCase):
@@ -88,7 +92,8 @@ class StateMachineDispatchTestCase(unittest.TestCase):
 
         self.assertEqual(sm.current_state, fsm.States.STA_13)
         self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
-        self.assertEqual(sm.primitive.source, 2)
+        abort = cast(pdu.AAbortPDU, sm.primitive)
+        self.assertEqual(abort.source, 2)
 
 
 class ReleaseCollisionTestCase(unittest.TestCase):
@@ -114,7 +119,8 @@ class ReleaseCollisionTestCase(unittest.TestCase):
                 sm.current_state = state
                 sm.action(fsm.Events.EVT_14)
                 self.assertEqual(sm.current_state, fsm.States.STA_11)
-                self.assertTrue(sm.provider.dul_socket.sent)
+                sock = cast(FakeSocket, sm.provider.dul_socket)
+                self.assertTrue(sock.sent)
 
 
 class RejectActionTestCase(unittest.TestCase):
@@ -125,14 +131,15 @@ class RejectActionTestCase(unittest.TestCase):
         sm.primitive = pdu.AAssociateRjPDU(1, 1, 1)
         result = sm.ae_8()
         self.assertEqual(result, fsm.States.STA_13)
-        self.assertTrue(sm.provider.dul_socket.sent)
+        sock = cast(FakeSocket, sm.provider.dul_socket)
+        self.assertTrue(sock.sent)
         self.assertIsNotNone(sm.timer._start_time)
 
 
 class AbortAndCloseTestCase(unittest.TestCase):
     def test_aa_2_stops_and_closes(self) -> None:
         sm = _make_sm()
-        sock = sm.provider.dul_socket
+        sock = cast(FakeSocket, sm.provider.dul_socket)
         result = sm.aa_2()
         self.assertEqual(result, fsm.States.STA_1)
         self.assertTrue(sock.closed)
@@ -145,7 +152,7 @@ class AbortAndCloseTestCase(unittest.TestCase):
     def test_aa_1_sends_abort_and_restarts_timer(self) -> None:
         sm = _make_sm()
         sm.primitive = pdu.AAbortPDU(source=0, reason_diag=0)
-        sock = sm.provider.dul_socket
+        sock = cast(FakeSocket, sm.provider.dul_socket)
         result = sm.aa_1()
         self.assertEqual(result, fsm.States.STA_13)
         self.assertTrue(sock.sent)
@@ -157,7 +164,8 @@ class AbortAndCloseTestCase(unittest.TestCase):
         result = sm.aa_4()
         self.assertEqual(result, fsm.States.STA_1)
         self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
-        self.assertEqual(sm.primitive.source, 2)
+        abort = cast(pdu.AAbortPDU, sm.primitive)
+        self.assertEqual(abort.source, 2)
         indication = sm.provider.to_service_user.get_nowait()
         self.assertIs(indication, sm.primitive)
 
@@ -178,8 +186,10 @@ class UnrecognizedPduAbortTestCase(unittest.TestCase):
 
         self.assertEqual(sm.current_state, fsm.States.STA_13)
         self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
-        self.assertEqual(sm.primitive.source, 2)
-        self.assertTrue(sm.provider.dul_socket.sent)
+        abort = cast(pdu.AAbortPDU, sm.primitive)
+        self.assertEqual(abort.source, 2)
+        sock = cast(FakeSocket, sm.provider.dul_socket)
+        self.assertTrue(sock.sent)
         # The A-P-ABORT indication is issued to the service user too.
         self.assertFalse(sm.provider.to_service_user.empty())
 
@@ -192,7 +202,8 @@ class UnrecognizedPduAbortTestCase(unittest.TestCase):
 
         self.assertEqual(sm.current_state, fsm.States.STA_13)
         self.assertIsInstance(sm.primitive, pdu.AAbortPDU)
-        self.assertEqual(sm.primitive.source, 2)
+        abort = cast(pdu.AAbortPDU, sm.primitive)
+        self.assertEqual(abort.source, 2)
 
 
 if __name__ == '__main__':

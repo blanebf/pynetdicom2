@@ -10,7 +10,7 @@ from pynetdicom2 import uids
 UID_PATTERN = re.compile(r'^[0-9]+(\.[0-9]+)*$')
 
 
-def _all_uid_constants() -> list:
+def _all_uid_constants() -> list[uid.UID]:
     return [
         value for value in vars(uids).values()
         if isinstance(value, uid.UID)

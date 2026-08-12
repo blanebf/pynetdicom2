@@ -70,7 +70,7 @@ build-backend = "poetry.core.masonry.api"
 # them; bump this when the lower bound is raised (e.g. back to 3.10 when 3.9
 # support is removed).
 python_version = "3.9"
-files = ["pynetdicom2"]
+files = ["pynetdicom2", "tests"]
 warn_unused_configs = true
 
 [tool.coverage.run]

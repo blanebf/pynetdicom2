@@ -7,9 +7,12 @@ import contextlib
 import io
 import sys
 import unittest
+from collections.abc import Iterable
 from unittest import mock
 
-from pynetdicom2 import cli
+from pydicom import dataset, uid
+
+from pynetdicom2 import asceprovider, cli, commands
 from pynetdicom2 import uids
 
 
@@ -154,17 +157,22 @@ class FindRootSelectionTestCase(unittest.TestCase):
         )
         captured: dict[str, object] = {}
 
-        def fake_find(local_aet, remote_ae, request, root):  # type: ignore
+        def fake_find(
+                local_aet: str,
+                remote_ae: asceprovider.RemoteAEConfig,
+                request: dataset.Dataset,
+                root: uid.UID = uids.STUDY_ROOT_FIND_SOP_CLASS
+        ) -> Iterable[dataset.Dataset]:
             captured['root'] = root
             captured['level'] = request.QueryRetrieveLevel
             return iter([])
 
-        original = cli.commands.find
-        cli.commands.find = fake_find  # type: ignore[assignment]
+        original = commands.find
+        commands.find = fake_find
         try:
             list(cli.find(args))
         finally:
-            cli.commands.find = original  # type: ignore[assignment]
+            commands.find = original
 
         self.assertEqual(captured['root'], uids.PATIENT_ROOT_FIND_SOP_CLASS)
 

@@ -4,7 +4,7 @@ import socket
 import ssl
 import threading
 import unittest
-from typing import BinaryIO, Iterable, Iterator, Union
+from typing import BinaryIO, Iterable, Iterator, Union, cast
 
 import pydicom
 from pydicom import uid
@@ -25,7 +25,7 @@ def _free_port() -> int:
     """Gets an ephemeral free port on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(('127.0.0.1', 0))
-        return sock.getsockname()[1]
+        return int(sock.getsockname()[1])
 
 
 class CEchoTestCase(unittest.TestCase):
@@ -419,7 +419,8 @@ class AbortReceptionTestCase(unittest.TestCase):
         left, right = socket.socketpair()
         self.addCleanup(right.close)
         provider = dulprovider.DULServiceProvider(
-            set(), lambda ctx, ds: (None, 0), dul_socket=left
+            set(), cast(fsm.GetFileCB, lambda ctx, ds: (None, 0)),
+            dul_socket=left
         )
         try:
             rq = pdu.AAssociateRqPDU('CALLED', 'CALLING', [])
@@ -430,7 +431,8 @@ class AbortReceptionTestCase(unittest.TestCase):
             right.sendall(pdu.AAbortPDU(source=0, reason_diag=2).encode())
             abort = provider.receive(5)
             self.assertIsInstance(abort, pdu.AAbortPDU)
-            self.assertEqual(abort.source, 0)
-            self.assertEqual(abort.reason_diag, 2)
+            abort_pdu = cast(pdu.AAbortPDU, abort)
+            self.assertEqual(abort_pdu.source, 0)
+            self.assertEqual(abort_pdu.reason_diag, 2)
         finally:
             provider.kill()

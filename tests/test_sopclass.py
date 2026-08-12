@@ -6,7 +6,7 @@ real network association is required.
 """
 import contextlib
 import unittest
-from typing import Any, Iterator
+from typing import Any, Iterator, cast
 
 import pydicom
 from pydicom import uid
@@ -53,6 +53,16 @@ def _context() -> fsm.PContextDef:
     )
 
 
+def _as_acceptor(fake: FakeAcceptor) -> asceprovider.AssociationAcceptor:
+    """Adapts the recording fake to the type the SCP handlers expect."""
+    return cast(asceprovider.AssociationAcceptor, fake)
+
+
+def _as_requester(fake: object) -> asceprovider.AssociationRequester:
+    """Adapts a fake requester to the type the SCU handlers expect."""
+    return cast(asceprovider.AssociationRequester, fake)
+
+
 class ScpMissingDatasetTestCase(unittest.TestCase):
     """SCPs must respond with a failure status, not tear down the
     association, when a required Identifier/dataset is missing."""
@@ -63,7 +73,7 @@ class ScpMissingDatasetTestCase(unittest.TestCase):
         msg.message_id = 7
         msg.sop_class_uid = uids.STUDY_ROOT_FIND_SOP_CLASS
         # No data_set assigned.
-        sopclass.qr_find_scp(acceptor, _context(), msg)
+        sopclass.qr_find_scp(_as_acceptor(acceptor), _context(), msg)
 
         self.assertEqual(len(acceptor.sent), 1)
         rsp, ctx_id = acceptor.sent[0]
@@ -77,7 +87,7 @@ class ScpMissingDatasetTestCase(unittest.TestCase):
         msg = dimsemessages.CMoveRQMessage()
         msg.message_id = 9
         msg.sop_class_uid = uids.STUDY_ROOT_MOVE_SOP_CLASS
-        sopclass.qr_move_scp(acceptor, _context(), msg)
+        sopclass.qr_move_scp(_as_acceptor(acceptor), _context(), msg)
 
         self.assertEqual(len(acceptor.sent), 1)
         rsp, _ = acceptor.sent[0]
@@ -116,7 +126,7 @@ class QrMoveScpNothingToMoveTestCase(unittest.TestCase):
         query.QueryRetrieveLevel = 'STUDY'
         msg.data_set = dsutils.encode(query, True, True)
 
-        sopclass.qr_move_scp(acceptor, ctx, msg)
+        sopclass.qr_move_scp(_as_acceptor(acceptor), ctx, msg)
 
         self.assertEqual(len(acceptor.sent), 1)
         rsp, _ = acceptor.sent[0]
@@ -149,7 +159,7 @@ class QrMoveScpFinalStatusTestCase(unittest.TestCase):
             return remote, len(datasets), iter(datasets)
 
         sub_results = list(sub_statuses)
-        self.sub_op_msg_ids = []
+        self.sub_op_msg_ids: list[int] = []
         sub_op_msg_ids = self.sub_op_msg_ids
 
         class FakeAssociation:
@@ -184,7 +194,7 @@ class QrMoveScpFinalStatusTestCase(unittest.TestCase):
         query.QueryRetrieveLevel = 'STUDY'
         msg.data_set = dsutils.encode(query, True, True)
 
-        sopclass.qr_move_scp(acceptor, ctx, msg)
+        sopclass.qr_move_scp(_as_acceptor(acceptor), ctx, msg)
         return acceptor
 
     def test_all_sub_ops_succeed_final_is_success(self) -> None:
@@ -254,7 +264,7 @@ class QrFindScpFinalStatusTestCase(unittest.TestCase):
         query.QueryRetrieveLevel = 'STUDY'
         msg.data_set = dsutils.encode(query, True, True)
 
-        sopclass.qr_find_scp(acceptor, ctx, msg)
+        sopclass.qr_find_scp(_as_acceptor(acceptor), ctx, msg)
         return acceptor
 
     def test_no_matches_sends_success(self) -> None:
@@ -315,7 +325,8 @@ class StorageScuMoveOriginatorTestCase(unittest.TestCase):
             1, uids.CT_IMAGE_STORAGE, uid.ImplicitVRLittleEndian
         )
         sopclass.storage_scu(
-            FakeRequester(), ctx, _stored_instance(), 1, **kwargs
+            _as_requester(FakeRequester()),
+            ctx, _stored_instance(), 1, **kwargs
         )
         msg, _ = sent[0]
         return msg
@@ -383,9 +394,9 @@ class QrGetScuContextTestCase(unittest.TestCase):
                 return self._incoming.pop(0)
 
         requester = FakeRequester()
-        results = list(
-            sopclass.qr_get_scu(requester, get_ctx, pydicom.Dataset(), 1)
-        )
+        results = list(sopclass.qr_get_scu(
+            _as_requester(requester), get_ctx, pydicom.Dataset(), 1
+        ))
 
         self.assertEqual(len(results), 1)
         yielded_ctx, yielded_ds = results[0]
@@ -429,7 +440,7 @@ class StorageCommitmentEventReportTestCase(unittest.TestCase):
         acceptor = FakeAcceptor(ae)
 
         sopclass.StorageCommitment.n_event_report(
-            acceptor, self._context(), self._make_report_msg()
+            _as_acceptor(acceptor), self._context(), self._make_report_msg()
         )
 
         self.assertEqual(len(acceptor.sent), 1)
@@ -446,7 +457,7 @@ class StorageCommitmentEventReportTestCase(unittest.TestCase):
         acceptor = FakeAcceptor(ae)
 
         sopclass.StorageCommitment.n_event_report(
-            acceptor, self._context(), self._make_report_msg()
+            _as_acceptor(acceptor), self._context(), self._make_report_msg()
         )
 
         self.assertEqual(len(calls), 1)
