@@ -36,7 +36,7 @@ jobs:
         run: poetry run pylint pynetdicom2 --fail-under=9
 
       - name: Type check (mypy)
-        run: poetry run mypy pynetdicom2
+        run: poetry run mypy
 
       - name: Run tests with coverage
         run: |

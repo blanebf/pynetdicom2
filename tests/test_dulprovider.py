@@ -13,6 +13,7 @@ import struct
 import threading
 import time
 import unittest
+from typing import cast
 from unittest import mock
 
 from pynetdicom2 import dulprovider
@@ -192,7 +193,7 @@ class CheckNetworkPacingTestCase(unittest.TestCase):
     def test_check_network_paces_when_no_socket(self) -> None:
         provider = _make_bare_provider()
         provider.dul_socket = None
-        with mock.patch.object(dulprovider.time, 'sleep') as sleep_mock:
+        with mock.patch.object(time, 'sleep') as sleep_mock:
             result = provider._check_network()
         self.assertFalse(result)
         sleep_mock.assert_called_once_with(dulprovider.POLL_INTERVAL)
@@ -208,9 +209,9 @@ class RunFailureTestCase(unittest.TestCase):
         provider.to_service_user = queue.Queue()
         # Bypass the event-loop helpers so the only thing that can raise is
         # the state machine action.
-        provider._check_outgoing_pdu = lambda: False
-        provider._check_network = lambda: False
-        provider._check_timer = lambda: False
+        provider._check_outgoing_pdu = lambda: False  # type: ignore
+        provider._check_network = lambda: False  # type: ignore
+        provider._check_timer = lambda: False  # type: ignore
         provider.state_machine = mock.MagicMock()
         provider.state_machine.action.side_effect = RuntimeError('boom')
         provider.event.append(fsm.Events.EVT_5)
@@ -220,6 +221,7 @@ class RunFailureTestCase(unittest.TestCase):
 
         abort = provider.to_service_user.get_nowait()
         self.assertIsInstance(abort, pdu.AAbortPDU)
+        abort = cast(pdu.AAbortPDU, abort)
         self.assertEqual(abort.source, 2)
         self.assertTrue(provider._is_killed.is_set())
 
@@ -257,7 +259,7 @@ class CreateSocketTestCase(unittest.TestCase):
         provider.called_presentation_address = ('localhost', 11112)
         fake_socket = mock.MagicMock()
         with mock.patch.object(
-            dulprovider.socket, 'create_connection',
+            socket, 'create_connection',
             return_value=fake_socket
         ) as connect_mock:
             provider.create_socket()
@@ -278,7 +280,7 @@ class CreateSocketTestCase(unittest.TestCase):
         provider = _make_bare_provider()
         provider.called_presentation_address = ('localhost', 11112)
         with mock.patch.object(
-            dulprovider.socket, 'create_connection',
+            socket, 'create_connection',
             side_effect=ConnectionRefusedError('refused')
         ):
             with self.assertRaises(exceptions.NetDICOMError):
@@ -290,7 +292,8 @@ class CreateSocketTestCase(unittest.TestCase):
         left, right = socket.socketpair()
         try:
             provider = dulprovider.DULServiceProvider(
-                set(), lambda ctx, ds: (None, 0), dul_socket=left
+                set(), cast(fsm.GetFileCB, lambda ctx, ds: (None, 0)),
+                dul_socket=left
             )
             try:
                 self.assertEqual(left.gettimeout(), dulprovider.SOCKET_TIMEOUT)
@@ -307,7 +310,8 @@ class CreateSocketTestCase(unittest.TestCase):
         left, right = socket.socketpair()
         try:
             provider = dulprovider.DULServiceProvider(
-                set(), lambda ctx, ds: (None, 0), dul_socket=left
+                set(), cast(fsm.GetFileCB, lambda ctx, ds: (None, 0)),
+                dul_socket=left
             )
             try:
                 self.assertTrue(provider.daemon)

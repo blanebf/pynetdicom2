@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 #: half-open or misbehaving peer would keep the association in STA_13
 #: indefinitely. The wait is performed in small non-blocking steps so the
 #: event loop keeps running while waiting.
-CLOSE_TIMEOUT = 10
+CLOSE_TIMEOUT: float = 10
 
 #: Upper bound (in bytes) for the body of received association PDUs.
 #: Association PDUs are exchanged before the Maximum Length negotiation takes

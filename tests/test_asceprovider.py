@@ -22,7 +22,6 @@ from pynetdicom2 import userdataitems
 def _make_bare_association() -> asceprovider.Association:
     """Creates an association without starting its DUL provider."""
     assoc = object.__new__(asceprovider.Association)
-    assoc.dul = mock.MagicMock()
     assoc.association_established = True
     return assoc
 
@@ -34,36 +33,42 @@ class KillTestCase(unittest.TestCase):
         # exited before returning, and the association is no longer marked
         # established.
         assoc = _make_bare_association()
-        assoc.dul.stop.return_value = True
+        dul = mock.MagicMock()
+        assoc.dul = dul
+        dul.stop.return_value = True
 
         assoc.kill()
 
-        assoc.dul.stop.assert_called()
-        assoc.dul.kill.assert_called_once()
+        dul.stop.assert_called()
+        dul.kill.assert_called_once()
         self.assertFalse(assoc.association_established)
 
     def test_kill_does_not_busy_spin_when_idle(self) -> None:
         # Once the provider stops gracefully, kill() must stop retrying the
         # graceful path immediately rather than looping over stop().
         assoc = _make_bare_association()
-        assoc.dul.stop.return_value = True
+        dul = mock.MagicMock()
+        assoc.dul = dul
+        dul.stop.return_value = True
 
         assoc.kill()
 
-        self.assertEqual(assoc.dul.stop.call_count, 1)
+        self.assertEqual(dul.stop.call_count, 1)
 
     def test_kill_retries_then_forces_termination(self) -> None:
         # When the association never becomes idle, kill() retries graceful
         # stopping a bounded number of times and then forces termination.
         assoc = _make_bare_association()
-        assoc.dul.stop.return_value = False
+        dul = mock.MagicMock()
+        assoc.dul = dul
+        dul.stop.return_value = False
 
         with mock.patch('pynetdicom2.asceprovider.time.sleep') as sleep_mock:
             assoc.kill()
 
-        self.assertEqual(assoc.dul.stop.call_count, 1000)
+        self.assertEqual(dul.stop.call_count, 1000)
         self.assertEqual(sleep_mock.call_count, 1000)
-        assoc.dul.kill.assert_called_once()
+        dul.kill.assert_called_once()
         self.assertFalse(assoc.association_established)
 
 
@@ -71,14 +76,16 @@ class ReleaseTestCase(unittest.TestCase):
     def test_release_normal_flow(self) -> None:
         assoc = _make_bare_association()
         assoc.ae = mock.MagicMock()
-        assoc.dul.receive.return_value = pdu.AReleaseRpPDU()
+        dul = mock.MagicMock()
+        assoc.dul = dul
+        dul.receive.return_value = pdu.AReleaseRpPDU()
 
         rsp = assoc.release()
 
         self.assertIsInstance(rsp, pdu.AReleaseRpPDU)
-        rq = assoc.dul.send.call_args_list[0].args[0]
+        rq = dul.send.call_args_list[0].args[0]
         self.assertIsInstance(rq, pdu.AReleaseRqPDU)
-        assoc.dul.kill.assert_called_once()
+        dul.kill.assert_called_once()
 
     def test_release_collision_approves_remote_request(self) -> None:
         # PS3.7 7.2.4: if the remote AE requested release while our request
@@ -86,7 +93,9 @@ class ReleaseTestCase(unittest.TestCase):
         # own release once the remote confirmation arrives.
         assoc = _make_bare_association()
         assoc.ae = mock.MagicMock()
-        assoc.dul.receive.side_effect = [
+        dul = mock.MagicMock()
+        assoc.dul = dul
+        dul.receive.side_effect = [
             pdu.AReleaseRqPDU(),  # remote release request
             pdu.AReleaseRpPDU()   # confirmation of our request
         ]
@@ -94,10 +103,10 @@ class ReleaseTestCase(unittest.TestCase):
         rsp = assoc.release()
 
         self.assertIsInstance(rsp, pdu.AReleaseRpPDU)
-        sent = [call.args[0] for call in assoc.dul.send.call_args_list]
+        sent = [call.args[0] for call in dul.send.call_args_list]
         self.assertIsInstance(sent[0], pdu.AReleaseRqPDU)
         self.assertIsInstance(sent[1], pdu.AReleaseRpPDU)
-        assoc.dul.kill.assert_called_once()
+        dul.kill.assert_called_once()
 
 
 class CancelHandlingTestCase(unittest.TestCase):
@@ -132,7 +141,6 @@ class AcceptValidationTestCase(unittest.TestCase):
 
     def _make_acceptor(self) -> asceprovider.AssociationAcceptor:
         assoc = object.__new__(asceprovider.AssociationAcceptor)
-        assoc.dul = mock.MagicMock()
         assoc.ae = mock.MagicMock()
         assoc.ae.supported_scp = {self.SOP_CLASS: object()}
         assoc.ae.supported_ts = frozenset([self.TS])
@@ -141,7 +149,9 @@ class AcceptValidationTestCase(unittest.TestCase):
         assoc.accepted_contexts = {}
         return assoc
 
-    def _rq(self, variable_items: list) -> pdu.AAssociateRqPDU:
+    def _rq(
+            self, variable_items: list[pdu.VariableItems]
+    ) -> pdu.AAssociateRqPDU:
         return pdu.AAssociateRqPDU(
             called_ae_title='CALLED',
             calling_ae_title='CALLING',
@@ -178,6 +188,8 @@ class AcceptValidationTestCase(unittest.TestCase):
 
     def test_invalid_and_duplicate_context_ids_refused(self) -> None:
         assoc = self._make_acceptor()
+        dul = mock.MagicMock()
+        assoc.dul = dul
         ctx = pdu.ApplicationContextItem(self.APPLICATION_CONTEXT)
         assoc.accept(self._rq([
             ctx,
@@ -187,7 +199,7 @@ class AcceptValidationTestCase(unittest.TestCase):
             self._user_info()
         ]))
 
-        res = assoc.dul.send.call_args.args[0]
+        res = dul.send.call_args.args[0]
         ac_items = [
             item for item in res.variable_items
             if isinstance(item, pdu.PresentationContextItemAC)
